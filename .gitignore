@@ -1,0 +1,23 @@
+.DS_Store
+target/
+
+# Runtime data and local identities
+.reticulum/
+.ratspeak/
+*.db
+*.sqlite
+*.sqlite3
+*.key
+identity
+storage/
+
+# Python and tooling caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Editor and local environment files
+.env
+.env.*
+*.swp

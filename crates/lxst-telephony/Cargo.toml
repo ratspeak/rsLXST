@@ -1,0 +1,25 @@
+[package]
+name = "lxst-telephony"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bytes.workspace = true
+lxst-core.workspace = true
+lxst-rns.workspace = true
+rns-crypto.workspace = true
+rns-identity.workspace = true
+rns-link.workspace = true
+rns-runtime.workspace = true
+rns-transport.workspace = true
+rns-wire.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+hex.workspace = true
+rns-interface.workspace = true
+serial_test.workspace = true
+serde_json.workspace = true

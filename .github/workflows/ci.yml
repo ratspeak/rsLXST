@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  # Python LXST parity fixtures and the pinned upstream reference are kept in
+  # the internal development tree, not in this published source release. The
+  # corresponding tests skip themselves when this env var is set.
+  SKIP_PYTHON_LXST_INTEROP: "1"
+
+jobs:
+  lint:
+    name: Lint and Docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: rsLXST
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/rsReticulum
+          ref: main
+          path: rsReticulum
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rsLXST -> target
+      - name: Install Linux system deps
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev libdbus-1-dev pkg-config libopus0 libogg0
+      - run: cargo fmt --all -- --check
+        working-directory: rsLXST
+      - run: cargo clippy --workspace -- -D warnings
+        working-directory: rsLXST
+      - run: cargo doc --workspace --no-deps
+        working-directory: rsLXST
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+  desktop-test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: rsLXST
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/rsReticulum
+          ref: main
+          path: rsReticulum
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rsLXST -> target
+      - name: Install Linux system deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev libdbus-1-dev pkg-config libopus0 libogg0
+      - name: Install macOS Opus runtime
+        if: runner.os == 'macOS'
+        run: brew install opus libogg
+      - run: cargo test --workspace
+        working-directory: rsLXST
+
+  mobile-check:
+    name: Check (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: aarch64-linux-android
+          - os: macos-latest
+            target: aarch64-apple-ios
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: rsLXST
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/rsReticulum
+          ref: main
+          path: rsReticulum
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rsLXST -> target
+      - uses: nttld/setup-ndk@v1
+        if: matrix.target == 'aarch64-linux-android'
+        id: setup-ndk
+        with:
+          ndk-version: r27d
+          add-to-path: false
+      - name: Check Android
+        if: matrix.target == 'aarch64-linux-android'
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          AR_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+          CC_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
+          CXX_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++
+        run: cargo check --workspace --target ${{ matrix.target }}
+        working-directory: rsLXST
+      - name: Check iOS
+        if: matrix.target == 'aarch64-apple-ios'
+        run: cargo check --workspace --target ${{ matrix.target }}
+        working-directory: rsLXST

@@ -1,0 +1,36 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/lxst-core",
+    "crates/lxst-rns",
+    "crates/lxst-telephony",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+rust-version = "1.85"
+
+[workspace.dependencies]
+rmpv = "1"
+thiserror = "2"
+serde_json = "1"
+hex = "0.4"
+bytes = "1"
+tokio = { version = "1", features = ["sync", "time", "rt", "macros"] }
+half = "2"
+proptest = "1"
+opus-rs = "0.1.19"
+serial_test = "3"
+
+rns-crypto = { path = "../rsReticulum/crates/rns-crypto" }
+rns-identity = { path = "../rsReticulum/crates/rns-identity" }
+rns-interface = { path = "../rsReticulum/crates/rns-interface" }
+rns-link = { path = "../rsReticulum/crates/rns-link" }
+rns-runtime = { path = "../rsReticulum/crates/rns-runtime" }
+rns-transport = { path = "../rsReticulum/crates/rns-transport" }
+rns-wire = { path = "../rsReticulum/crates/rns-wire" }
+
+lxst-core = { path = "crates/lxst-core" }
+lxst-rns = { path = "crates/lxst-rns" }

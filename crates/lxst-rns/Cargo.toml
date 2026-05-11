@@ -1,0 +1,18 @@
+[package]
+name = "lxst-rns"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bytes.workspace = true
+lxst-core.workspace = true
+rns-link.workspace = true
+rns-transport.workspace = true
+rns-wire.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+rns-crypto.workspace = true

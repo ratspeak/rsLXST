@@ -1,0 +1,17 @@
+[package]
+name = "lxst-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+half.workspace = true
+opus-rs.workspace = true
+rmpv.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+hex.workspace = true
+proptest.workspace = true
+serde_json.workspace = true
