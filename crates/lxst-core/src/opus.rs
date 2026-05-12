@@ -646,4 +646,22 @@ mod tests {
         assert_eq!(encoded.payload[0] & !0x03, 0x48);
         assert!(encoded.payload.len() <= profile.opus_payload_ceiling_bytes().unwrap());
     }
+
+    #[test]
+    fn opus_decoder_accepts_direct_sixty_ms_mediumband_without_panicking() {
+        let mut decoder = OpusDecoderState::new(Profile::QualityMedium).unwrap();
+        let mediumband_silk = Frame::new(CodecKind::Opus, [0x38, 0x00, 0x00]);
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            decoder.decode_frame(&mediumband_silk)
+        }));
+
+        assert!(result.is_ok());
+        let decoded = result.unwrap().unwrap();
+        assert_eq!(decoded.channels, Profile::QualityMedium.channels());
+        assert_eq!(
+            decoded.sample_frames(),
+            Profile::QualityMedium.sample_frames_per_packet()
+        );
+    }
 }
