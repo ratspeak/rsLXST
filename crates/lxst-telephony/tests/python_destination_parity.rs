@@ -5,8 +5,6 @@ use lxst_core::TELEPHONY_DESTINATION_NAME;
 use lxst_telephony::telephony_destination_hash;
 use serde_json::Value;
 
-const SKIP_ENV: &str = "SKIP_PYTHON_LXST_INTEROP";
-
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -19,18 +17,20 @@ fn fixture_script() -> PathBuf {
     repo_root().join("tools/fixtures/lxst_destination_fixtures.py")
 }
 
-fn should_skip() -> bool {
-    std::env::var(SKIP_ENV).map(|v| v == "1").unwrap_or(false)
+fn python_interpreter() -> String {
+    std::env::var("PYTHON").unwrap_or_else(|_| {
+        if cfg!(windows) {
+            "python".to_string()
+        } else {
+            "python3".to_string()
+        }
+    })
 }
 
 #[test]
 fn rust_destination_hash_matches_python_rns_lxst_telephony() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping Python RNS destination parity");
-        return;
-    }
-
-    let output = Command::new("python3")
+    let output = Command::new(python_interpreter())
+        .env("PYTHONDONTWRITEBYTECODE", "1")
         .arg(fixture_script())
         .output()
         .expect("spawn Python destination fixture generator");

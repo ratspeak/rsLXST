@@ -6,8 +6,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use lxst_telephony::telephony_destination_hash;
 use serde_json::Value;
 
-const SKIP_ENV: &str = "SKIP_PYTHON_LXST_INTEROP";
-
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -28,19 +26,21 @@ fn temp_storage(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!("{name}-{}-{now}", std::process::id()))
 }
 
-fn should_skip() -> bool {
-    std::env::var(SKIP_ENV).map(|v| v == "1").unwrap_or(false)
+fn python_interpreter() -> String {
+    std::env::var("PYTHON").unwrap_or_else(|_| {
+        if cfg!(windows) {
+            "python".to_string()
+        } else {
+            "python3".to_string()
+        }
+    })
 }
 
 #[test]
 fn python_telephone_helper_loads_reference_and_creates_destination() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping Python LXST Telephone helper self-test");
-        return;
-    }
-
     let storage = temp_storage("rs-lxst-python-telephone-helper");
-    let output = Command::new("python3")
+    let output = Command::new(python_interpreter())
+        .env("PYTHONDONTWRITEBYTECODE", "1")
         .arg(helper_script())
         .arg("--mode")
         .arg("self-test")
@@ -70,10 +70,15 @@ fn python_telephone_helper_loads_reference_and_creates_destination() {
     assert_eq!(ready["app_name"], "lxst");
     assert_eq!(ready["primitive_name"], "telephony");
     assert_eq!(ready["lxst_version"], "0.4.5");
-    assert_eq!(
-        ready["lxst_root"].as_str(),
-        Some("/Users/Games/Desktop/main/upstream/LXST")
-    );
+    let lxst_root = PathBuf::from(ready["lxst_root"].as_str().expect("LXST root"));
+    if let Ok(configured) = std::env::var("LXST_UPSTREAM_DIR") {
+        let configured = PathBuf::from(configured)
+            .canonicalize()
+            .expect("configured LXST upstream exists");
+        assert_eq!(lxst_root, configured);
+    } else {
+        assert!(lxst_root.ends_with(Path::new("upstream").join("LXST")));
+    }
     assert!(ready["codec2_stubbed"].is_boolean());
     assert_eq!(ready["headless_audio"], true);
     assert_eq!(ready["native_filters_disabled"], true);

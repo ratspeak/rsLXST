@@ -723,9 +723,16 @@ pub enum OpusReceiveStreamStopReason {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TelephonyServiceEvent {
+    OutgoingCallPending {
+        remote_identity: IdentityHash,
+    },
     OutgoingCallStarted {
         link_id: LinkId,
         remote_identity: IdentityHash,
+    },
+    OutgoingCallFailed {
+        remote_identity: IdentityHash,
+        message: String,
     },
     IncomingCall {
         link_id: LinkId,
@@ -779,6 +786,21 @@ pub enum TelephonyServiceEvent {
         message: String,
     },
     Stopped,
+}
+
+#[derive(Debug)]
+enum TelephonyInternalEvent {
+    OutgoingDiscoveryCompleted {
+        remote_identity: IdentityHash,
+        profile: Option<Profile>,
+        result: Result<RemoteTelephonyPeer, Error>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct OutgoingDiscoveryState {
+    remote_identity: IdentityHash,
+    profile: Option<Profile>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1009,11 +1031,14 @@ pub struct TelephonyService {
     endpoint: TelephonyRnsEndpoint,
     core: TelephonyRuntimeCore,
     control_rx: mpsc::Receiver<TelephonyControl>,
+    internal_tx: mpsc::Sender<TelephonyInternalEvent>,
+    internal_rx: mpsc::Receiver<TelephonyInternalEvent>,
     event_tx: mpsc::Sender<TelephonyServiceEvent>,
     config: TelephonyServiceConfig,
     active_timeout: Option<TelephonyServiceTimeout>,
     next_announce_at: Option<Instant>,
     startup_announce_retries_remaining: u8,
+    outgoing_discovery: Option<OutgoingDiscoveryState>,
     media: TelephonyServiceMedia,
 }
 
@@ -1089,16 +1114,20 @@ impl TelephonyService {
             } else {
                 0
             };
+        let (internal_tx, internal_rx) = mpsc::channel(32);
 
         Self {
             endpoint,
             core,
             control_rx,
+            internal_tx,
+            internal_rx,
             event_tx,
             config,
             active_timeout: None,
             next_announce_at,
             startup_announce_retries_remaining,
+            outgoing_discovery: None,
             media: TelephonyServiceMedia::default(),
         }
     }
@@ -1113,6 +1142,14 @@ impl TelephonyService {
                         break;
                     };
                     if !self.handle_control(control).await {
+                        break;
+                    }
+                }
+                internal = self.internal_rx.recv() => {
+                    let Some(internal) = internal else {
+                        break;
+                    };
+                    if !self.handle_internal(internal).await {
                         break;
                     }
                 }
@@ -1170,6 +1207,7 @@ impl TelephonyService {
     }
 
     async fn shutdown(&mut self) {
+        self.outgoing_discovery = None;
         let commands = self.core.shutdown();
         if !commands.is_empty() {
             let _ = self.control_commands(Ok(commands)).await;
@@ -1209,36 +1247,26 @@ impl TelephonyService {
                 remote_identity,
                 profile,
                 discovery_timeout,
-            } => match self
-                .endpoint
-                .begin_outgoing_link(&mut self.core, remote_identity, profile, discovery_timeout)
-                .await
-            {
-                Ok(link_id) => {
-                    let stream_events = self.refresh_active_timeout();
-                    if !emit_service_events(self.event_tx.clone(), stream_events).await {
-                        return false;
-                    }
-                    if !emit_service_event(
-                        self.event_tx.clone(),
-                        TelephonyServiceEvent::OutgoingCallStarted {
-                            link_id,
-                            remote_identity,
-                        },
-                    )
-                    .await
-                    {
-                        return false;
-                    }
-                    return emit_snapshot(self.event_tx.clone(), self.core.snapshot()).await;
-                }
-                Err(err) => Err(err),
-            },
+            } => {
+                return self
+                    .start_outgoing_discovery(remote_identity, profile, discovery_timeout)
+                    .await;
+            }
             TelephonyControl::Answer => {
                 let commands = self.core.answer_active();
                 self.control_commands(commands).await
             }
             TelephonyControl::Hangup { ring_timeout } => {
+                if let Some(discovery) = self.outgoing_discovery.take() {
+                    return emit_service_event(
+                        self.event_tx.clone(),
+                        TelephonyServiceEvent::OutgoingCallFailed {
+                            remote_identity: discovery.remote_identity,
+                            message: "cancelled".to_string(),
+                        },
+                    )
+                    .await;
+                }
                 let commands = self.core.hangup_active(ring_timeout);
                 self.control_commands(commands).await
             }
@@ -1298,6 +1326,117 @@ impl TelephonyService {
         match result {
             Ok(()) => true,
             Err(err) => emit_service_error(self.event_tx.clone(), err).await,
+        }
+    }
+
+    async fn start_outgoing_discovery(
+        &mut self,
+        remote_identity: IdentityHash,
+        profile: Option<Profile>,
+        discovery_timeout: Duration,
+    ) -> bool {
+        if self.core.line_busy() || self.outgoing_discovery.is_some() {
+            return emit_service_error(self.event_tx.clone(), Error::LineBusy).await;
+        }
+
+        self.outgoing_discovery = Some(OutgoingDiscoveryState {
+            remote_identity,
+            profile,
+        });
+
+        if !emit_service_event(
+            self.event_tx.clone(),
+            TelephonyServiceEvent::OutgoingCallPending { remote_identity },
+        )
+        .await
+        {
+            return false;
+        }
+
+        let transport_tx = self.endpoint.transport_tx.clone();
+        let internal_tx = self.internal_tx.clone();
+        tokio::spawn(async move {
+            let result = async {
+                let peer = discover_remote_telephony_peer_on_transport(
+                    transport_tx.clone(),
+                    remote_identity,
+                    discovery_timeout,
+                )
+                .await?;
+                await_path_on_transport(transport_tx, peer.destination_hash, discovery_timeout)
+                    .await?;
+                Ok(peer)
+            }
+            .await;
+
+            let _ = internal_tx
+                .send(TelephonyInternalEvent::OutgoingDiscoveryCompleted {
+                    remote_identity,
+                    profile,
+                    result,
+                })
+                .await;
+        });
+
+        true
+    }
+
+    async fn handle_internal(&mut self, event: TelephonyInternalEvent) -> bool {
+        match event {
+            TelephonyInternalEvent::OutgoingDiscoveryCompleted {
+                remote_identity,
+                profile,
+                result,
+            } => {
+                let expected = OutgoingDiscoveryState {
+                    remote_identity,
+                    profile,
+                };
+                if self.outgoing_discovery != Some(expected) {
+                    return true;
+                }
+                self.outgoing_discovery = None;
+
+                match result.and_then(|peer| {
+                    self.endpoint.begin_outgoing_link_with_remote_pubkey(
+                        &mut self.core,
+                        remote_identity,
+                        peer.public_key,
+                        profile,
+                        peer.hops,
+                    )
+                }) {
+                    Ok(link_id) => {
+                        let stream_events = self.refresh_active_timeout();
+                        if !emit_service_events(self.event_tx.clone(), stream_events).await {
+                            return false;
+                        }
+                        if !emit_service_event(
+                            self.event_tx.clone(),
+                            TelephonyServiceEvent::OutgoingCallStarted {
+                                link_id,
+                                remote_identity,
+                            },
+                        )
+                        .await
+                        {
+                            return false;
+                        }
+                        emit_snapshot(self.event_tx.clone(), self.core.snapshot()).await
+                    }
+                    Err(err) => {
+                        let message = err.to_string();
+                        emit_service_event(
+                            self.event_tx.clone(),
+                            TelephonyServiceEvent::OutgoingCallFailed {
+                                remote_identity,
+                                message,
+                            },
+                        )
+                        .await
+                    }
+                }
+            }
         }
     }
 

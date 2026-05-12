@@ -1,0 +1,38 @@
+{
+  "commit": "1194c9011fe6402edc7aebe7ffe9650ea3b1afee",
+  "dirty": false,
+  "files": {
+    "LXST/Codecs/Codec2.py": {
+      "bytes": 4107,
+      "sha256": "e43a0be0b3b5b66665c47f468e8b102040632652a88e73598fc8cdbad8d4819a"
+    },
+    "LXST/Codecs/Opus.py": {
+      "bytes": 7806,
+      "sha256": "0f0e6f9ffa48e899a80220b33485226fc411d70cd07dce3ff0b7582a208deb03"
+    },
+    "LXST/Codecs/Raw.py": {
+      "bytes": 2316,
+      "sha256": "8bda42cb8602797e7ef62dd71bac074d2ec547278ec2b0bc5bf8bcb7c100a026"
+    },
+    "LXST/Codecs/__init__.py": {
+      "bytes": 704,
+      "sha256": "48c3f7adaf9c89326a81abf29f394f9857b11ea17315b3790214eaf7d45c03de"
+    },
+    "LXST/Network.py": {
+      "bytes": 6172,
+      "sha256": "3da8422a5c2c73f6e9c7d8e784b1e9cb307d079ebb5bf99183fc5daadfbd9701"
+    },
+    "LXST/Primitives/Telephony.py": {
+      "bytes": 37026,
+      "sha256": "35b2a4093368223145a548ac671504b43a4dcdac62368db754b082fe40138825"
+    },
+    "LXST/_version.py": {
+      "bytes": 22,
+      "sha256": "12b90b908d930c15f5388aa2d8619adb408f7aee1972e9448be5df7d16cb53a3"
+    }
+  },
+  "missing_files": [],
+  "package_version": "0.4.5",
+  "remote": "https://github.com/markqvist/LXST.git",
+  "upstream": "../upstream/LXST"
+}

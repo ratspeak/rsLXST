@@ -4,8 +4,6 @@ use std::process::Command;
 use lxst_core::{RawAudioFrame, RawBitDepth};
 use serde_json::Value;
 
-const SKIP_ENV: &str = "SKIP_PYTHON_LXST_INTEROP";
-
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -18,17 +16,19 @@ fn fixture_script() -> PathBuf {
     repo_root().join("tools/fixtures/lxst_raw_fixtures.py")
 }
 
-fn should_skip() -> bool {
-    std::env::var(SKIP_ENV).map(|v| v == "1").unwrap_or(false)
+fn python_interpreter() -> String {
+    std::env::var("PYTHON").unwrap_or_else(|_| {
+        if cfg!(windows) {
+            "python".to_string()
+        } else {
+            "python3".to_string()
+        }
+    })
 }
 
 fn python_fixtures() -> Vec<Value> {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping Python LXST Raw parity");
-        return Vec::new();
-    }
-
-    let output = Command::new("python3")
+    let output = Command::new(python_interpreter())
+        .env("PYTHONDONTWRITEBYTECODE", "1")
         .arg(fixture_script())
         .output()
         .expect("spawn Python Raw fixture generator");
@@ -44,7 +44,8 @@ fn python_fixtures() -> Vec<Value> {
 }
 
 fn decode_with_python(payload_hex: &str) -> Value {
-    let output = Command::new("python3")
+    let output = Command::new(python_interpreter())
+        .env("PYTHONDONTWRITEBYTECODE", "1")
         .arg(fixture_script())
         .arg("--decode-hex")
         .arg(payload_hex)
@@ -123,11 +124,6 @@ fn rust_decodes_python_raw_payloads() {
 
 #[test]
 fn python_decodes_rust_raw_payloads() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping Python LXST Raw parity");
-        return;
-    }
-
     let cases = [
         (
             RawAudioFrame::new(2, vec![0.0, 0.5, -0.25, 1.0]).unwrap(),

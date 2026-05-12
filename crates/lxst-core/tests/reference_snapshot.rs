@@ -4,8 +4,6 @@ use std::process::Command;
 
 use serde_json::Value;
 
-const SKIP_ENV: &str = "SKIP_PYTHON_LXST_INTEROP";
-
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -14,15 +12,21 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
+fn python_interpreter() -> String {
+    std::env::var("PYTHON").unwrap_or_else(|_| {
+        if cfg!(windows) {
+            "python".to_string()
+        } else {
+            "python3".to_string()
+        }
+    })
+}
+
 #[test]
 fn python_lxst_reference_snapshot_is_available() {
-    if std::env::var(SKIP_ENV).map(|v| v == "1").unwrap_or(false) {
-        eprintln!("{SKIP_ENV}=1 -> skipping Python LXST reference snapshot");
-        return;
-    }
-
     let script = repo_root().join("tools/reference/lxst_reference_snapshot.py");
-    let output = Command::new("python3")
+    let output = Command::new(python_interpreter())
+        .env("PYTHONDONTWRITEBYTECODE", "1")
         .arg(script)
         .output()
         .expect("spawn Python LXST reference snapshot");

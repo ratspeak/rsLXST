@@ -134,10 +134,10 @@ cargo build --release
 
 ## Test It
 
-Run the Rust-only test gate:
+Run the workspace test gate:
 
 ```bash
-SKIP_PYTHON_LXST_INTEROP=1 cargo test --workspace
+cargo test --workspace
 ```
 
 Run the local CI gate:
@@ -145,15 +145,22 @@ Run the local CI gate:
 ```bash
 cargo fmt --all -- --check
 cargo clippy --workspace -- -D warnings
-SKIP_PYTHON_LXST_INTEROP=1 cargo test --workspace
+cargo test --workspace
 ```
 
-The Rust-only gate covers wire codecs, telephony state, profile metadata,
-Opus stream boundaries, malformed-input handling, and the local service
-runtime.
+The test gate covers wire codecs, telephony state, profile metadata, Opus
+stream boundaries, malformed-input handling, the local service runtime, Python
+LXST wire parity, Reticulum destination parity, and live headless LXST
+Telephone interop. The Python tests expect upstream LXST at `../upstream/LXST`
+or `LXST_UPSTREAM_DIR`, and upstream Reticulum at `../upstream/Reticulum`,
+`RETICULUM_UPSTREAM_DIR`, or sibling `../rsReticulum`.
 
-Python LXST interop tests against the pinned upstream reference live in the development tree and are not
-included in this published release but I am happy to provide them on request.
+For full Python Opus media interop, install a native Opus runtime as well as
+the Python reference dependencies:
+
+```bash
+python -m pip install numpy cryptography pyserial cffi
+```
 
 ## Crate Layout
 
@@ -191,9 +198,12 @@ control_tx
 ```
 
 The service event stream is the app-facing state source. Use
-`TelephonyServiceEvent::Snapshot`, `IncomingCall`, `OutgoingCallStarted`,
-`CallTerminated`, stream lifecycle events, and media events instead of
-inferring call state from raw Reticulum traffic.
+`TelephonyServiceEvent::Snapshot`, `IncomingCall`, `OutgoingCallPending`,
+`OutgoingCallStarted`, `OutgoingCallFailed`, `CallTerminated`, stream lifecycle
+events, and media events instead of inferring call state from raw Reticulum
+traffic. Outgoing announce/path discovery runs asynchronously inside the
+service, so an unreachable or non-LXST peer does not block hangup, announce,
+media, or shutdown controls while discovery times out.
 
 For Opus calls, applications supply and receive `RawAudioFrame` values through
 `StartOpusStream` and `StartOpusReceiveStream`. rsLXST enforces the negotiated

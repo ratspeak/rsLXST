@@ -29,7 +29,6 @@ use lxst_telephony::{
     TelephonyServiceEvent, telephony_inbound_destination,
 };
 
-const SKIP_ENV: &str = "SKIP_PYTHON_LXST_INTEROP";
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn repo_root() -> PathBuf {
@@ -44,8 +43,14 @@ fn helper_script() -> PathBuf {
     repo_root().join("tools/interop/lxst_telephone_helper.py")
 }
 
-fn should_skip() -> bool {
-    std::env::var(SKIP_ENV).map(|v| v == "1").unwrap_or(false)
+fn python_interpreter() -> String {
+    std::env::var("PYTHON").unwrap_or_else(|_| {
+        if cfg!(windows) {
+            "python".to_string()
+        } else {
+            "python3".to_string()
+        }
+    })
 }
 
 fn temp_storage(name: &str) -> PathBuf {
@@ -88,8 +93,9 @@ impl PythonTelephoneHost {
         let log_path = storage.join("helper.stderr.log");
         let log_file = std::fs::File::create(&log_path).expect("create helper stderr log");
 
-        let mut command = Command::new("python3");
+        let mut command = Command::new(python_interpreter());
         command
+            .env("PYTHONDONTWRITEBYTECODE", "1")
             .arg(helper_script())
             .arg("--mode")
             .arg("host")
@@ -108,6 +114,7 @@ impl PythonTelephoneHost {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::from(log_file));
+        add_platform_python_library_path(&mut command);
         if enable_transport {
             command.arg("--enable-transport");
         }
@@ -186,7 +193,43 @@ impl PythonTelephoneHost {
     }
 
     fn stderr_log(&self) -> String {
-        std::fs::read_to_string(&self.log_path).unwrap_or_default()
+        let mut log = std::fs::read_to_string(&self.log_path).unwrap_or_default();
+        let rns_log_path = self.storage.join("rns_debug.log");
+        if let Ok(rns_log) = std::fs::read_to_string(&rns_log_path) {
+            if !log.is_empty() {
+                log.push_str("\n\n");
+            }
+            log.push_str("Reticulum log:\n");
+            log.push_str(&rns_log);
+        }
+        log
+    }
+}
+
+fn add_platform_python_library_path(command: &mut Command) {
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+
+    let defaults = [
+        "/opt/homebrew/opt/opus/lib",
+        "/opt/homebrew/opt/libogg/lib",
+        "/usr/local/opt/opus/lib",
+        "/usr/local/opt/libogg/lib",
+    ];
+    let existing = std::env::var("DYLD_FALLBACK_LIBRARY_PATH").unwrap_or_default();
+    let mut paths = Vec::new();
+    paths.extend(
+        defaults
+            .iter()
+            .filter(|path| Path::new(path).exists())
+            .map(|path| (*path).to_string()),
+    );
+    if !existing.is_empty() {
+        paths.push(existing);
+    }
+    if !paths.is_empty() {
+        command.env("DYLD_FALLBACK_LIBRARY_PATH", paths.join(":"));
     }
 }
 
@@ -997,11 +1040,6 @@ impl RustCallerSession {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn python_telephone_announce_reaches_rust_transport() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Python LXST Telephone announce interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
     let mut announce_rx = register_telephony_announce_handler(&actor_tx).await;
@@ -1072,11 +1110,6 @@ async fn python_telephone_announce_reaches_rust_transport() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn rust_to_rust_call_establishes_through_python_transport_hub() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Rust/Rust Python transport-hub interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let hub = PythonTelephoneHost::spawn_transport_hub(port);
     let ready = hub.wait_event("READY", Duration::from_secs(10));
@@ -1185,11 +1218,6 @@ async fn rust_to_rust_call_establishes_through_python_transport_hub() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn rust_telephony_startup_retry_announces_after_late_tcp_hub_connection() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Rust/Rust delayed TCP-hub interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let hub = PythonTelephoneHost::spawn_transport_hub(port);
     let ready = hub.wait_event("READY", Duration::from_secs(10));
@@ -1229,11 +1257,6 @@ async fn rust_telephony_startup_retry_announces_after_late_tcp_hub_connection() 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rust_outgoing_call_reaches_python_ringing_without_audio() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Python LXST Telephone call interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
     let mut announce_rx = register_telephony_announce_handler(&actor_tx).await;
@@ -1327,11 +1350,6 @@ async fn rust_outgoing_call_reaches_python_ringing_without_audio() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rust_outgoing_call_establishes_when_python_answers_without_audio() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Rust caller/Python answer interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
     let mut announce_rx = register_telephony_announce_handler(&actor_tx).await;
@@ -1454,11 +1472,6 @@ async fn rust_outgoing_call_establishes_when_python_answers_without_audio() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn python_outgoing_call_reaches_rust_incoming_ringing_without_audio() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Python LXST Telephone caller interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
 
@@ -1535,11 +1548,6 @@ async fn python_outgoing_call_reaches_rust_incoming_ringing_without_audio() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn python_outgoing_call_establishes_when_rust_answers_without_audio() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Python caller/Rust answer interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
 
@@ -1642,11 +1650,6 @@ async fn python_outgoing_call_establishes_when_rust_answers_without_audio() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rust_hangup_after_python_answer_ends_python_call_without_audio() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Rust hangup/Python ended interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
     let mut announce_rx = register_telephony_announce_handler(&actor_tx).await;
@@ -1768,11 +1771,6 @@ async fn rust_hangup_after_python_answer_ends_python_call_without_audio() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn python_hangup_after_rust_answer_ends_rust_call_without_audio() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Python hangup/Rust ended interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
 
@@ -1888,11 +1886,6 @@ async fn python_hangup_after_rust_answer_ends_rust_call_without_audio() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rust_outgoing_call_receives_python_busy_without_audio() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Python busy/Rust caller interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
     let mut announce_rx = register_telephony_announce_handler(&actor_tx).await;
@@ -1966,11 +1959,6 @@ async fn rust_outgoing_call_receives_python_busy_without_audio() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn python_outgoing_call_receives_rust_busy_without_audio() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Rust busy/Python caller interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
 
@@ -2063,11 +2051,6 @@ async fn python_outgoing_call_receives_rust_busy_without_audio() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rust_outgoing_call_receives_python_reject_without_audio() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Python reject/Rust caller interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
     let mut announce_rx = register_telephony_announce_handler(&actor_tx).await;
@@ -2158,11 +2141,6 @@ async fn rust_outgoing_call_receives_python_reject_without_audio() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn python_outgoing_call_receives_rust_reject_without_audio() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Rust reject/Python caller interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
 
@@ -2263,11 +2241,6 @@ async fn python_outgoing_call_receives_rust_reject_without_audio() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rust_service_outgoing_timeout_ends_python_ringing_call_without_audio() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Rust outgoing timeout/Python callee interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
     let mut announce_rx = register_telephony_announce_handler(&actor_tx).await;
@@ -2403,11 +2376,6 @@ async fn rust_service_outgoing_timeout_ends_python_ringing_call_without_audio() 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rust_service_incoming_timeout_ends_python_outgoing_call_without_reject() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Rust incoming timeout/Python caller interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
 
@@ -2535,11 +2503,6 @@ async fn rust_service_incoming_timeout_ends_python_outgoing_call_without_reject(
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rust_service_sends_raw_media_to_python_established_call() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Rust Raw media/Python receiver interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
     let mut announce_rx = register_telephony_announce_handler(&actor_tx).await;
@@ -2698,11 +2661,6 @@ async fn rust_service_sends_raw_media_to_python_established_call() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rust_service_sends_opus_voice_profile_matrix_to_python_established_calls() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Rust Opus media/Python receiver interop");
-        return;
-    }
-
     for profile in OPUS_VOICE_PROFILES {
         let Some(mut session) = RustCallerSession::establish(profile).await else {
             return;
@@ -2731,11 +2689,6 @@ async fn rust_service_sends_opus_voice_profile_matrix_to_python_established_call
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rust_profile_switch_reaches_python_and_media_uses_new_profile() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Rust-to-Python profile-switch interop");
-        return;
-    }
-
     let Some(mut session) = RustCallerSession::establish(Profile::QualityMedium).await else {
         return;
     };
@@ -2755,11 +2708,6 @@ async fn rust_profile_switch_reaches_python_and_media_uses_new_profile() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn python_profile_switch_reaches_rust_and_media_uses_new_profile() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Python-to-Rust profile-switch interop");
-        return;
-    }
-
     let Some(mut session) = RustCallerSession::establish(Profile::QualityHigh).await else {
         return;
     };
@@ -2771,11 +2719,6 @@ async fn python_profile_switch_reaches_rust_and_media_uses_new_profile() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rust_service_receives_python_raw_media_on_established_call() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Python Raw media/Rust receiver interop");
-        return;
-    }
-
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
     let mut announce_rx = register_telephony_announce_handler(&actor_tx).await;
@@ -2950,11 +2893,6 @@ async fn rust_service_receives_python_raw_media_on_established_call() {
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn rust_service_decodes_python_opus_voice_profile_matrix() {
-    if should_skip() {
-        eprintln!("{SKIP_ENV}=1 -> skipping live Python Opus media/Rust decoder interop");
-        return;
-    }
-
     for profile in OPUS_VOICE_PROFILES {
         let Some(mut session) = RustCallerSession::establish(profile).await else {
             return;

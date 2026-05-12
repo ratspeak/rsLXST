@@ -47,6 +47,7 @@ fn announce_entry(
         timestamp: 1234.0,
         public_key,
         ratchet: None,
+        name_hash: name_hash(TELEPHONY_DESTINATION_NAME),
         retained: false,
     }
 }
@@ -1534,6 +1535,127 @@ async fn telephony_service_announce_control_queues_telephony_announce() {
 }
 
 #[tokio::test]
+async fn telephony_service_outgoing_discovery_does_not_block_controls() {
+    let local_identity = Identity::new();
+    let remote_identity = Identity::new();
+    let remote_hash = remote_identity.hash;
+    let local_destination_hash = telephony_destination_hash(&local_identity.hash);
+    let remote_destination_hash = telephony_destination_hash(&remote_hash);
+
+    let (transport_tx, mut transport_rx) = mpsc::channel(16);
+    let endpoint = TelephonyRnsEndpoint::register(transport_tx, &local_identity).unwrap();
+    let _listener_registration = transport_rx.recv().await.unwrap();
+
+    let (control_tx, control_rx) = mpsc::channel(8);
+    let (event_tx, mut event_rx) = mpsc::channel(8);
+    let service = TelephonyService::with_config(
+        endpoint,
+        TelephonyRuntimeCore::new(),
+        control_rx,
+        event_tx,
+        TelephonyServiceConfig {
+            poll_interval: Duration::from_millis(20),
+            announce_on_start: false,
+            announce_interval: None,
+            ..TelephonyServiceConfig::default()
+        },
+    );
+    let service_task = tokio::spawn(service.run());
+
+    control_tx
+        .send(TelephonyControl::Call {
+            remote_identity: remote_hash,
+            profile: Some(Profile::QualityMedium),
+            discovery_timeout: Duration::from_millis(100),
+        })
+        .await
+        .unwrap();
+
+    let event = timeout(Duration::from_secs(1), event_rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        event,
+        TelephonyServiceEvent::OutgoingCallPending {
+            remote_identity: remote_hash,
+        }
+    );
+
+    let register = transport_rx.recv().await.unwrap();
+    assert!(matches!(
+        register,
+        TransportMessage::RegisterAnnounceHandler {
+            aspect_filter: Some(_),
+            receive_path_responses: true,
+            ..
+        }
+    ));
+
+    let rpc = transport_rx.recv().await.unwrap();
+    let TransportMessage::Rpc { query, response_tx } = rpc else {
+        panic!("expected GetRecentAnnounces Rpc, got {rpc:?}");
+    };
+    assert!(matches!(query, TransportQuery::GetRecentAnnounces));
+
+    control_tx.send(TelephonyControl::Announce).await.unwrap();
+    let announce = timeout(Duration::from_secs(1), transport_rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let TransportMessage::Outbound(announce) = announce else {
+        panic!("expected telephony announce while discovery is pending, got {announce:?}");
+    };
+    let (header, _data_offset) = rns_wire::header::PacketHeader::unpack(&announce.raw).unwrap();
+    assert_eq!(header.destination_hash, local_destination_hash);
+    assert_eq!(
+        header.flags.packet_type,
+        rns_wire::flags::PacketType::Announce
+    );
+
+    response_tx
+        .send(TransportQueryResponse::Announces(Vec::new()))
+        .unwrap();
+    let rpc = transport_rx.recv().await.unwrap();
+    let TransportMessage::Rpc { query, response_tx } = rpc else {
+        panic!("expected DropPath Rpc, got {rpc:?}");
+    };
+    assert!(matches!(
+        query,
+        TransportQuery::DropPath {
+            dest
+        } if dest == remote_destination_hash
+    ));
+    response_tx.send(TransportQueryResponse::Ok).unwrap();
+
+    let request_path = transport_rx.recv().await.unwrap();
+    let TransportMessage::RequestPath { destination_hash } = request_path else {
+        panic!("expected RequestPath, got {request_path:?}");
+    };
+    assert_eq!(destination_hash, remote_destination_hash);
+
+    let event = timeout(Duration::from_secs(1), event_rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        event,
+        TelephonyServiceEvent::OutgoingCallFailed {
+            remote_identity: remote_hash,
+            message: Error::RemoteTelephonyPeerNotDiscovered.to_string(),
+        }
+    );
+
+    control_tx.send(TelephonyControl::Shutdown).await.unwrap();
+    let stopped = timeout(Duration::from_secs(1), event_rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stopped, TelephonyServiceEvent::Stopped);
+    service_task.await.unwrap();
+}
+
+#[tokio::test]
 async fn telephony_service_call_control_discovers_peer_and_emits_started() {
     let local_identity = Identity::new();
     let remote_identity = Identity::new();
@@ -1569,6 +1691,17 @@ async fn telephony_service_call_control_discovers_peer_and_emits_started() {
         })
         .await
         .unwrap();
+
+    let event = timeout(Duration::from_secs(1), event_rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        event,
+        TelephonyServiceEvent::OutgoingCallPending {
+            remote_identity: remote_hash,
+        }
+    );
 
     let register = transport_rx.recv().await.unwrap();
     let TransportMessage::RegisterAnnounceHandler {
