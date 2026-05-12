@@ -835,7 +835,7 @@ impl OpusDecoder {
                 }
                 let count_byte = input[1];
                 let n_frames = (count_byte & 0x3F) as usize;
-                if n_frames < 1 || n_frames > 48 {
+                if !(1..=48).contains(&n_frames) {
                     return Err("Code 3: invalid frame count");
                 }
                 frame_count = n_frames;

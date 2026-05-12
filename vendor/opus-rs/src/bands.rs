@@ -202,7 +202,6 @@ pub fn haar1(x: &mut [f32], n0: usize, stride: usize) {
         } else {
             haar1_scalar(x, n0, stride);
         }
-        return;
     }
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     unsafe {
@@ -293,10 +292,7 @@ fn haar1_neon(x: &mut [f32], n0: usize) {
             let even = vmulq_f32(pairs.0, vscale);
             let odd = vmulq_f32(pairs.1, vscale);
 
-            let out = float32x4x2_t {
-                0: vaddq_f32(even, odd),
-                1: vsubq_f32(even, odd),
-            };
+            let out = float32x4x2_t(vaddq_f32(even, odd), vsubq_f32(even, odd));
             vst2q_f32(x.as_mut_ptr().add(idx), out);
             j += 4;
         }

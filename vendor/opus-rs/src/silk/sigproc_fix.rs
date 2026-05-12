@@ -937,7 +937,6 @@ pub fn silk_lpc_analysis_filter(
         } else {
             silk_lpc_analysis_filter_scalar(out, input, b, len, d);
         }
-        return;
     }
 
     #[cfg(not(target_arch = "aarch64"))]
