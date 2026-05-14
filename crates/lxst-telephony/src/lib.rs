@@ -1363,8 +1363,13 @@ impl TelephonyService {
                     discovery_timeout,
                 )
                 .await?;
-                await_path_on_transport(transport_tx, peer.destination_hash, discovery_timeout)
-                    .await?;
+                await_path_on_transport(
+                    transport_tx.clone(),
+                    peer.destination_hash,
+                    discovery_timeout,
+                )
+                .await?;
+                let peer = refresh_peer_hops_from_transport(transport_tx, peer).await?;
                 Ok(peer)
             }
             .await;
@@ -2212,6 +2217,7 @@ impl TelephonyRnsEndpoint {
             discovery_timeout,
         )
         .await?;
+        let peer = refresh_peer_hops_from_transport(self.transport_tx.clone(), peer).await?;
         self.begin_outgoing_link_with_remote_pubkey(
             core,
             remote_identity,
@@ -2893,6 +2899,40 @@ async fn await_path_on_transport(
     match timeout(path_timeout, response).await {
         Ok(Ok(true)) => Ok(()),
         Ok(Ok(false)) | Ok(Err(_)) | Err(_) => Err(Error::RemotePathNotDiscovered),
+    }
+}
+
+async fn refresh_peer_hops_from_transport(
+    transport_tx: mpsc::Sender<TransportMessage>,
+    mut peer: RemoteTelephonyPeer,
+) -> Result<RemoteTelephonyPeer, Error> {
+    if let Some(hops) = path_hops_on_transport(transport_tx, peer.destination_hash).await? {
+        peer.hops = hops;
+    }
+    Ok(peer)
+}
+
+async fn path_hops_on_transport(
+    transport_tx: mpsc::Sender<TransportMessage>,
+    destination_hash: [u8; 16],
+) -> Result<Option<u8>, Error> {
+    let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+    send_transport_async(
+        transport_tx,
+        TransportMessage::Rpc {
+            query: TransportQuery::GetPathTable,
+            response_tx,
+        },
+    )
+    .await?;
+
+    match response_rx.await.map_err(|_| Error::TransportQueryClosed)? {
+        TransportQueryResponse::PathTable(entries) => Ok(entries
+            .into_iter()
+            .find(|entry| entry.hash == destination_hash)
+            .map(|entry| entry.hops)),
+        TransportQueryResponse::Error(_) => Err(Error::UnexpectedTransportQueryResponse),
+        _ => Err(Error::UnexpectedTransportQueryResponse),
     }
 }
 

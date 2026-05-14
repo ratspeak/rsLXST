@@ -6,7 +6,7 @@ use rns_crypto::ed25519::Ed25519PrivateKey;
 use rns_identity::announce::AnnounceData;
 use rns_link::link::LinkState;
 use rns_transport::messages::{
-    AnnounceRpcEntry, TransportMessage, TransportQuery, TransportQueryResponse,
+    AnnounceRpcEntry, PathTableRpcEntry, TransportMessage, TransportQuery, TransportQueryResponse,
 };
 
 fn link(byte: u8) -> LinkId {
@@ -49,6 +49,17 @@ fn announce_entry(
         ratchet: None,
         name_hash: name_hash(TELEPHONY_DESTINATION_NAME),
         retained: false,
+    }
+}
+
+fn path_entry(destination_hash: [u8; 16], hops: u8) -> PathTableRpcEntry {
+    PathTableRpcEntry {
+        hash: destination_hash,
+        timestamp: 1235.0,
+        via: None,
+        hops,
+        expires: 3600.0,
+        interface: "test".to_string(),
     }
 }
 
@@ -1284,6 +1295,18 @@ async fn begin_outgoing_link_discovers_announce_and_sends_link_request() {
         assert_eq!(dest, destination_hash);
         reply.send(true).unwrap();
 
+        let rpc = transport_rx.recv().await.unwrap();
+        let TransportMessage::Rpc { query, response_tx } = rpc else {
+            panic!("expected path table Rpc, got {rpc:?}");
+        };
+        assert!(matches!(query, TransportQuery::GetPathTable));
+        response_tx
+            .send(TransportQueryResponse::PathTable(vec![path_entry(
+                destination_hash,
+                2,
+            )]))
+            .unwrap();
+
         let request_path = transport_rx.recv().await.unwrap();
         let TransportMessage::RequestPath {
             destination_hash: requested_hash,
@@ -1765,6 +1788,18 @@ async fn telephony_service_call_control_discovers_peer_and_emits_started() {
     };
     assert_eq!(dest, destination_hash);
     reply.send(true).unwrap();
+
+    let rpc = transport_rx.recv().await.unwrap();
+    let TransportMessage::Rpc { query, response_tx } = rpc else {
+        panic!("expected path table Rpc, got {rpc:?}");
+    };
+    assert!(matches!(query, TransportQuery::GetPathTable));
+    response_tx
+        .send(TransportQueryResponse::PathTable(vec![path_entry(
+            destination_hash,
+            1,
+        )]))
+        .unwrap();
 
     let request_path = transport_rx.recv().await.unwrap();
     let TransportMessage::RequestPath {
