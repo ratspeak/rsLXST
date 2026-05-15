@@ -37,6 +37,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: rsLXST -> target
+          cache-bin: false
       - name: Install Linux system deps
         run: sudo apt-get update && sudo apt-get install -y libudev-dev libdbus-1-dev pkg-config libopus0 libogg0
       - run: cargo fmt --all -- --check
@@ -80,6 +81,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: rsLXST -> target
+          cache-bin: false
       - name: Install Linux system deps
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libudev-dev libdbus-1-dev pkg-config libopus0 libogg0
@@ -118,6 +120,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: rsLXST -> target
+          cache-bin: false
       - uses: nttld/setup-ndk@v1
         if: matrix.target == 'aarch64-linux-android'
         id: setup-ndk
