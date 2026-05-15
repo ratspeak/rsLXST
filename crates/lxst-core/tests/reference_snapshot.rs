@@ -22,6 +22,12 @@ fn python_interpreter() -> String {
     })
 }
 
+fn normalized_remote(value: &Value) -> Option<String> {
+    value
+        .as_str()
+        .map(|remote| remote.strip_suffix(".git").unwrap_or(remote).to_string())
+}
+
 #[test]
 fn python_lxst_reference_snapshot_is_available() {
     let script = repo_root().join("tools/reference/lxst_reference_snapshot.py");
@@ -45,13 +51,14 @@ fn python_lxst_reference_snapshot_is_available() {
             .expect("reference lock JSON");
 
     assert_eq!(
-        snapshot["remote"].as_str(),
-        Some("https://github.com/markqvist/LXST.git")
+        normalized_remote(&snapshot["remote"]).as_deref(),
+        Some("https://github.com/markqvist/LXST")
     );
     assert_eq!(snapshot["dirty"].as_bool(), Some(false));
     assert_eq!(snapshot["missing_files"].as_array().unwrap().len(), 0);
     assert_eq!(
-        snapshot["remote"], locked["remote"],
+        normalized_remote(&snapshot["remote"]),
+        normalized_remote(&locked["remote"]),
         "LXST upstream remote changed"
     );
     assert_eq!(
