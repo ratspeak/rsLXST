@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
+import subprocess
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))
-from lxst_reference import git_output, json_dump, sha256_file, upstream_lxst_root  # noqa: E402
+from lxst_reference import git_output, json_dump, upstream_lxst_root  # noqa: E402
 
 
 REFERENCE_FILES = [
@@ -27,6 +29,10 @@ def package_version(root: Path) -> str:
     return version_globals["__version__"]
 
 
+def git_blob(root: Path, rel: str) -> bytes:
+    return subprocess.check_output(["git", "show", f"HEAD:{rel}"], cwd=str(root))
+
+
 def main() -> None:
     root = upstream_lxst_root()
     missing = [rel for rel in REFERENCE_FILES if not (root / rel).is_file()]
@@ -34,9 +40,10 @@ def main() -> None:
     for rel in REFERENCE_FILES:
         path = root / rel
         if path.is_file():
+            blob = git_blob(root, rel)
             files[rel] = {
-                "bytes": path.stat().st_size,
-                "sha256": sha256_file(path),
+                "bytes": len(blob),
+                "sha256": hashlib.sha256(blob).hexdigest(),
             }
 
     json_dump(
