@@ -5,8 +5,12 @@ use lxst_core::{
 use rns_crypto::ed25519::Ed25519PrivateKey;
 use rns_identity::announce::AnnounceData;
 use rns_link::link::LinkState;
-use rns_transport::messages::{
-    AnnounceRpcEntry, PathTableRpcEntry, TransportMessage, TransportQuery, TransportQueryResponse,
+use rns_transport::{
+    constants::InterfaceMode,
+    messages::{
+        AnnounceRpcEntry, InterfaceRole, PathTableRpcEntry, TransportMessage, TransportQuery,
+        TransportQueryResponse,
+    },
 };
 
 fn link(byte: u8) -> LinkId {
@@ -60,6 +64,9 @@ fn path_entry(destination_hash: [u8; 16], hops: u8) -> PathTableRpcEntry {
         hops,
         expires: 3600.0,
         interface: "test".to_string(),
+        interface_id: 1,
+        interface_mode: InterfaceMode::Full,
+        interface_role: InterfaceRole::Normal,
     }
 }
 
