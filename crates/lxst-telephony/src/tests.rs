@@ -52,6 +52,7 @@ fn announce_entry(
         public_key,
         ratchet: None,
         name_hash: name_hash(TELEPHONY_DESTINATION_NAME),
+        is_path_response: false,
         retained: false,
     }
 }
