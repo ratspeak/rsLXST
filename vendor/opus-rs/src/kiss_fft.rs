@@ -270,7 +270,7 @@ unsafe fn kf_bfly2_m1_neon(fout: &mut [KissCpx], n: usize) {
 #[inline(always)]
 fn kf_bfly2(fout: &mut [KissCpx], m: usize, n: usize) {
     if m == 1 {
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        #[cfg(target_arch = "x86_64")]
         unsafe {
             if std::arch::is_x86_feature_detected!("avx") {
                 kf_bfly2_m1_avx(fout, n);
@@ -472,7 +472,7 @@ fn kf_bfly4(
     mm: usize,
 ) {
     if m == 1 {
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        #[cfg(target_arch = "x86_64")]
         unsafe {
             if std::arch::is_x86_feature_detected!("avx") {
                 kf_bfly4_m1_avx(fout, n);
@@ -498,7 +498,7 @@ fn kf_bfly4(
             fout[base + 3] = KissCpx::new(scratch0.r - diff13.i, scratch0.i + diff13.r);
         }
     } else {
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        #[cfg(target_arch = "x86_64")]
         unsafe {
             if std::arch::is_x86_feature_detected!("avx") {
                 kf_bfly4_avx_inner(fout, twiddles, m, n, mm, fstride);
@@ -558,7 +558,7 @@ fn kf_bfly3(
     n: usize,
     mm: usize,
 ) {
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg(target_arch = "x86_64")]
     unsafe {
         if std::arch::is_x86_feature_detected!("avx") {
             kf_bfly3_avx_inner(fout, fstride, twiddles, m, n, mm);
@@ -621,7 +621,7 @@ fn kf_bfly5(
     n: usize,
     mm: usize,
 ) {
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg(target_arch = "x86_64")]
     unsafe {
         if std::arch::is_x86_feature_detected!("avx") {
             kf_bfly5_avx_inner(fout, fstride, twiddles, m, n, mm);
@@ -707,7 +707,7 @@ fn kf_bfly5(
     }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 unsafe fn kf_bfly2_m1_avx(fout: &mut [KissCpx], n: usize) {
     for i in 0..n {
@@ -718,7 +718,7 @@ unsafe fn kf_bfly2_m1_avx(fout: &mut [KissCpx], n: usize) {
     }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 unsafe fn kf_bfly4_m1_avx(fout: &mut [KissCpx], n: usize) {
     let mut i = 0usize;
@@ -737,7 +737,7 @@ unsafe fn kf_bfly4_m1_avx(fout: &mut [KissCpx], n: usize) {
     }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 unsafe fn kf_bfly4_avx_inner(
     fout: &mut [KissCpx],
@@ -784,7 +784,7 @@ unsafe fn kf_bfly4_avx_inner(
     }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 unsafe fn kf_bfly3_avx_inner(
     fout: &mut [KissCpx],
@@ -828,7 +828,7 @@ unsafe fn kf_bfly3_avx_inner(
     }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 unsafe fn kf_bfly5_avx_inner(
     fout: &mut [KissCpx],

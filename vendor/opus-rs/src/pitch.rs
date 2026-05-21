@@ -2,7 +2,7 @@
 use crate::celt_lpc::{autocorr, lpc};
 
 pub fn inner_prod(x: &[f32], y: &[f32], n: usize) -> f32 {
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg(target_arch = "x86_64")]
     unsafe {
         if std::arch::is_x86_feature_detected!("avx") {
             return inner_prod_avx(x, y, n);
@@ -30,7 +30,7 @@ pub fn inner_prod(x: &[f32], y: &[f32], n: usize) -> f32 {
 }
 
 pub fn dual_inner_prod(x: &[f32], y1: &[f32], y2: &[f32], n: usize) -> (f32, f32) {
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg(target_arch = "x86_64")]
     unsafe {
         if std::arch::is_x86_feature_detected!("avx") {
             return dual_inner_prod_avx(x, y1, y2, n);
@@ -60,7 +60,7 @@ pub fn dual_inner_prod(x: &[f32], y1: &[f32], y2: &[f32], n: usize) -> (f32, f32
 }
 
 pub fn pitch_xcorr(x: &[f32], y: &[f32], xcorr: &mut [f32], len: usize, max_pitch: usize) {
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg(target_arch = "x86_64")]
     unsafe {
         if std::arch::is_x86_feature_detected!("avx") {
             return pitch_xcorr_avx(x, y, xcorr, len, max_pitch);
@@ -461,7 +461,7 @@ unsafe fn pitch_xcorr_sse(x: &[f32], y: &[f32], xcorr: &mut [f32], len: usize, m
     }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 unsafe fn inner_prod_avx(x: &[f32], y: &[f32], n: usize) -> f32 {
     use std::arch::x86_64::*;
@@ -505,7 +505,7 @@ unsafe fn inner_prod_avx(x: &[f32], y: &[f32], n: usize) -> f32 {
     result
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 unsafe fn dual_inner_prod_avx(x: &[f32], y1: &[f32], y2: &[f32], n: usize) -> (f32, f32) {
     use std::arch::x86_64::*;
@@ -567,7 +567,7 @@ unsafe fn dual_inner_prod_avx(x: &[f32], y1: &[f32], y2: &[f32], n: usize) -> (f
     (s1, s2)
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 unsafe fn pitch_xcorr_avx(x: &[f32], y: &[f32], xcorr: &mut [f32], len: usize, max_pitch: usize) {
     let mut i = 0;
@@ -587,7 +587,7 @@ unsafe fn pitch_xcorr_avx(x: &[f32], y: &[f32], xcorr: &mut [f32], len: usize, m
     }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 unsafe fn xcorr_kernel_avx(x: &[f32], y: &[f32], sum: &mut [f32; 4], len: usize) {
     use std::arch::x86_64::*;
@@ -892,7 +892,7 @@ fn find_best_pitch(
         }
         sum
     };
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg(target_arch = "x86_64")]
     let mut syy = unsafe {
         if std::arch::is_x86_feature_detected!("avx") {
             use std::arch::x86_64::*;
@@ -932,7 +932,7 @@ fn find_best_pitch(
             sum
         }
     };
-    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86", target_arch = "x86_64")))]
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
     let mut syy = {
         let mut sum = 1.0f32;
         for j in 0..len {

@@ -149,7 +149,7 @@ impl MdctLookup {
             }
         }
 
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        #[cfg(target_arch = "x86_64")]
         unsafe {
             if std::arch::is_x86_feature_detected!("avx") {
                 mdct_pre_rotation_avx(f, f2, trig, &st.bitrev[..n4], n4, scale);
@@ -167,17 +167,11 @@ impl MdctLookup {
                 }
             }
         }
-        #[cfg(all(
-            not(any(target_arch = "x86", target_arch = "x86_64")),
-            target_arch = "aarch64"
-        ))]
+        #[cfg(all(not(target_arch = "x86_64"), target_arch = "aarch64"))]
         {
             mdct_pre_rotation_neon(f, f2, trig, &st.bitrev[..n4], n4, scale);
         }
-        #[cfg(all(
-            not(any(target_arch = "x86", target_arch = "x86_64")),
-            not(target_arch = "aarch64")
-        ))]
+        #[cfg(all(not(target_arch = "x86_64"), not(target_arch = "aarch64")))]
         for i in 0..n4 {
             let re = f[2 * i];
             let im = f[2 * i + 1];
@@ -192,7 +186,7 @@ impl MdctLookup {
 
         opus_fft_impl(st, f2);
 
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        #[cfg(target_arch = "x86_64")]
         unsafe {
             if std::arch::is_x86_feature_detected!("avx") {
                 mdct_post_rotation_avx(f2, trig, output, n4, n2, stride);
@@ -210,17 +204,11 @@ impl MdctLookup {
                 }
             }
         }
-        #[cfg(all(
-            not(any(target_arch = "x86", target_arch = "x86_64")),
-            target_arch = "aarch64"
-        ))]
+        #[cfg(all(not(target_arch = "x86_64"), target_arch = "aarch64"))]
         {
             mdct_post_rotation_neon(f2, trig, output, n4, n2, stride);
         }
-        #[cfg(all(
-            not(any(target_arch = "x86", target_arch = "x86_64")),
-            not(target_arch = "aarch64")
-        ))]
+        #[cfg(all(not(target_arch = "x86_64"), not(target_arch = "aarch64")))]
         for i in 0..n4 {
             let fp = &f2[i];
             let t0 = trig[i];
@@ -258,7 +246,7 @@ impl MdctLookup {
 
         let f2 = unsafe { std::slice::from_raw_parts_mut(f2_buf.as_mut_ptr() as *mut KissCpx, n4) };
 
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        #[cfg(target_arch = "x86_64")]
         unsafe {
             if std::arch::is_x86_feature_detected!("avx") {
                 mdct_backward_pre_rotation_avx(input, f2, trig, &st.bitrev[..n4], n4, n2, stride);
@@ -277,17 +265,11 @@ impl MdctLookup {
                 }
             }
         }
-        #[cfg(all(
-            not(any(target_arch = "x86", target_arch = "x86_64")),
-            target_arch = "aarch64"
-        ))]
+        #[cfg(all(not(target_arch = "x86_64"), target_arch = "aarch64"))]
         {
             mdct_backward_pre_rotation_neon(input, f2, trig, &st.bitrev[..n4], n4, n2, stride);
         }
-        #[cfg(all(
-            not(any(target_arch = "x86", target_arch = "x86_64")),
-            not(target_arch = "aarch64")
-        ))]
+        #[cfg(all(not(target_arch = "x86_64"), not(target_arch = "aarch64")))]
         for i in 0..n4 {
             let rev = st.bitrev[i] as usize;
             let x1 = input[2 * i * stride];
@@ -305,7 +287,7 @@ impl MdctLookup {
 
         assert!(output.len() >= overlap2 + n2);
 
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        #[cfg(target_arch = "x86_64")]
         unsafe {
             if std::arch::is_x86_feature_detected!("avx") {
                 mdct_backward_post_rotation_avx(f2, trig, output, n4, n2, overlap2);
@@ -335,17 +317,11 @@ impl MdctLookup {
                 }
             }
         }
-        #[cfg(all(
-            not(any(target_arch = "x86", target_arch = "x86_64")),
-            target_arch = "aarch64"
-        ))]
+        #[cfg(all(not(target_arch = "x86_64"), target_arch = "aarch64"))]
         {
             mdct_backward_post_rotation_neon(f2, trig, output, n4, n2, overlap2);
         }
-        #[cfg(all(
-            not(any(target_arch = "x86", target_arch = "x86_64")),
-            not(target_arch = "aarch64")
-        ))]
+        #[cfg(all(not(target_arch = "x86_64"), not(target_arch = "aarch64")))]
         for i in 0..((n4 + 1) >> 1) {
             let im0 = f2[i].r;
             let re0 = f2[i].i;
@@ -370,7 +346,7 @@ impl MdctLookup {
             output[overlap2 + 2 * i + 1] = yi1;
         }
 
-        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        #[cfg(target_arch = "x86_64")]
         unsafe {
             if std::arch::is_x86_feature_detected!("avx") {
                 mdct_tdac_avx(output, window, overlap);
@@ -386,17 +362,11 @@ impl MdctLookup {
                 }
             }
         }
-        #[cfg(all(
-            not(any(target_arch = "x86", target_arch = "x86_64")),
-            target_arch = "aarch64"
-        ))]
+        #[cfg(all(not(target_arch = "x86_64"), target_arch = "aarch64"))]
         {
             mdct_tdac_neon(output, window, overlap);
         }
-        #[cfg(all(
-            not(any(target_arch = "x86", target_arch = "x86_64")),
-            not(target_arch = "aarch64")
-        ))]
+        #[cfg(all(not(target_arch = "x86_64"), not(target_arch = "aarch64")))]
         for i in 0..overlap2 {
             let x1 = output[overlap - 1 - i];
             let x2 = output[i];
@@ -409,7 +379,7 @@ impl MdctLookup {
     }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 unsafe fn mdct_pre_rotation_avx(
     f: &[f32],
@@ -432,7 +402,7 @@ unsafe fn mdct_pre_rotation_avx(
     }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 unsafe fn mdct_post_rotation_avx(
     f2: &[KissCpx],
@@ -455,7 +425,7 @@ unsafe fn mdct_post_rotation_avx(
     }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 unsafe fn mdct_backward_pre_rotation_avx(
     input: &[f32],
@@ -480,7 +450,7 @@ unsafe fn mdct_backward_pre_rotation_avx(
     }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 unsafe fn mdct_backward_post_rotation_avx(
     f2: &[KissCpx],
@@ -515,7 +485,7 @@ unsafe fn mdct_backward_post_rotation_avx(
     }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 unsafe fn mdct_tdac_avx(output: &mut [f32], window: &[f32], overlap: usize) {
     use std::arch::x86_64::*;

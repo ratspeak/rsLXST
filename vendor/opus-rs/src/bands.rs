@@ -203,7 +203,7 @@ pub fn haar1(x: &mut [f32], n0: usize, stride: usize) {
             haar1_scalar(x, n0, stride);
         }
     }
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg(target_arch = "x86_64")]
     unsafe {
         if stride == 1 && n0 >= 16 && is_x86_feature_detected!("avx") {
             haar1_avx(x, n0);
@@ -214,7 +214,7 @@ pub fn haar1(x: &mut [f32], n0: usize, stride: usize) {
     haar1_scalar(x, n0, stride);
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx")]
 unsafe fn haar1_avx(x: &mut [f32], n0: usize) {
     use std::arch::x86_64::*;

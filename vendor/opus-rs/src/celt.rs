@@ -613,7 +613,7 @@ fn comb_filter_const(
     {
         comb_filter_const_neon(y, x, y_idx, x_idx, t, n, g10, g11, g12);
     }
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg(target_arch = "x86_64")]
     unsafe {
         if std::arch::is_x86_feature_detected!("avx") {
             comb_filter_const_avx(y, x, y_idx, x_idx, t, n, g10, g11, g12);
@@ -814,7 +814,7 @@ unsafe fn comb_filter_const_sse(
     }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn comb_filter_const_avx(
@@ -917,7 +917,7 @@ unsafe fn comb_filter_const_avx(
     }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx,fma")]
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn comb_filter_const_sse_fma(
