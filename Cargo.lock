@@ -942,7 +942,7 @@ dependencies = [
 
 [[package]]
 name = "rns-crypto"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "aes",
  "cbc",
@@ -960,7 +960,7 @@ dependencies = [
 
 [[package]]
 name = "rns-identity"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "hex",
  "rand 0.8.6",
@@ -976,7 +976,7 @@ dependencies = [
 
 [[package]]
 name = "rns-interface"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "bytes",
  "hex",
@@ -1001,7 +1001,7 @@ dependencies = [
 
 [[package]]
 name = "rns-link"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "hex",
  "rand 0.8.6",
@@ -1016,7 +1016,7 @@ dependencies = [
 
 [[package]]
 name = "rns-protocol"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "bzip2",
  "hex",
@@ -1032,7 +1032,7 @@ dependencies = [
 
 [[package]]
 name = "rns-runtime"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "bytes",
  "hex",
@@ -1057,7 +1057,7 @@ dependencies = [
 
 [[package]]
 name = "rns-transport"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "bytes",
  "hex",
@@ -1076,7 +1076,7 @@ dependencies = [
 
 [[package]]
 name = "rns-wire"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "rns-crypto",
  "sha2",
