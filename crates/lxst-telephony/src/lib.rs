@@ -2059,7 +2059,7 @@ impl TelephonyRnsEndpoint {
             destination_rx,
             identity,
             TELEPHONY_DESTINATION_NAME,
-            manager_signing_key,
+            Some(manager_signing_key),
         );
         let (established_tx, link_established_rx) = mpsc::channel(64);
         let (identified_tx, link_identified_rx) = mpsc::channel(64);
