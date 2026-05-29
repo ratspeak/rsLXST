@@ -15,7 +15,7 @@ use lxst_core::{
     TELEPHONY_DESTINATION_NAME, TelephonyAction, TelephonyCall,
 };
 use lxst_rns::{InboundLxstPacket, LxstLinkIngress, LxstMediaEgress, queue_lxst_link_packet};
-use rns_crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
+use rns_crypto::ed25519::Ed25519PublicKey;
 use rns_identity::destination::{
     DestType, Destination, DestinationError, Direction, ProofStrategy,
 };
@@ -2018,7 +2018,7 @@ pub struct TelephonyRnsEndpoint {
     pub link_closed_rx: mpsc::Receiver<LinkId>,
     transport_tx: mpsc::Sender<TransportMessage>,
     identity_pub_key: [u8; 64],
-    identity_signing_key: Ed25519PrivateKey,
+    identity: Identity,
     outgoing_attempts: HashMap<LinkId, OutgoingLinkAttempt>,
     outgoing_links: HashMap<LinkId, OutgoingLinkState>,
 }
@@ -2039,8 +2039,8 @@ impl TelephonyRnsEndpoint {
         transport_tx: mpsc::Sender<TransportMessage>,
         identity: &Identity,
     ) -> Result<Self, Error> {
-        let manager_signing_key = identity.get_signing_key().ok_or(Error::NoSigningKey)?;
-        let identity_signing_key = identity.get_signing_key().ok_or(Error::NoSigningKey)?;
+        // Software identities yield Some(key); hardware identities yield None and
+        // sign through the backend — both via `identity.sign()` / the LinkManager.
         let identity_pub_key = identity.get_public_key();
         let destination_hash = telephony_destination_hash(&identity.hash);
         let (destination_tx, destination_rx) = mpsc::channel::<DestinationEvent>(256);
@@ -2059,7 +2059,7 @@ impl TelephonyRnsEndpoint {
             destination_rx,
             identity,
             TELEPHONY_DESTINATION_NAME,
-            Some(manager_signing_key),
+            identity.get_signing_key(),
         );
         let (established_tx, link_established_rx) = mpsc::channel(64);
         let (identified_tx, link_identified_rx) = mpsc::channel(64);
@@ -2079,7 +2079,7 @@ impl TelephonyRnsEndpoint {
             link_closed_rx,
             transport_tx,
             identity_pub_key,
-            identity_signing_key,
+            identity: identity.clone(),
             outgoing_attempts: HashMap::new(),
             outgoing_links: HashMap::new(),
         })
@@ -2131,7 +2131,7 @@ impl TelephonyRnsEndpoint {
         signed_data.extend_from_slice(&self.identity_pub_key);
         signed_data.extend_from_slice(&announce_name_hash);
         signed_data.extend_from_slice(&random_hash);
-        let signature = self.identity_signing_key.sign(&signed_data);
+        let signature = self.identity.sign(&signed_data).unwrap_or([0u8; 64]);
 
         let mut announce_data = Vec::with_capacity(64 + 10 + 10 + 64);
         announce_data.extend_from_slice(&self.identity_pub_key);
@@ -2464,7 +2464,7 @@ impl TelephonyRnsEndpoint {
             return execute_command_with_link(
                 &self.transport_tx,
                 &self.identity_pub_key,
-                &self.identity_signing_key,
+                &self.identity,
                 link,
                 command,
             );
@@ -2486,7 +2486,7 @@ impl TelephonyRnsEndpoint {
             execute_command_with_link(
                 &self.transport_tx,
                 &self.identity_pub_key,
-                &self.identity_signing_key,
+                &self.identity,
                 link,
                 command,
             )?
@@ -2665,7 +2665,7 @@ impl TelephonyRnsEndpoint {
 pub fn execute_command_with_link(
     transport_tx: &mpsc::Sender<TransportMessage>,
     identity_pub_key: &[u8; 64],
-    identity_signing_key: &Ed25519PrivateKey,
+    identity: &Identity,
     link: &mut Link,
     command: &TelephonyCommand,
 ) -> Result<TelephonyCommandEffect, Error> {
@@ -2680,7 +2680,7 @@ pub fn execute_command_with_link(
         }
         TelephonyCommand::IdentifyLocalIdentity { link_id } => {
             let encrypted = link
-                .identify(identity_pub_key, identity_signing_key)
+                .identify_with(identity_pub_key, |m| identity.sign(m).unwrap_or([0u8; 64]))
                 .map_err(|err| Error::LinkOperation(err.to_string()))?;
             queue_link_context_packet(
                 transport_tx,

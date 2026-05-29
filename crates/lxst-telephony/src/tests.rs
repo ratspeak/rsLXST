@@ -2856,14 +2856,13 @@ fn execute_send_signal_queues_lxst_link_packet() {
     let (mut sender, receiver) = active_link_pair();
     let link_id = sender.link_id;
     let identity = Identity::new();
-    let signing_key = identity.get_signing_key().unwrap();
     let (tx, mut rx) = mpsc::channel(1);
 
     assert_eq!(
         execute_command_with_link(
             &tx,
             &identity.get_public_key(),
-            &signing_key,
+            &identity,
             &mut sender,
             &TelephonyCommand::SendSignal {
                 link_id,
@@ -2892,14 +2891,13 @@ fn execute_identify_queues_verifiable_link_identify_packet() {
     let (mut sender, mut receiver) = active_link_pair();
     let link_id = sender.link_id;
     let identity = Identity::new();
-    let signing_key = identity.get_signing_key().unwrap();
     let (tx, mut rx) = mpsc::channel(1);
 
     assert_eq!(
         execute_command_with_link(
             &tx,
             &identity.get_public_key(),
-            &signing_key,
+            &identity,
             &mut sender,
             &TelephonyCommand::IdentifyLocalIdentity { link_id },
         )
@@ -2926,14 +2924,13 @@ fn execute_teardown_queues_link_close_packet() {
     let (mut sender, mut receiver) = active_link_pair();
     let link_id = sender.link_id;
     let identity = Identity::new();
-    let signing_key = identity.get_signing_key().unwrap();
     let (tx, mut rx) = mpsc::channel(1);
 
     assert_eq!(
         execute_command_with_link(
             &tx,
             &identity.get_public_key(),
-            &signing_key,
+            &identity,
             &mut sender,
             &TelephonyCommand::TeardownLink { link_id },
         )
