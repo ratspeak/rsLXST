@@ -1221,6 +1221,19 @@ async fn endpoint_announce_sends_lxst_telephony_announce_with_public_key() {
 }
 
 #[tokio::test]
+async fn endpoint_announce_fails_closed_without_signer() {
+    let identity = Identity::new();
+    let public_only = Identity::from_public_key(&identity.get_public_key()).unwrap();
+
+    let (transport_tx, mut transport_rx) = mpsc::channel(4);
+    let endpoint = TelephonyRnsEndpoint::register(transport_tx, &public_only).unwrap();
+    let _listener_registration = transport_rx.recv().await.unwrap();
+
+    assert!(matches!(endpoint.announce(), Err(Error::NoSigningKey)));
+    assert!(transport_rx.try_recv().is_err());
+}
+
+#[tokio::test]
 async fn begin_outgoing_link_discovers_announce_and_sends_link_request() {
     let local_identity = Identity::new();
     let remote_identity = Identity::new();
@@ -2917,6 +2930,27 @@ fn execute_identify_queues_verifiable_link_identify_packet() {
         receiver.handle_identification(&encrypted).unwrap(),
         identity.get_public_key()
     );
+}
+
+#[test]
+fn execute_identify_fails_closed_without_signer() {
+    let (mut sender, _receiver) = active_link_pair();
+    let link_id = sender.link_id;
+    let identity = Identity::new();
+    let public_only = Identity::from_public_key(&identity.get_public_key()).unwrap();
+    let (tx, mut rx) = mpsc::channel(1);
+
+    assert!(matches!(
+        execute_command_with_link(
+            &tx,
+            &public_only.get_public_key(),
+            &public_only,
+            &mut sender,
+            &TelephonyCommand::IdentifyLocalIdentity { link_id },
+        ),
+        Err(Error::LinkOperation(_))
+    ));
+    assert!(rx.try_recv().is_err());
 }
 
 #[test]

@@ -2104,7 +2104,7 @@ impl TelephonyRnsEndpoint {
     }
 
     pub fn announce(&self) -> Result<(), Error> {
-        let raw = self.announce_packet();
+        let raw = self.announce_packet()?;
         try_send_transport(
             &self.transport_tx,
             TransportMessage::Outbound(OutboundRequest {
@@ -2114,7 +2114,7 @@ impl TelephonyRnsEndpoint {
         )
     }
 
-    fn announce_packet(&self) -> Vec<u8> {
+    fn announce_packet(&self) -> Result<Vec<u8>, Error> {
         let announce_name_hash = name_hash(TELEPHONY_DESTINATION_NAME);
         let random_bytes = rns_crypto::random::random_bytes(5);
         let timestamp = SystemTime::now()
@@ -2131,7 +2131,10 @@ impl TelephonyRnsEndpoint {
         signed_data.extend_from_slice(&self.identity_pub_key);
         signed_data.extend_from_slice(&announce_name_hash);
         signed_data.extend_from_slice(&random_hash);
-        let signature = self.identity.sign(&signed_data).unwrap_or([0u8; 64]);
+        let signature = self
+            .identity
+            .sign(&signed_data)
+            .ok_or(Error::NoSigningKey)?;
 
         let mut announce_data = Vec::with_capacity(64 + 10 + 10 + 64);
         announce_data.extend_from_slice(&self.identity_pub_key);
@@ -2155,7 +2158,7 @@ impl TelephonyRnsEndpoint {
         };
         let mut raw = header.pack();
         raw.extend_from_slice(&announce_data);
-        raw
+        Ok(raw)
     }
 
     pub fn deregister_link_destination(&self, link_id: LinkId) -> Result<(), Error> {
@@ -2680,7 +2683,7 @@ pub fn execute_command_with_link(
         }
         TelephonyCommand::IdentifyLocalIdentity { link_id } => {
             let encrypted = link
-                .identify_with(identity_pub_key, |m| identity.sign(m).unwrap_or([0u8; 64]))
+                .identify_with_fallible(identity_pub_key, |m| identity.sign(m))
                 .map_err(|err| Error::LinkOperation(err.to_string()))?;
             queue_link_context_packet(
                 transport_tx,
