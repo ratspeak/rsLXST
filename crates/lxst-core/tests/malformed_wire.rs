@@ -1,5 +1,6 @@
 use lxst_core::{
-    CodecKind, Error, FIELD_FRAMES, FIELD_SIGNALLING, Frame, LxstPacket, RawAudioFrame, RawBitDepth,
+    CodecKind, Error, FIELD_FRAMES, FIELD_SIGNALLING, Frame, LxstPacket, OpusDecoderState, Profile,
+    RawAudioFrame, RawBitDepth,
 };
 use proptest::prelude::*;
 use rmpv::Value;
@@ -117,12 +118,60 @@ fn raw_payload_errors_are_explicit() {
     );
 }
 
+/// T3-5a finding: a SILK packet whose duration exceeds the profile's
+/// frame size used to clamp the resampler output but not its input,
+/// overrunning the buffer (vendor opus-rs silk/resampler.rs). libopus
+/// rejects such packets with OPUS_BUFFER_TOO_SMALL; the port now does too.
+#[test]
+fn opus_decoder_rejects_packet_longer_than_frame_size() {
+    let mut decoder = OpusDecoderState::new(Profile::LatencyLow).expect("decoder");
+    let frame = Frame::new(CodecKind::Opus, vec![41u8, 0, 0, 0, 0, 0, 0, 0, 0]);
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        decoder.decode_frame(&frame)
+    }));
+
+    assert!(result.expect("decode must not panic").is_err());
+}
+
 proptest! {
     #[test]
     fn arbitrary_bytes_never_panic(bytes in proptest::collection::vec(any::<u8>(), 0..1024)) {
         let result = std::panic::catch_unwind(|| {
             let _ = LxstPacket::decode(&bytes);
         });
+        prop_assert!(result.is_ok());
+    }
+
+    /// T3-5a: the Opus decode path never panics on attacker-controlled
+    /// payloads — single-subframe profile (direct decode).
+    #[test]
+    fn arbitrary_opus_payloads_never_panic_direct(
+        bytes in proptest::collection::vec(any::<u8>(), 0..512),
+    ) {
+        let mut decoder = OpusDecoderState::new(Profile::LatencyLow).expect("decoder");
+        let frame = Frame::new(CodecKind::Opus, bytes);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = decoder.decode_frame(&frame);
+        }));
+        prop_assert!(result.is_ok());
+    }
+
+    /// T3-5a: multi-subframe profile, with half the cases forced to TOC
+    /// code 3 so the subframe parser (incl. the T0-3 CBR path) is hit.
+    #[test]
+    fn arbitrary_opus_payloads_never_panic_multi_subframe(
+        mut bytes in proptest::collection::vec(any::<u8>(), 0..512),
+        force_code3 in any::<bool>(),
+    ) {
+        if force_code3 && !bytes.is_empty() {
+            bytes[0] |= 0x03;
+        }
+        let mut decoder = OpusDecoderState::new(Profile::QualityMedium).expect("decoder");
+        let frame = Frame::new(CodecKind::Opus, bytes);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = decoder.decode_frame(&frame);
+        }));
         prop_assert!(result.is_ok());
     }
 }

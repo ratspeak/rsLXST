@@ -915,6 +915,18 @@ impl OpusDecoder {
             _ => unreachable!(),
         }
 
+        // libopus opus_decode_native rejects packets whose duration exceeds
+        // the caller's frame_size (OPUS_BUFFER_TOO_SMALL). Without this the
+        // decode paths clamp output buffers to sub_frame_size but feed the
+        // resampler the full decoded sample count, overrunning the output.
+        let samples_per_frame = samples_per_frame_from_toc(toc, self.sampling_rate);
+        if samples_per_frame * frame_count > frame_size {
+            return Err("Output buffer too small for packet duration");
+        }
+        if output.len() < frame_size * self.channels {
+            return Err("Output slice shorter than frame_size");
+        }
+
         self.frame_size = frame_size;
         self.bandwidth = bandwidth;
         self.stream_channels = packet_channels;
@@ -1279,6 +1291,30 @@ fn bandwidth_from_toc(toc: u8) -> Bandwidth {
             }
         }
     }
+}
+
+/// Samples per frame at `fs_hz`, straight port of libopus
+/// `opus_packet_get_samples_per_frame` (exact for 2.5 ms CELT configs,
+/// which `frame_duration_ms_from_toc` rounds to 2 ms).
+fn samples_per_frame_from_toc(toc: u8, fs_hz: i32) -> usize {
+    let audiosize = if toc & 0x80 != 0 {
+        let config = i32::from((toc >> 3) & 0x03);
+        (fs_hz << config) / 400
+    } else if (toc & 0x60) == 0x60 {
+        if toc & 0x08 != 0 {
+            fs_hz / 50
+        } else {
+            fs_hz / 100
+        }
+    } else {
+        let config = i32::from((toc >> 3) & 0x03);
+        if config == 3 {
+            fs_hz * 60 / 1000
+        } else {
+            (fs_hz << config) / 100
+        }
+    };
+    audiosize as usize
 }
 
 fn frame_duration_ms_from_toc(toc: u8) -> i32 {

@@ -531,6 +531,13 @@ fn parse_code3_subframe_payloads(
             ));
         }
         let frame_len = compressed.len() / frame_count;
+        // An empty payload passes the divisibility check with frame_len 0,
+        // and chunks(0) panics — reject before reaching it.
+        if frame_len == 0 {
+            return Err(OpusCodecError::MalformedPacket(
+                "CBR code 3 payload is empty",
+            ));
+        }
         Ok(compressed.chunks(frame_len).collect())
     }
 }
@@ -645,6 +652,27 @@ mod tests {
 
         assert_eq!(encoded.payload[0] & !0x03, 0x48);
         assert!(encoded.payload.len() <= profile.opus_payload_ceiling_bytes().unwrap());
+    }
+
+    /// T0-3: a two-byte CBR code-3 frame (empty payload) passed the
+    /// divisibility check with frame_len 0 and panicked in chunks(0) —
+    /// a remote crash vector for any call peer.
+    #[test]
+    fn opus_decoder_rejects_empty_cbr_code3_payload() {
+        let mut decoder = OpusDecoderState::new(Profile::QualityMedium).unwrap();
+        let hostile = Frame::new(CodecKind::Opus, [0x03, 0x03]);
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            decoder.decode_frame(&hostile)
+        }));
+
+        let decode_result = result.expect("decode must not panic");
+        assert!(matches!(
+            decode_result,
+            Err(OpusCodecError::MalformedPacket(
+                "CBR code 3 payload is empty"
+            ))
+        ));
     }
 
     #[test]
