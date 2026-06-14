@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 rust-version = "1.85"
@@ -32,5 +32,5 @@ rns-runtime = { path = "../rsReticulum/crates/rns-runtime", version = "1.0.0" }
 rns-transport = { path = "../rsReticulum/crates/rns-transport", version = "1.0.0" }
 rns-wire = { path = "../rsReticulum/crates/rns-wire", version = "1.0.0" }
 
-lxst-core = { path = "crates/lxst-core", version = "0.1.0" }
-lxst-rns = { path = "crates/lxst-rns", version = "0.1.0" }
+lxst-core = { path = "crates/lxst-core", version = "0.1.1" }
+lxst-rns = { path = "crates/lxst-rns", version = "0.1.1" }
