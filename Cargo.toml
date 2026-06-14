@@ -24,13 +24,13 @@ proptest = "1"
 opus-rs = { path = "vendor/opus-rs" }
 serial_test = "3"
 
-rns-crypto = { path = "../rsReticulum/crates/rns-crypto" }
-rns-identity = { path = "../rsReticulum/crates/rns-identity" }
-rns-interface = { path = "../rsReticulum/crates/rns-interface" }
-rns-link = { path = "../rsReticulum/crates/rns-link" }
-rns-runtime = { path = "../rsReticulum/crates/rns-runtime" }
-rns-transport = { path = "../rsReticulum/crates/rns-transport" }
-rns-wire = { path = "../rsReticulum/crates/rns-wire" }
+rns-crypto = { path = "../rsReticulum/crates/rns-crypto", version = "1.0.0" }
+rns-identity = { path = "../rsReticulum/crates/rns-identity", version = "1.0.0" }
+rns-interface = { path = "../rsReticulum/crates/rns-interface", version = "1.0.0" }
+rns-link = { path = "../rsReticulum/crates/rns-link", version = "1.0.0" }
+rns-runtime = { path = "../rsReticulum/crates/rns-runtime", version = "1.0.0" }
+rns-transport = { path = "../rsReticulum/crates/rns-transport", version = "1.0.0" }
+rns-wire = { path = "../rsReticulum/crates/rns-wire", version = "1.0.0" }
 
-lxst-core = { path = "crates/lxst-core" }
-lxst-rns = { path = "crates/lxst-rns" }
+lxst-core = { path = "crates/lxst-core", version = "0.1.0" }
+lxst-rns = { path = "crates/lxst-rns", version = "0.1.0" }
