@@ -942,13 +942,6 @@ fn rns_endpoint_try_drive_ready_pumps_reticulum_handshake_events() {
     let mut core = TelephonyRuntimeCore::new();
     assert!(endpoint.try_drive_ready(&mut core).unwrap().is_empty());
 
-    let (proof_header, proof_data) = take_outbound(&mut transport_rx);
-    assert_eq!(proof_header.destination_hash, link_id);
-    assert_eq!(
-        proof_header.flags.packet_type,
-        rns_wire::flags::PacketType::Proof
-    );
-
     let register_link = transport_rx.try_recv().unwrap();
     let TransportMessage::RegisterLink {
         link_id: registered_link_id,
@@ -964,6 +957,23 @@ fn rns_endpoint_try_drive_ready_pumps_reticulum_handshake_events() {
     assert_eq!(registered_destination_hash, endpoint.destination_hash);
     assert_eq!(interface_id, 7);
     assert!(!registered_initiator);
+
+    let proof = transport_rx.try_recv().unwrap();
+    let TransportMessage::OutboundAttached {
+        request: proof,
+        interface_id: proof_interface_id,
+    } = proof
+    else {
+        panic!("expected attached Link proof, got {proof:?}");
+    };
+    assert_eq!(proof_interface_id, 7);
+    let (proof_header, proof_offset) = rns_wire::header::PacketHeader::unpack(&proof.raw).unwrap();
+    let proof_data = proof.raw[proof_offset..].to_vec();
+    assert_eq!(proof_header.destination_hash, link_id);
+    assert_eq!(
+        proof_header.flags.packet_type,
+        rns_wire::flags::PacketType::Proof
+    );
 
     let local_public_key = local_identity.get_public_key();
     let mut local_ed25519_public_key = [0u8; 32];
