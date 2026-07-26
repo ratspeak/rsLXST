@@ -291,7 +291,7 @@ async fn attach_rust_tcp_client(
     cfg.connect_timeout_secs = 1;
     cfg.max_reconnect_tries = Some(5);
 
-    let handle = spawn_tcp_client(cfg, interface_id, actor_tx.clone(), None)
+    let handle = spawn_tcp_client(cfg, interface_id, actor_tx.clone())
         .await
         .expect("spawn Rust TCP client");
 
@@ -352,10 +352,13 @@ fn register_interface_entry(
         online: Some(handle.online),
         rxb: handle.rxb,
         txb: handle.txb,
+        inspection: None,
         tx_drops: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
         ingress: IngressController::new(),
         announce_queue: Vec::new(),
         multipoint: false,
+        recursive_prs: false,
+        announces_from_internal: true,
     };
     (handle.id, entry, handle.read_task)
 }
