@@ -7,6 +7,7 @@ use rns_identity::announce::AnnounceData;
 use rns_link::link::LinkState;
 use rns_transport::{
     constants::InterfaceMode,
+    link_messages::PacketMetrics,
     messages::{
         AnnounceRpcEntry, InterfaceRole, PathTableRpcEntry, TransportMessage, TransportQuery,
         TransportQueryResponse,
@@ -195,6 +196,7 @@ fn queue_inbound_opus_frame(
                 &encrypted,
             )),
             interface_id: 1,
+            metrics: PacketMetrics::default(),
         })
         .unwrap();
 }
@@ -936,6 +938,7 @@ fn rns_endpoint_try_drive_ready_pumps_reticulum_handshake_events() {
         .try_send(DestinationEvent::LinkRequest {
             raw: build_link_request_packet(endpoint.destination_hash, &request_data),
             interface_id: 7,
+            metrics: PacketMetrics::default(),
         })
         .unwrap();
 
@@ -991,6 +994,7 @@ fn rns_endpoint_try_drive_ready_pumps_reticulum_handshake_events() {
                 &rtt_data,
             )),
             interface_id: 7,
+            metrics: PacketMetrics::default(),
         })
         .unwrap();
 
@@ -2211,6 +2215,7 @@ async fn telephony_service_decodes_inbound_opus_frames_with_call_profile() {
                     &encrypted,
                 )),
                 interface_id: 1,
+                metrics: PacketMetrics::default(),
             })
             .unwrap();
 
@@ -2585,6 +2590,7 @@ async fn telephony_service_stops_media_streams_on_established_profile_switch() {
                 &encrypted,
             )),
             interface_id: 1,
+            metrics: PacketMetrics::default(),
         })
         .unwrap();
     assert!(service.drive_ready().await);
@@ -2775,6 +2781,7 @@ fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
         .try_send(DestinationEvent::InboundPacket {
             raw: Bytes::from(link_proof_packet(link_id, &proof_data)),
             interface_id: 1,
+            metrics: PacketMetrics::default(),
         })
         .unwrap();
 
@@ -2796,6 +2803,7 @@ fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
                 &[rns_link::constants::KEEPALIVE_RESPONSE],
             )),
             interface_id: 1,
+            metrics: PacketMetrics::default(),
         })
         .unwrap();
     assert!(endpoint.try_drive_once(&mut core).unwrap().is_none());
@@ -2812,6 +2820,7 @@ fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
                 &encrypted_available,
             )),
             interface_id: 1,
+            metrics: PacketMetrics::default(),
         })
         .unwrap();
 
@@ -2847,6 +2856,7 @@ fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
                 &close_data,
             )),
             interface_id: 1,
+            metrics: PacketMetrics::default(),
         })
         .unwrap();
 
@@ -3017,6 +3027,7 @@ fn outgoing_link_ignores_unauthenticated_remote_close() {
                 &[0xA5; 16],
             )),
             interface_id: 1,
+            metrics: PacketMetrics::default(),
         })
         .unwrap();
 
@@ -3055,6 +3066,7 @@ fn outgoing_link_closes_on_authenticated_remote_close() {
                 &close_data,
             )),
             interface_id: 1,
+            metrics: PacketMetrics::default(),
         })
         .unwrap();
 
@@ -3208,6 +3220,7 @@ fn outgoing_active_ignores_inbound_link_request_event() {
         .try_send(DestinationEvent::LinkRequest {
             raw: Bytes::from_static(&[0x01, 0x02, 0x03]),
             interface_id: 1,
+            metrics: PacketMetrics::default(),
         })
         .unwrap();
 
@@ -3241,6 +3254,7 @@ fn outgoing_active_ignores_packet_for_other_destination() {
                 &[0x99],
             )),
             interface_id: 1,
+            metrics: PacketMetrics::default(),
         })
         .unwrap();
 

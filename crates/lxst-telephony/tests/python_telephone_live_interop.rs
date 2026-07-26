@@ -352,6 +352,7 @@ fn register_interface_entry(
         online: Some(handle.online),
         rxb: handle.rxb,
         txb: handle.txb,
+        inspection: None,
         tx_drops: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
         ingress: IngressController::new(),
         announce_queue: Vec::new(),
