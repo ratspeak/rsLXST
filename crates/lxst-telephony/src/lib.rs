@@ -2014,7 +2014,7 @@ pub struct TelephonyRnsEndpoint {
     pub manager: LinkManager,
     pub link_established_rx: mpsc::Receiver<LinkId>,
     pub link_identified_rx: mpsc::Receiver<(LinkId, IdentityHash)>,
-    pub link_packet_rx: mpsc::Receiver<(Vec<u8>, LinkId)>,
+    pub link_packet_rx: mpsc::UnboundedReceiver<(Vec<u8>, LinkId)>,
     pub link_closed_rx: mpsc::Receiver<LinkId>,
     transport_tx: mpsc::Sender<TransportMessage>,
     identity_pub_key: [u8; 64],
@@ -2063,7 +2063,7 @@ impl TelephonyRnsEndpoint {
         );
         let (established_tx, link_established_rx) = mpsc::channel(64);
         let (identified_tx, link_identified_rx) = mpsc::channel(64);
-        let (packet_tx, link_packet_rx) = mpsc::channel(256);
+        let (packet_tx, link_packet_rx) = mpsc::unbounded_channel();
         let (closed_tx, link_closed_rx) = mpsc::channel(64);
         manager.set_link_established_channel(established_tx);
         manager.set_link_identified_channel(identified_tx);

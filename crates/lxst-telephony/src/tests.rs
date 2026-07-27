@@ -844,13 +844,13 @@ fn rns_endpoint_try_step_feeds_established_and_packet_events() {
         }]
     );
 
-    let (packet_tx, packet_rx) = mpsc::channel(1);
+    let (packet_tx, packet_rx) = mpsc::unbounded_channel();
     endpoint.manager.set_link_packet_channel(packet_tx.clone());
     endpoint.link_packet_rx = packet_rx;
     let remote = identity(0xD2);
     core.caller_identified(link_id, remote).unwrap();
     packet_tx
-        .try_send((
+        .send((
             signalling_packet(Signal::from(Profile::LatencyLow))
                 .encode()
                 .unwrap(),
@@ -894,11 +894,11 @@ fn rns_endpoint_try_drive_once_executes_step_commands() {
     core.start_outgoing_call(link_id, identity(0xE2), None)
         .unwrap();
 
-    let (packet_tx, packet_rx) = mpsc::channel(1);
+    let (packet_tx, packet_rx) = mpsc::unbounded_channel();
     endpoint.manager.set_link_packet_channel(packet_tx.clone());
     endpoint.link_packet_rx = packet_rx;
     packet_tx
-        .try_send((
+        .send((
             signalling_packet(Signal::from(Profile::LatencyLow))
                 .encode()
                 .unwrap(),
