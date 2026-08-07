@@ -15,10 +15,10 @@ fn silk_nlsf_residual_dequant(
     for i in (0..order as usize).rev() {
         let pred_q10 = silk_smulbb(out_q10, pred_coef_q8[i] as i32) >> 8;
         let mut current_out_q10 = (indices[i] as i32) << 10;
-        if current_out_q10 > 0 {
-            current_out_q10 -= NLSF_QUANT_LEVEL_ADJ;
-        } else if current_out_q10 < 0 {
-            current_out_q10 += NLSF_QUANT_LEVEL_ADJ;
+        match current_out_q10.cmp(&0) {
+            std::cmp::Ordering::Greater => current_out_q10 -= NLSF_QUANT_LEVEL_ADJ,
+            std::cmp::Ordering::Less => current_out_q10 += NLSF_QUANT_LEVEL_ADJ,
+            std::cmp::Ordering::Equal => {}
         }
 
         out_q10 = silk_smlawb(pred_q10, current_out_q10, quant_step_size_q16);

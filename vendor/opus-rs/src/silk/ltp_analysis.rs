@@ -42,17 +42,21 @@ pub fn silk_find_ltp_fix(
         );
 
         extra_shifts = xx_shifts - xx_shifts_matrix;
-        if extra_shifts > 0 {
-            xx_shifts_vector = xx_shifts;
-            for i in 0..(LTP_ORDER * LTP_ORDER) {
-                xxlp_ptr[i] = silk_rshift32(xxlp_ptr[i], extra_shifts);
+        match extra_shifts.cmp(&0) {
+            std::cmp::Ordering::Greater => {
+                xx_shifts_vector = xx_shifts;
+                for item in xxlp_ptr.iter_mut().take(LTP_ORDER * LTP_ORDER) {
+                    *item = silk_rshift32(*item, extra_shifts);
+                }
+                nrg = silk_rshift32(nrg, extra_shifts);
             }
-            nrg = silk_rshift32(nrg, extra_shifts);
-        } else if extra_shifts < 0 {
-            xx_shifts_vector = xx_shifts_matrix;
-            xx = silk_rshift32(xx, -extra_shifts);
-        } else {
-            xx_shifts_vector = xx_shifts;
+            std::cmp::Ordering::Less => {
+                xx_shifts_vector = xx_shifts_matrix;
+                xx = silk_rshift32(xx, -extra_shifts);
+            }
+            std::cmp::Ordering::Equal => {
+                xx_shifts_vector = xx_shifts;
+            }
         }
 
         let xxlp_vec_ptr = &mut xxltp_q17_vector[k * LTP_ORDER..];

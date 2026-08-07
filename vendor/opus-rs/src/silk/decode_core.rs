@@ -22,10 +22,14 @@ pub fn silk_decode_core(
     for i in 0..ps_dec.frame_length as usize {
         rand_seed = silk_rand(rand_seed);
         ps_dec.exc_q14[i] = (pulses[i] as i32) << 14;
-        if ps_dec.exc_q14[i] > 0 {
-            ps_dec.exc_q14[i] -= QUANT_LEVEL_ADJUST_Q10 << 4;
-        } else if ps_dec.exc_q14[i] < 0 {
-            ps_dec.exc_q14[i] += QUANT_LEVEL_ADJUST_Q10 << 4;
+        match ps_dec.exc_q14[i].cmp(&0) {
+            std::cmp::Ordering::Greater => {
+                ps_dec.exc_q14[i] -= QUANT_LEVEL_ADJUST_Q10 << 4;
+            }
+            std::cmp::Ordering::Less => {
+                ps_dec.exc_q14[i] += QUANT_LEVEL_ADJUST_Q10 << 4;
+            }
+            std::cmp::Ordering::Equal => {}
         }
         ps_dec.exc_q14[i] += offset_q10 << 4;
         if rand_seed < 0 {

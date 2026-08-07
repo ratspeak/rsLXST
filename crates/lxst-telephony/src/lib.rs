@@ -1549,11 +1549,11 @@ impl TelephonyService {
             return true;
         };
 
-        if !frames.is_empty()
-            && let Err(err) = self.send_opus_frames(profile, frames).await
-        {
-            self.media.opus_transmit_stream = None;
-            return emit_service_error(self.event_tx.clone(), err).await;
+        if !frames.is_empty() {
+            if let Err(err) = self.send_opus_frames(profile, frames).await {
+                self.media.opus_transmit_stream = None;
+                return emit_service_error(self.event_tx.clone(), err).await;
+            }
         }
 
         if source_closed {
@@ -1725,10 +1725,10 @@ impl TelephonyService {
                             return false;
                         }
                     }
-                    if let Some(event) = media_received
-                        && !emit_service_event(self.event_tx.clone(), event).await
-                    {
-                        return false;
+                    if let Some(event) = media_received {
+                        if !emit_service_event(self.event_tx.clone(), event).await {
+                            return false;
+                        }
                     }
                     for event in opus_received_events {
                         if !emit_service_event(self.event_tx.clone(), event).await {
@@ -1839,12 +1839,14 @@ impl TelephonyService {
                 dropped,
             });
         }
-        if sink_closed && let Some(stream) = self.media.opus_receive_stream.take() {
-            events.push(TelephonyServiceEvent::OpusReceiveStreamStopped {
-                link_id: stream.link_id,
-                profile: stream.profile,
-                reason: OpusReceiveStreamStopReason::SinkClosed,
-            });
+        if sink_closed {
+            if let Some(stream) = self.media.opus_receive_stream.take() {
+                events.push(TelephonyServiceEvent::OpusReceiveStreamStopped {
+                    link_id: stream.link_id,
+                    profile: stream.profile,
+                    reason: OpusReceiveStreamStopReason::SinkClosed,
+                });
+            }
         }
         events
     }

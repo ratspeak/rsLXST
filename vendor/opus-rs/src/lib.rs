@@ -817,7 +817,7 @@ impl OpusDecoder {
                     if data.len() < 2 {
                         return Err("Code 2 packet too short for 2-byte length");
                     }
-                    (((data[0] & 0x7F) as usize) << 8 | data[1] as usize, 2)
+                    ((((data[0] & 0x7F) as usize) << 8) | data[1] as usize, 2)
                 } else {
                     (data[0] as usize, 1)
                 };
@@ -889,7 +889,7 @@ impl OpusDecoder {
                                     return Err("Code 3: short frame length");
                                 }
                                 (
-                                    ((input[payload_ptr] & 0x7F) as usize) << 8
+                                    (((input[payload_ptr] & 0x7F) as usize) << 8)
                                         | input[payload_ptr + 1] as usize,
                                     2,
                                 )

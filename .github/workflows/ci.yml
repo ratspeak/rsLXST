@@ -42,9 +42,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libudev-dev libdbus-1-dev pkg-config libopus0 libogg0
       - run: cargo fmt --all -- --check
         working-directory: rsLXST
-      - run: cargo clippy --workspace -- -D warnings
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
         working-directory: rsLXST
-      - run: cargo doc --workspace --no-deps
+      - run: cargo doc --workspace --no-deps --locked
         working-directory: rsLXST
         env:
           RUSTDOCFLAGS: "-D warnings"
@@ -90,21 +90,13 @@ jobs:
         run: brew install opus libogg
       - name: Install Python interop deps
         run: python -m pip install --upgrade pip && python -m pip install numpy cryptography pyserial cffi "audioop-lts; python_version >= '3.13'"
-      - run: cargo test --workspace
+      - run: cargo test --workspace --locked
         working-directory: rsLXST
 
-  mobile-check:
-    name: Check (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
+  msrv:
+    name: Rust 1.85 MSRV
+    runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: aarch64-linux-android
-          - os: macos-latest
-            target: aarch64-apple-ios
     steps:
       - uses: actions/checkout@v5
         with:
@@ -114,9 +106,61 @@ jobs:
           repository: ${{ github.repository_owner }}/rsReticulum
           ref: main
           path: rsReticulum
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v5
         with:
+          repository: markqvist/LXST
+          path: upstream/LXST
+      - uses: actions/checkout@v5
+        with:
+          repository: markqvist/Reticulum
+          path: upstream/Reticulum
+      - uses: dtolnay/rust-toolchain@1.85.0
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rsLXST -> target
+          cache-bin: false
+      - name: Install Linux system deps
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev libdbus-1-dev pkg-config libopus0 libogg0
+      - name: Clippy (all targets and features)
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+        working-directory: rsLXST
+
+  mobile-check:
+    name: Clippy (${{ matrix.target }}, ${{ matrix.toolchain }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: aarch64-linux-android
+            toolchain: stable
+          - os: macos-latest
+            target: aarch64-apple-ios
+            toolchain: stable
+          - os: ubuntu-latest
+            target: aarch64-linux-android
+            toolchain: 1.85.0
+          - os: macos-latest
+            target: aarch64-apple-ios
+            toolchain: 1.85.0
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: rsLXST
+      - uses: actions/checkout@v5
+        with:
+          repository: ${{ github.repository_owner }}/rsReticulum
+          ref: main
+          path: rsReticulum
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
           targets: ${{ matrix.target }}
+          components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: rsLXST -> target
@@ -127,16 +171,16 @@ jobs:
         with:
           ndk-version: r27d
           add-to-path: false
-      - name: Check Android
+      - name: Clippy Android
         if: matrix.target == 'aarch64-linux-android'
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           AR_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
           CC_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
           CXX_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++
-        run: cargo check --workspace --target ${{ matrix.target }}
+        run: cargo clippy --workspace --all-targets --all-features --target ${{ matrix.target }} --locked -- -D warnings
         working-directory: rsLXST
-      - name: Check iOS
+      - name: Clippy iOS
         if: matrix.target == 'aarch64-apple-ios'
-        run: cargo check --workspace --target ${{ matrix.target }}
+        run: cargo clippy --workspace --all-targets --all-features --target ${{ matrix.target }} --locked -- -D warnings
         working-directory: rsLXST

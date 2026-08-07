@@ -840,21 +840,25 @@ pub fn silk_schur(rc_q15: &mut [i16], c: &[i32], order: usize) -> i32 {
 
     let lz = c[0].leading_zeros() as i32;
 
-    if lz < 2 {
-        for i in 0..=order {
-            c_inner[i][0] = c[i] >> 1;
-            c_inner[i][1] = c[i] >> 1;
+    match lz.cmp(&2) {
+        std::cmp::Ordering::Less => {
+            for i in 0..=order {
+                c_inner[i][0] = c[i] >> 1;
+                c_inner[i][1] = c[i] >> 1;
+            }
         }
-    } else if lz > 2 {
-        let lz_adj = lz - 2;
-        for i in 0..=order {
-            c_inner[i][0] = c[i] << lz_adj;
-            c_inner[i][1] = c[i] << lz_adj;
+        std::cmp::Ordering::Greater => {
+            let lz_adj = lz - 2;
+            for i in 0..=order {
+                c_inner[i][0] = c[i] << lz_adj;
+                c_inner[i][1] = c[i] << lz_adj;
+            }
         }
-    } else {
-        for i in 0..=order {
-            c_inner[i][0] = c[i];
-            c_inner[i][1] = c[i];
+        std::cmp::Ordering::Equal => {
+            for i in 0..=order {
+                c_inner[i][0] = c[i];
+                c_inner[i][1] = c[i];
+            }
         }
     }
 

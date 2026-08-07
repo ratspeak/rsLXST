@@ -55,7 +55,7 @@ fn kf_factor(n_orig: usize, factors: &mut [i16; 2 * MAXFACTORS]) -> bool {
     let mut stages = 0;
 
     loop {
-        while !n.is_multiple_of(p as usize) {
+        while n % p as usize != 0 {
             p = match p {
                 4 => 2,
                 2 => 3,
