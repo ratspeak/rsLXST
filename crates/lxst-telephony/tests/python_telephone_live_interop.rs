@@ -1165,18 +1165,19 @@ async fn rust_to_rust_call_establishes_through_python_transport_hub() {
         |event| matches!(event, TelephonyServiceEvent::IncomingCall { .. }),
     )
     .await;
-    match incoming {
+    let incoming_link_id = match incoming {
         TelephonyServiceEvent::IncomingCall {
-            remote_identity, ..
-        } => assert_eq!(remote_identity, caller.identity.hash),
+            link_id,
+            remote_identity,
+        } => {
+            assert_eq!(remote_identity, caller.identity.hash);
+            link_id
+        }
         other => panic!("expected IncomingCall, got {other:?}"),
-    }
-
-    callee
-        .control_tx
-        .send(TelephonyControl::Answer)
+    };
+    lxst_telephony::request_answer(&callee.control_tx, incoming_link_id)
         .await
-        .expect("send callee Answer control");
+        .expect("answer callee call");
 
     wait_matching_service_event(
         &mut caller.event_rx,
@@ -1618,8 +1619,9 @@ async fn python_outgoing_call_establishes_when_rust_answers_without_audio() {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
 
+    let link_id = core.active_call().expect("active incoming call").link_id;
     let commands = core
-        .answer_active()
+        .answer_active(link_id)
         .expect("answer active Rust incoming call");
     endpoint
         .execute_commands(&commands)
@@ -1841,8 +1843,9 @@ async fn python_hangup_after_rust_answer_ends_rust_call_without_audio() {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
 
+    let link_id = core.active_call().expect("active incoming call").link_id;
     let commands = core
-        .answer_active()
+        .answer_active(link_id)
         .expect("answer active Rust incoming call");
     endpoint
         .execute_commands(&commands)

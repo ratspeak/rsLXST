@@ -104,9 +104,32 @@ impl TelephonyCall {
         self.ensure_profile(&mut actions);
         self.push_status_signal(SignallingStatus::Connecting, &mut actions);
         actions.push(TelephonyAction::OpenAudioPipelines);
-        self.push_status_signal(SignallingStatus::Established, &mut actions);
-        actions.push(TelephonyAction::StartAudioPipelines);
+        // Python LXST sends ESTABLISHED as the final half of the answer offer,
+        // then the outgoing peer echoes ESTABLISHED while opening its own
+        // pipelines. Keep the incoming call in CONNECTING until that remote
+        // echo is observed: local queue admission alone is not proof that the
+        // caller received the answer.
+        actions.push(TelephonyAction::SendSignal(Signal::from(
+            SignallingStatus::Established,
+        )));
         actions
+    }
+
+    /// Re-send the wire-compatible answer offer without reopening pipelines
+    /// or changing local state. The service bounds these retries and stops as
+    /// soon as the outgoing peer's ESTABLISHED echo is observed.
+    pub fn retry_answer(&self) -> Vec<TelephonyAction> {
+        if self.role != CallRole::Incoming
+            || !self.answered
+            || self.status != SignallingStatus::Connecting
+        {
+            return Vec::new();
+        }
+
+        vec![
+            TelephonyAction::SendSignal(Signal::from(SignallingStatus::Connecting)),
+            TelephonyAction::SendSignal(Signal::from(SignallingStatus::Established)),
+        ]
     }
 
     pub fn receive_signal(&mut self, signal: Signal) -> Vec<TelephonyAction> {
@@ -126,10 +149,16 @@ impl TelephonyCall {
                 vec![TelephonyAction::IgnoreSignal(signal)]
             }
             Signal::Status(SignallingStatus::Available) => {
+                if self.status.wire_value() >= SignallingStatus::Available.wire_value() {
+                    return vec![TelephonyAction::IgnoreSignal(signal)];
+                }
                 self.status = SignallingStatus::Available;
                 vec![TelephonyAction::IdentifyLocalIdentity]
             }
             Signal::Status(SignallingStatus::Ringing) => {
+                if self.status.wire_value() >= SignallingStatus::Ringing.wire_value() {
+                    return vec![TelephonyAction::IgnoreSignal(signal)];
+                }
                 let mut actions = Vec::new();
                 self.status = SignallingStatus::Ringing;
                 self.ensure_profile(&mut actions);
@@ -141,13 +170,37 @@ impl TelephonyCall {
                 actions
             }
             Signal::Status(SignallingStatus::Connecting) => {
+                if self.role == CallRole::Outgoing
+                    && self.status.wire_value() >= SignallingStatus::Connecting.wire_value()
+                {
+                    // A delayed/retried CONNECTING must not regress an already
+                    // established call. Re-echo ESTABLISHED so an incoming
+                    // peer can recover if its first acknowledgement was lost.
+                    return vec![TelephonyAction::SendSignal(Signal::from(
+                        SignallingStatus::Established,
+                    ))];
+                }
+                if self.status.wire_value() >= SignallingStatus::Connecting.wire_value() {
+                    return vec![TelephonyAction::IgnoreSignal(signal)];
+                }
                 self.status = SignallingStatus::Connecting;
-                vec![
+                let mut actions = vec![
                     TelephonyAction::ResetDialingPipelines,
                     TelephonyAction::OpenAudioPipelines,
-                ]
+                ];
+                if self.role == CallRole::Outgoing {
+                    // This mirrors Python Telephone.__open_pipelines(): the
+                    // caller echoes ESTABLISHED after observing CONNECTING.
+                    actions.push(TelephonyAction::SendSignal(Signal::from(
+                        SignallingStatus::Established,
+                    )));
+                }
+                actions
             }
             Signal::Status(SignallingStatus::Established) => {
+                if self.status == SignallingStatus::Established {
+                    return vec![TelephonyAction::IgnoreSignal(signal)];
+                }
                 self.status = SignallingStatus::Established;
                 vec![TelephonyAction::StartAudioPipelines]
             }
@@ -251,7 +304,7 @@ mod tests {
         );
 
         let answer = call.answer();
-        assert_eq!(call.status(), SignallingStatus::Established);
+        assert_eq!(call.status(), SignallingStatus::Connecting);
         assert!(call.answered());
         assert_eq!(call.profile(), Some(Profile::DEFAULT));
         assert_eq!(
@@ -261,9 +314,14 @@ mod tests {
                 TelephonyAction::SendSignal(Signal::from(SignallingStatus::Connecting)),
                 TelephonyAction::OpenAudioPipelines,
                 TelephonyAction::SendSignal(Signal::from(SignallingStatus::Established)),
-                TelephonyAction::StartAudioPipelines,
             ]
         );
+
+        assert_eq!(
+            call.receive_signal(Signal::from(SignallingStatus::Established)),
+            vec![TelephonyAction::StartAudioPipelines]
+        );
+        assert_eq!(call.status(), SignallingStatus::Established);
     }
 
     #[test]
@@ -292,6 +350,7 @@ mod tests {
             vec![
                 TelephonyAction::ResetDialingPipelines,
                 TelephonyAction::OpenAudioPipelines,
+                TelephonyAction::SendSignal(Signal::from(SignallingStatus::Established)),
             ]
         );
         assert_eq!(
@@ -299,6 +358,45 @@ mod tests {
             vec![TelephonyAction::StartAudioPipelines]
         );
         assert_eq!(call.status(), SignallingStatus::Established);
+    }
+
+    #[test]
+    fn answer_retry_and_established_echo_are_bounded_idempotent_transitions() {
+        let mut incoming = TelephonyCall::incoming();
+        incoming.caller_identified(false, true);
+        incoming.answer();
+        assert_eq!(
+            incoming.retry_answer(),
+            vec![
+                TelephonyAction::SendSignal(Signal::from(SignallingStatus::Connecting)),
+                TelephonyAction::SendSignal(Signal::from(SignallingStatus::Established)),
+            ]
+        );
+
+        assert_eq!(
+            incoming.receive_signal(Signal::from(SignallingStatus::Established)),
+            vec![TelephonyAction::StartAudioPipelines]
+        );
+        assert!(incoming.retry_answer().is_empty());
+        assert_eq!(
+            incoming.receive_signal(Signal::from(SignallingStatus::Established)),
+            vec![TelephonyAction::IgnoreSignal(Signal::from(
+                SignallingStatus::Established
+            ))]
+        );
+
+        let mut outgoing = TelephonyCall::outgoing(Some(Profile::DEFAULT));
+        outgoing.receive_signal(Signal::from(SignallingStatus::Available));
+        outgoing.receive_signal(Signal::from(SignallingStatus::Ringing));
+        outgoing.receive_signal(Signal::from(SignallingStatus::Connecting));
+        outgoing.receive_signal(Signal::from(SignallingStatus::Established));
+        assert_eq!(
+            outgoing.receive_signal(Signal::from(SignallingStatus::Connecting)),
+            vec![TelephonyAction::SendSignal(Signal::from(
+                SignallingStatus::Established
+            ))]
+        );
+        assert_eq!(outgoing.status(), SignallingStatus::Established);
     }
 
     #[test]

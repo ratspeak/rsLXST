@@ -178,6 +178,46 @@ fn established_outgoing_service_with_transport(
     )
 }
 
+fn ringing_incoming_service(
+    transport_capacity: usize,
+    event_capacity: usize,
+    config: TelephonyServiceConfig,
+) -> (
+    TelephonyService,
+    Link,
+    LinkId,
+    mpsc::Receiver<TransportMessage>,
+    mpsc::Receiver<TelephonyServiceEvent>,
+) {
+    let (sender, receiver) = active_link_pair();
+    let link_id = sender.link_id;
+    let local_identity = Identity::new();
+    let (transport_tx, transport_rx) = mpsc::channel(transport_capacity);
+    let mut endpoint = TelephonyRnsEndpoint::register(transport_tx, &local_identity).unwrap();
+    let (_link_event_tx, link_event_rx) = mpsc::channel(4);
+    endpoint.outgoing_links.insert(
+        link_id,
+        OutgoingLinkState {
+            link: sender,
+            event_rx: link_event_rx,
+        },
+    );
+
+    let mut core = TelephonyRuntimeCore::new();
+    core.incoming_link_established(link_id);
+    core.caller_identified(link_id, identity(0x5A)).unwrap();
+
+    let (_control_tx, control_rx) = mpsc::channel(4);
+    let (event_tx, event_rx) = mpsc::channel(event_capacity);
+    (
+        TelephonyService::with_config(endpoint, core, control_rx, event_tx, config),
+        receiver,
+        link_id,
+        transport_rx,
+        event_rx,
+    )
+}
+
 fn queue_inbound_opus_frame(
     link_event_tx: &mpsc::Sender<DestinationEvent>,
     receiver: &Link,
@@ -353,7 +393,7 @@ fn incoming_call_identify_answer_and_hangup_emit_python_ordered_commands() {
     );
 
     assert_eq!(
-        core.answer_active().unwrap(),
+        core.answer_active(link_id).unwrap(),
         vec![
             TelephonyCommand::SelectProfile {
                 link_id,
@@ -368,8 +408,25 @@ fn incoming_call_identify_answer_and_hangup_emit_python_ordered_commands() {
                 link_id,
                 signal: Signal::from(SignallingStatus::Established),
             },
-            TelephonyCommand::StartAudioPipelines { link_id },
         ]
+    );
+    assert_eq!(
+        core.active_call().unwrap().call.status(),
+        SignallingStatus::Connecting
+    );
+
+    assert_eq!(
+        core.accept_lxst_plaintext(
+            link_id,
+            &packet([Signal::from(SignallingStatus::Established)]),
+        )
+        .unwrap()
+        .commands,
+        vec![TelephonyCommand::StartAudioPipelines { link_id }]
+    );
+    assert_eq!(
+        core.active_call().unwrap().call.status(),
+        SignallingStatus::Established
     );
 
     assert_eq!(
@@ -384,6 +441,191 @@ fn incoming_call_identify_answer_and_hangup_emit_python_ordered_commands() {
         ]
     );
     assert!(core.active_call().is_none());
+}
+
+#[test]
+fn answer_admission_is_scoped_to_the_exact_ringing_incoming_link() {
+    let mut core = TelephonyRuntimeCore::new();
+    let link_id = link(0xA1);
+    core.incoming_link_established(link_id);
+    core.caller_identified(link_id, identity(0xA2)).unwrap();
+
+    assert!(matches!(
+        core.answer_active(link(0xFF)),
+        Err(Error::WrongActiveLink)
+    ));
+    let active = core.active_call().unwrap();
+    assert_eq!(active.call.status(), SignallingStatus::Ringing);
+    assert!(!active.call.answered());
+
+    core.answer_active(link_id).unwrap();
+    assert!(matches!(
+        core.answer_active(link_id),
+        Err(Error::CallNotAnswerable)
+    ));
+    assert_eq!(
+        core.active_call().unwrap().call.status(),
+        SignallingStatus::Connecting
+    );
+}
+
+#[tokio::test]
+async fn answer_control_acks_authoritative_connecting_after_atomic_admission() {
+    let (mut service, receiver, link_id, mut transport_rx, mut event_rx) =
+        ringing_incoming_service(8, 8, TelephonyServiceConfig::default());
+    let _destination_registration = transport_rx.try_recv().unwrap();
+    let (reply, result) = oneshot::channel();
+
+    assert!(
+        service
+            .handle_control(TelephonyControl::Answer {
+                expected_link_id: link_id,
+                reply,
+            })
+            .await
+    );
+    let snapshot = result.await.unwrap().unwrap();
+    assert_eq!(snapshot.link_id, link_id);
+    assert_eq!(snapshot.role, CallRole::Incoming);
+    assert_eq!(snapshot.status, SignallingStatus::Connecting);
+    assert!(snapshot.answered);
+
+    let mut signals = Vec::new();
+    for _ in 0..2 {
+        let (_header, encrypted) = take_outbound(&mut transport_rx);
+        signals.extend(
+            LxstPacket::decode(&receiver.decrypt(&encrypted).unwrap())
+                .unwrap()
+                .signals,
+        );
+    }
+    assert_eq!(
+        signals,
+        vec![
+            Signal::from(SignallingStatus::Connecting),
+            Signal::from(SignallingStatus::Established),
+        ]
+    );
+
+    let events = collect_ready_service_events(&mut event_rx);
+    assert!(matches!(
+        events.last(),
+        Some(TelephonyServiceEvent::Snapshot(snapshot))
+            if snapshot.active_call.as_ref().is_some_and(|active| {
+                active.link_id == link_id
+                    && active.status == SignallingStatus::Connecting
+                    && active.answered
+            })
+    ));
+}
+
+#[tokio::test]
+async fn answered_service_starts_media_only_after_remote_established_echo() {
+    let (mut service, _receiver, link_id, mut transport_rx, mut event_rx) =
+        ringing_incoming_service(8, 12, TelephonyServiceConfig::default());
+    let _destination_registration = transport_rx.try_recv().unwrap();
+    let answer = service.answer_exact(link_id).await.unwrap();
+    assert_eq!(answer.status, SignallingStatus::Connecting);
+    assert!(service.answering.is_some());
+    let _ = collect_ready_service_events(&mut event_rx);
+
+    let step = service
+        .core
+        .accept_lxst_plaintext(
+            link_id,
+            &packet([Signal::from(SignallingStatus::Established)]),
+        )
+        .unwrap();
+    assert_eq!(
+        step.commands,
+        vec![TelephonyCommand::StartAudioPipelines { link_id }]
+    );
+    let effects = service.endpoint.execute_commands(&step.commands).unwrap();
+    service
+        .publish_commands(step.commands, effects)
+        .await
+        .unwrap();
+
+    assert!(service.answering.is_none());
+    let active = service.core.snapshot().active_call.unwrap();
+    assert_eq!(active.link_id, link_id);
+    assert_eq!(active.status, SignallingStatus::Established);
+    let events = collect_ready_service_events(&mut event_rx);
+    assert!(events.iter().any(|event| matches!(
+        event,
+        TelephonyServiceEvent::Drive(TelephonyDriveStep { step, .. })
+            if step.commands == vec![TelephonyCommand::StartAudioPipelines { link_id }]
+    )));
+    assert!(matches!(
+        events.last(),
+        Some(TelephonyServiceEvent::Snapshot(snapshot))
+            if snapshot.active_call.as_ref().is_some_and(|active| {
+                active.link_id == link_id && active.status == SignallingStatus::Established
+            })
+    ));
+}
+
+#[tokio::test]
+async fn answer_transport_backpressure_rolls_back_without_publishing_a_prefix() {
+    let (mut service, _receiver, link_id, mut transport_rx, _event_rx) =
+        ringing_incoming_service(1, 8, TelephonyServiceConfig::default());
+
+    assert!(matches!(
+        service.answer_exact(link_id).await,
+        Err(Error::TransportFull)
+    ));
+    let active = service.core.active_call().unwrap();
+    assert_eq!(active.call.status(), SignallingStatus::Ringing);
+    assert!(!active.call.answered());
+    assert!(service.answering.is_none());
+
+    assert!(matches!(
+        transport_rx.try_recv().unwrap(),
+        TransportMessage::RegisterDestination { .. }
+    ));
+    assert!(transport_rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn answering_retries_are_bounded_and_timeout_terminates_connecting_call() {
+    let config = TelephonyServiceConfig {
+        answer_retry_interval: Some(Duration::from_millis(10)),
+        answer_timeout: Some(Duration::from_millis(40)),
+        ..TelephonyServiceConfig::default()
+    };
+    let (mut service, _receiver, link_id, mut transport_rx, mut event_rx) =
+        ringing_incoming_service(16, 16, config);
+    let _destination_registration = transport_rx.try_recv().unwrap();
+    service.answer_exact(link_id).await.unwrap();
+    let _ = collect_ready_service_events(&mut event_rx);
+    let _ = take_outbound(&mut transport_rx);
+    let _ = take_outbound(&mut transport_rx);
+
+    service.answering.as_mut().unwrap().next_retry_at = Some(Instant::now());
+    assert!(service.handle_due_answer_retry().await);
+    assert!(matches!(
+        event_rx.try_recv().unwrap(),
+        TelephonyServiceEvent::Drive(_)
+    ));
+    let _ = take_outbound(&mut transport_rx);
+    let _ = take_outbound(&mut transport_rx);
+
+    service.answering.as_mut().unwrap().expires_at = Some(Instant::now());
+    assert!(service.handle_due_answer_retry().await);
+    assert!(service.core.active_call().is_none());
+    assert!(service.answering.is_none());
+    let events = collect_ready_service_events(&mut event_rx);
+    assert!(events.iter().any(|event| matches!(
+        event,
+        TelephonyServiceEvent::CallTerminated {
+            link_id: terminated,
+            reason: Some(SignallingStatus::Connecting),
+        } if *terminated == link_id
+    )));
+    assert!(matches!(
+        events.last(),
+        Some(TelephonyServiceEvent::Snapshot(snapshot)) if snapshot.active_call.is_none()
+    ));
 }
 
 #[test]
@@ -472,6 +714,10 @@ fn outgoing_signalling_from_lxst_packets_drives_call_setup() {
         vec![
             TelephonyCommand::ResetDialingPipelines { link_id },
             TelephonyCommand::OpenAudioPipelines { link_id },
+            TelephonyCommand::SendSignal {
+                link_id,
+                signal: Signal::from(SignallingStatus::Established),
+            },
         ]
     );
 
