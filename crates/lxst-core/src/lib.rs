@@ -12,7 +12,11 @@ mod synthetic;
 mod telephony;
 mod wire;
 
-pub use opus::{OpusCodecError, OpusDecoderState, OpusEncoderState};
+pub use opus::{
+    OPUS_ENCODED_FRAME_MAX_BYTES, OPUS_ENCODED_PACKET_MAX_BYTES, OPUS_MONO_DECODE_SAMPLE_RATE_HZ,
+    OpusCodecError, OpusDecoderState, OpusEncoderState, OpusMonoDecoder,
+    opus_packet_duration_samples_48k,
+};
 pub use profile::{AudioCodec, OpusApplication, OpusProfile, Profile, SignallingStatus};
 pub use raw::RawAudioFrame;
 pub use stream::{
