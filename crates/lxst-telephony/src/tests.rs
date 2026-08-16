@@ -150,6 +150,7 @@ fn established_outgoing_service_with_transport(
         OutgoingLinkState {
             link: sender,
             event_rx,
+            endpoint: None,
         },
     );
 
@@ -200,6 +201,7 @@ fn ringing_incoming_service(
         OutgoingLinkState {
             link: sender,
             event_rx: link_event_rx,
+            endpoint: None,
         },
     );
 
@@ -244,9 +246,34 @@ fn queue_inbound_opus_frame(
 fn take_outbound(
     rx: &mut mpsc::Receiver<TransportMessage>,
 ) -> (rns_wire::header::PacketHeader, Vec<u8>) {
-    let message = rx.try_recv().unwrap();
-    let TransportMessage::Outbound(outbound) = message else {
-        panic!("expected Outbound, got {message:?}");
+    let outbound = loop {
+        let message = rx.try_recv().unwrap();
+        match message {
+            TransportMessage::Outbound(outbound) => break outbound,
+            TransportMessage::SendLinkEndpoint {
+                request: outbound,
+                result_tx,
+                ..
+            }
+            | TransportMessage::SendLinkEndpointAndUnbind {
+                request: outbound,
+                result_tx,
+                ..
+            }
+            | TransportMessage::SendLinkEndpointBestEffort {
+                request: outbound,
+                result_tx,
+                ..
+            } => {
+                let _ = result_tx.send(LinkEndpointSendResult::Sent);
+                break outbound;
+            }
+            TransportMessage::BindLinkEndpoint { result_tx, .. } => {
+                let _ = result_tx.send(LinkEndpointBindResult::Bound);
+                continue;
+            }
+            other => panic!("expected outbound packet, got {other:?}"),
+        }
     };
     let (header, data_offset) = rns_wire::header::PacketHeader::unpack(&outbound.raw).unwrap();
     (header, outbound.raw[data_offset..].to_vec())
@@ -263,7 +290,13 @@ fn collect_ready_service_events(
 }
 
 fn assert_deregistered_link(rx: &mut mpsc::Receiver<TransportMessage>, link_id: LinkId) {
-    let deregister_link = rx.try_recv().unwrap();
+    let deregister_link = loop {
+        let message = rx.try_recv().unwrap();
+        if matches!(message, TransportMessage::UnbindLinkEndpoint { .. }) {
+            continue;
+        }
+        break message;
+    };
     let TransportMessage::DeregisterDestination {
         hash: deregistered_hash,
     } = deregister_link
@@ -1190,6 +1223,20 @@ fn rns_endpoint_try_drive_ready_pumps_reticulum_handshake_events() {
 
     let mut core = TelephonyRuntimeCore::new();
     assert!(endpoint.try_drive_ready(&mut core).unwrap().is_empty());
+
+    let bind = transport_rx.try_recv().unwrap();
+    let TransportMessage::BindLinkEndpoint {
+        binding,
+        lifecycle_tx: responder_lifecycle_tx,
+        ..
+    } = bind
+    else {
+        panic!("expected responder endpoint binding, got {bind:?}");
+    };
+    assert_eq!(binding.link_id, link_id);
+    assert_eq!(binding.interface_id, 7);
+    assert_eq!(binding.role, LinkEndpointRole::Responder);
+    let _responder_lifecycle_tx = responder_lifecycle_tx;
 
     let register_link = transport_rx.try_recv().unwrap();
     let TransportMessage::RegisterLink {
@@ -2225,6 +2272,7 @@ async fn telephony_service_send_opus_frames_queues_decodeable_quality_media() {
         OutgoingLinkState {
             link: sender,
             event_rx,
+            endpoint: None,
         },
     );
 
@@ -2329,6 +2377,7 @@ async fn telephony_service_pumps_owned_opus_stream_in_bounded_batches() {
         OutgoingLinkState {
             link: sender,
             event_rx,
+            endpoint: None,
         },
     );
 
@@ -2426,6 +2475,7 @@ async fn telephony_service_decodes_inbound_opus_frames_with_call_profile() {
         OutgoingLinkState {
             link: sender,
             event_rx,
+            endpoint: None,
         },
     );
 
@@ -3037,6 +3087,21 @@ fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
     assert!(endpoint.outgoing_attempts.is_empty());
     assert!(endpoint.outgoing_links.contains_key(&link_id));
 
+    let bind = transport_rx.try_recv().unwrap();
+    let TransportMessage::BindLinkEndpoint {
+        binding,
+        lifecycle_tx,
+        result_tx,
+    } = bind
+    else {
+        panic!("expected initiator endpoint binding, got {bind:?}");
+    };
+    assert_eq!(binding.link_id, link_id);
+    assert_eq!(binding.interface_id, 1);
+    assert_eq!(binding.role, LinkEndpointRole::Initiator);
+    result_tx.send(LinkEndpointBindResult::Bound).unwrap();
+    let _initiator_lifecycle_tx = lifecycle_tx;
+
     let (rtt_header, rtt_data) = take_outbound(&mut transport_rx);
     assert_eq!(rtt_header.context, rns_wire::context::PacketContext::Lrrtt);
     responder.receive_rtt_packet(&rtt_data).unwrap();
@@ -3120,14 +3185,7 @@ fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
     assert_eq!(driven.effects, vec![TelephonyCommandEffect::Noop; 2]);
     assert!(endpoint.outgoing_links.is_empty());
 
-    let deregister_link = transport_rx.try_recv().unwrap();
-    let TransportMessage::DeregisterDestination {
-        hash: deregistered_hash,
-    } = deregister_link
-    else {
-        panic!("expected DeregisterDestination, got {deregister_link:?}");
-    };
-    assert_eq!(deregistered_hash, link_id);
+    assert_deregistered_link(&mut transport_rx, link_id);
 }
 
 #[test]
@@ -3262,6 +3320,7 @@ fn outgoing_link_ignores_unauthenticated_remote_close() {
         OutgoingLinkState {
             link: sender,
             event_rx,
+            endpoint: None,
         },
     );
 
@@ -3300,6 +3359,7 @@ fn outgoing_link_closes_on_authenticated_remote_close() {
         OutgoingLinkState {
             link: sender,
             event_rx,
+            endpoint: None,
         },
     );
     let close_data = receiver.teardown(CloseReason::DestinationClosed).unwrap();
@@ -3338,6 +3398,7 @@ fn outgoing_active_transport_close_deregisters_link_destination() {
         OutgoingLinkState {
             link: sender,
             event_rx,
+            endpoint: None,
         },
     );
 
@@ -3430,6 +3491,7 @@ fn outgoing_active_ignores_broadcast_delivery_proof() {
         OutgoingLinkState {
             link: sender,
             event_rx,
+            endpoint: None,
         },
     );
 
@@ -3459,6 +3521,7 @@ fn outgoing_active_ignores_inbound_link_request_event() {
         OutgoingLinkState {
             link: sender,
             event_rx,
+            endpoint: None,
         },
     );
 
@@ -3489,6 +3552,7 @@ fn outgoing_active_ignores_packet_for_other_destination() {
         OutgoingLinkState {
             link: sender,
             event_rx,
+            endpoint: None,
         },
     );
 
@@ -3510,7 +3574,7 @@ fn outgoing_active_ignores_packet_for_other_destination() {
 }
 
 #[test]
-fn endpoint_teardown_of_outgoing_link_deregisters_link_destination() {
+fn endpoint_teardown_of_outgoing_link_defers_deregister_until_final_drain() {
     let (sender, _receiver) = active_link_pair();
     let link_id = sender.link_id;
     let local_identity = Identity::new();
@@ -3523,6 +3587,7 @@ fn endpoint_teardown_of_outgoing_link_deregisters_link_destination() {
         OutgoingLinkState {
             link: sender,
             event_rx,
+            endpoint: None,
         },
     );
 
@@ -3544,7 +3609,7 @@ fn endpoint_teardown_of_outgoing_link_deregisters_link_destination() {
     );
     assert!(!close_data.is_empty());
 
-    assert_deregistered_link(&mut transport_rx, link_id);
+    assert!(transport_rx.try_recv().is_err());
 }
 
 #[test]
@@ -3621,4 +3686,279 @@ fn rns_endpoint_reports_transport_backpressure() {
         TelephonyRnsEndpoint::register(transport_tx, &identity),
         Err(Error::TransportFull)
     ));
+}
+
+#[test]
+fn pinned_outgoing_link_rejects_wrong_interface_before_crypto_or_accounting() {
+    let (sender, receiver) = active_link_pair();
+    let link_id = sender.link_id;
+    let local_identity = Identity::new();
+    let (transport_tx, mut transport_rx) = mpsc::channel(8);
+    let mut endpoint = TelephonyRnsEndpoint::register(transport_tx, &local_identity).unwrap();
+    let _registration = transport_rx.try_recv().unwrap();
+    let (event_tx, event_rx) = mpsc::channel(4);
+    let (bind_result_tx, bind_result_rx) = oneshot::channel();
+    bind_result_tx.send(LinkEndpointBindResult::Bound).unwrap();
+    let (lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+    endpoint.outgoing_links.insert(
+        link_id,
+        OutgoingLinkState {
+            link: sender,
+            event_rx,
+            endpoint: Some(OutgoingEndpointState {
+                attached_interface: 7,
+                bind_result_rx: Some(bind_result_rx),
+                lifecycle_rx,
+            }),
+        },
+    );
+
+    let plaintext = signalling_packet(Signal::from(SignallingStatus::Available))
+        .encode()
+        .unwrap();
+    let encrypted = receiver.encrypt(&plaintext).unwrap();
+    let raw = Bytes::from(link_data_packet(
+        link_id,
+        rns_wire::context::PacketContext::None,
+        &encrypted,
+    ));
+    event_tx
+        .try_send(DestinationEvent::InboundPacket {
+            raw: raw.clone(),
+            interface_id: 8,
+            metrics: PacketMetrics {
+                rssi: Some(-42.0),
+                snr: Some(9.0),
+                q: Some(75.0),
+            },
+        })
+        .unwrap();
+
+    assert_eq!(endpoint.try_recv_link_event().unwrap(), None);
+    let link = &endpoint.outgoing_links[&link_id].link;
+    assert_eq!(link.traffic_stats(), (0, 0, 0, 0));
+    assert_eq!(link.get_rssi(), None);
+
+    event_tx
+        .try_send(DestinationEvent::InboundPacket {
+            raw,
+            interface_id: 7,
+            metrics: PacketMetrics::default(),
+        })
+        .unwrap();
+    assert_eq!(
+        endpoint.try_recv_link_event().unwrap(),
+        Some(TelephonyLinkEvent::LinkPacket { link_id, plaintext })
+    );
+    let link = &endpoint.outgoing_links[&link_id].link;
+    assert_eq!(link.rx_count, 1);
+    assert!(link.rx_bytes > 0);
+    drop(lifecycle_tx);
+}
+
+#[test]
+fn initiator_interface_loss_closes_exact_call_once() {
+    let (sender, _receiver) = active_link_pair();
+    let link_id = sender.link_id;
+    let local_identity = Identity::new();
+    let (transport_tx, mut transport_rx) = mpsc::channel(8);
+    let mut endpoint = TelephonyRnsEndpoint::register(transport_tx, &local_identity).unwrap();
+    let _registration = transport_rx.try_recv().unwrap();
+    let (_event_tx, event_rx) = mpsc::channel(1);
+    let (bind_result_tx, bind_result_rx) = oneshot::channel();
+    bind_result_tx.send(LinkEndpointBindResult::Bound).unwrap();
+    let (lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+    endpoint.outgoing_links.insert(
+        link_id,
+        OutgoingLinkState {
+            link: sender,
+            event_rx,
+            endpoint: Some(OutgoingEndpointState {
+                attached_interface: 7,
+                bind_result_rx: Some(bind_result_rx),
+                lifecycle_rx,
+            }),
+        },
+    );
+    lifecycle_tx
+        .send(LinkEndpointLifecycleEvent {
+            binding: LinkEndpointBinding {
+                link_id,
+                interface_id: 7,
+                role: LinkEndpointRole::Initiator,
+            },
+            reason: rns_transport::messages::LinkEndpointTerminalReason::InterfaceRemoved,
+            dropped_packets: 0,
+        })
+        .unwrap();
+
+    assert_eq!(
+        endpoint.try_recv_link_event().unwrap(),
+        Some(TelephonyLinkEvent::LinkClosed { link_id })
+    );
+    assert!(!endpoint.outgoing_links.contains_key(&link_id));
+    assert_eq!(endpoint.try_recv_link_event().unwrap(), None);
+}
+
+#[test]
+fn outgoing_link_attempt_timeout_is_driven_by_endpoint_tick() {
+    let local_identity = Identity::new();
+    let remote_identity = Identity::new();
+    let (transport_tx, mut transport_rx) = mpsc::channel(8);
+    let mut endpoint = TelephonyRnsEndpoint::register(transport_tx, &local_identity).unwrap();
+    let _registration = transport_rx.try_recv().unwrap();
+    let (_event_tx, event_rx) = mpsc::channel(1);
+    let (mut link, _request) = Link::new_initiator(link(0xA9), 1);
+    link.establishment_timeout = Duration::ZERO;
+    let link_id = link.link_id;
+    endpoint.outgoing_attempts.insert(
+        link_id,
+        OutgoingLinkAttempt {
+            link,
+            remote_public_key: remote_identity.get_public_key(),
+            event_rx,
+        },
+    );
+
+    endpoint.tick_reticulum();
+    assert_eq!(
+        endpoint.try_recv_link_event().unwrap(),
+        Some(TelephonyLinkEvent::LinkClosed { link_id })
+    );
+    assert!(!endpoint.outgoing_attempts.contains_key(&link_id));
+}
+
+#[test]
+fn outgoing_keepalive_tick_uses_reliable_initiator_endpoint() {
+    let (mut sender, _receiver) = active_link_pair();
+    let link_id = sender.link_id;
+    sender.keepalive.last_inbound = std::time::Instant::now() - Duration::from_secs(10);
+    sender.keepalive.last_outbound = Some(std::time::Instant::now() - Duration::from_secs(10));
+    sender.keepalive.keepalive_interval = Duration::from_secs(5);
+    sender.keepalive.stale_time = Duration::from_secs(60);
+    let local_identity = Identity::new();
+    let (transport_tx, mut transport_rx) = mpsc::channel(8);
+    let mut endpoint = TelephonyRnsEndpoint::register(transport_tx, &local_identity).unwrap();
+    let _registration = transport_rx.try_recv().unwrap();
+    let (_event_tx, event_rx) = mpsc::channel(1);
+    endpoint.outgoing_links.insert(
+        link_id,
+        OutgoingLinkState {
+            link: sender,
+            event_rx,
+            endpoint: None,
+        },
+    );
+
+    endpoint.tick_reticulum();
+    let keepalive = transport_rx.try_recv().unwrap();
+    let TransportMessage::SendLinkEndpoint {
+        link_id: sent_link_id,
+        role,
+        request,
+        ..
+    } = keepalive
+    else {
+        panic!("keepalive must use reliable exact-interface egress, got {keepalive:?}");
+    };
+    let (header, offset) = rns_wire::header::PacketHeader::unpack(&request.raw).unwrap();
+    assert_eq!(sent_link_id, link_id);
+    assert_eq!(role, LinkEndpointRole::Initiator);
+    assert_eq!(header.context, rns_wire::context::PacketContext::Keepalive);
+    assert_eq!(
+        &request.raw[offset..],
+        &[rns_link::constants::KEEPALIVE_REQUEST]
+    );
+}
+
+#[test]
+fn media_backpressure_drops_while_control_uses_reliable_endpoint_fifo() {
+    let (sender, _receiver) = active_link_pair();
+    let link_id = sender.link_id;
+    let local_identity = Identity::new();
+    let (transport_tx, mut transport_rx) = mpsc::channel(8);
+    let mut endpoint = TelephonyRnsEndpoint::register(transport_tx, &local_identity).unwrap();
+    let _registration = transport_rx.try_recv().unwrap();
+    let (_event_tx, event_rx) = mpsc::channel(1);
+    endpoint.outgoing_links.insert(
+        link_id,
+        OutgoingLinkState {
+            link: sender,
+            event_rx,
+            endpoint: None,
+        },
+    );
+
+    assert_eq!(
+        endpoint
+            .queue_frames(link_id, [Frame::new(CodecKind::Raw, [0x00, 0x01])],)
+            .unwrap(),
+        1
+    );
+    let media = transport_rx.try_recv().unwrap();
+    let TransportMessage::SendLinkEndpointBestEffort {
+        role, result_tx, ..
+    } = media
+    else {
+        panic!("media must use best-effort exact-interface egress, got {media:?}");
+    };
+    assert_eq!(role, LinkEndpointRole::Initiator);
+    result_tx
+        .send(LinkEndpointSendResult::DroppedBackpressure)
+        .unwrap();
+    assert_eq!(endpoint.try_recv_link_event().unwrap(), None);
+    assert_eq!(endpoint.media_drop_count(link_id), 1);
+
+    endpoint
+        .execute_command(&TelephonyCommand::SendSignal {
+            link_id,
+            signal: Signal::from(SignallingStatus::Established),
+        })
+        .unwrap();
+    let control = transport_rx.try_recv().unwrap();
+    let TransportMessage::SendLinkEndpoint {
+        role, result_tx, ..
+    } = control
+    else {
+        panic!("signalling must use reliable exact-interface egress, got {control:?}");
+    };
+    assert_eq!(role, LinkEndpointRole::Initiator);
+    result_tx
+        .send(LinkEndpointSendResult::Queued { depth: 1 })
+        .unwrap();
+    assert_eq!(endpoint.try_recv_link_event().unwrap(), None);
+    assert!(endpoint.outgoing_links.contains_key(&link_id));
+}
+
+#[test]
+fn outgoing_teardown_is_atomic_final_endpoint_send() {
+    let (sender, _receiver) = active_link_pair();
+    let link_id = sender.link_id;
+    let local_identity = Identity::new();
+    let (transport_tx, mut transport_rx) = mpsc::channel(8);
+    let mut endpoint = TelephonyRnsEndpoint::register(transport_tx, &local_identity).unwrap();
+    let _registration = transport_rx.try_recv().unwrap();
+    let (_event_tx, event_rx) = mpsc::channel(1);
+    endpoint.outgoing_links.insert(
+        link_id,
+        OutgoingLinkState {
+            link: sender,
+            event_rx,
+            endpoint: None,
+        },
+    );
+
+    endpoint
+        .execute_command(&TelephonyCommand::TeardownLink { link_id })
+        .unwrap();
+    let final_send = transport_rx.try_recv().unwrap();
+    assert!(matches!(
+        final_send,
+        TransportMessage::SendLinkEndpointAndUnbind {
+            link_id: id,
+            role: LinkEndpointRole::Initiator,
+            ..
+        } if id == link_id
+    ));
+    assert!(transport_rx.try_recv().is_err());
 }

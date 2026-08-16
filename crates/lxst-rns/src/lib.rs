@@ -10,9 +10,11 @@ use lxst_core::{
     JitterPush, JitterStats, LxstPacket, OpusDecoderState, RawAudioFrame, RawBitDepth,
 };
 use rns_link::link::{Link, LinkState};
-use rns_transport::messages::{OutboundRequest, TransportMessage};
+use rns_transport::messages::{
+    LinkEndpointRole, LinkEndpointSendResult, OutboundRequest, TransportMessage,
+};
 use thiserror::Error;
-use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -28,10 +30,6 @@ pub enum Error {
     PayloadExceedsMdu { payload_len: usize, mdu: usize },
     #[error("Reticulum link encryption failed: {0}")]
     LinkEncrypt(String),
-    #[error("Reticulum outbound queue is closed")]
-    TransportClosed,
-    #[error("Reticulum outbound queue is full")]
-    TransportFull,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -247,41 +245,106 @@ pub fn pack_link_payload(link: &Link, payload: &[u8]) -> Result<PackedLinkPacket
     })
 }
 
-/// Pack and queue an already-encoded LXST payload for Reticulum transmission.
-pub fn queue_link_payload(
-    transport_tx: &mpsc::Sender<TransportMessage>,
+/// Pack an already-encoded LXST payload and prepare an exact-interface
+/// established-Link transport command.
+pub fn prepare_link_payload_send(
     link: &Link,
+    role: LinkEndpointRole,
     payload: &[u8],
-) -> Result<PackedLinkPacket, Error> {
+) -> Result<PreparedLinkEndpointSend, Error> {
     let packet = pack_link_payload(link, payload)?;
-    queue_packed_link_packet(transport_tx, packet)
+    Ok(prepare_packed_link_endpoint_send(packet, role))
 }
 
-/// Pack and queue a structured LXST packet for Reticulum transmission.
-pub fn queue_lxst_link_packet(
-    transport_tx: &mpsc::Sender<TransportMessage>,
+/// Pack a structured LXST packet and prepare an exact-interface established-
+/// Link transport command.
+pub fn prepare_lxst_link_packet_send(
     link: &Link,
+    role: LinkEndpointRole,
     packet: &LxstPacket,
-) -> Result<PackedLinkPacket, Error> {
+) -> Result<PreparedLinkEndpointSend, Error> {
     let packet = pack_lxst_link_packet(link, packet)?;
-    queue_packed_link_packet(transport_tx, packet)
+    Ok(prepare_packed_link_endpoint_send(packet, role))
 }
 
-fn queue_packed_link_packet(
-    transport_tx: &mpsc::Sender<TransportMessage>,
+/// One packet plus the typed transport operation that owns its delivery
+/// outcome. Callers must retain and inspect `result_rx`; deliberately
+/// discarding the result would turn terminal endpoint failures into silent
+/// media or signalling loss.
+pub struct PreparedLinkEndpointSend {
+    pub packet: PackedLinkPacket,
+    pub message: TransportMessage,
+    pub result_rx: oneshot::Receiver<LinkEndpointSendResult>,
+}
+
+pub fn prepare_packed_link_endpoint_send(
     packet: PackedLinkPacket,
-) -> Result<PackedLinkPacket, Error> {
-    transport_tx
-        .try_send(TransportMessage::Outbound(OutboundRequest {
+    role: LinkEndpointRole,
+) -> PreparedLinkEndpointSend {
+    let (result_tx, result_rx) = oneshot::channel();
+    let message = TransportMessage::SendLinkEndpoint {
+        link_id: packet.destination_hash,
+        role,
+        request: OutboundRequest {
             raw: packet.raw.clone(),
             destination_hash: packet.destination_hash,
-        }))
-        .map_err(|e| match e {
-            mpsc::error::TrySendError::Full(_) => Error::TransportFull,
-            mpsc::error::TrySendError::Closed(_) => Error::TransportClosed,
-        })?;
+        },
+        result_tx,
+    };
+    PreparedLinkEndpointSend {
+        packet,
+        message,
+        result_rx,
+    }
+}
 
-    Ok(packet)
+/// Prepare the final ordered packet for an established Link. Transport keeps
+/// the endpoint alive until this packet and all earlier control packets have
+/// drained, then atomically unbinds it.
+pub fn prepare_packed_link_endpoint_final_send(
+    packet: PackedLinkPacket,
+    role: LinkEndpointRole,
+) -> PreparedLinkEndpointSend {
+    let (result_tx, result_rx) = oneshot::channel();
+    let message = TransportMessage::SendLinkEndpointAndUnbind {
+        link_id: packet.destination_hash,
+        role,
+        request: OutboundRequest {
+            raw: packet.raw.clone(),
+            destination_hash: packet.destination_hash,
+        },
+        result_tx,
+    };
+    PreparedLinkEndpointSend {
+        packet,
+        message,
+        result_rx,
+    }
+}
+
+/// Prepare realtime media for exact-interface, best-effort Link delivery.
+///
+/// Unlike [`prepare_packed_link_endpoint_send`], this operation never enters
+/// the ordered control FIFO when the target interface is backpressured.
+pub fn prepare_packed_link_endpoint_best_effort_send(
+    packet: PackedLinkPacket,
+    role: LinkEndpointRole,
+) -> PreparedLinkEndpointSend {
+    let (result_tx, result_rx) = oneshot::channel();
+    let message = TransportMessage::SendLinkEndpointBestEffort {
+        link_id: packet.destination_hash,
+        role,
+        request: OutboundRequest {
+            raw: packet.raw.clone(),
+            destination_hash: packet.destination_hash,
+        },
+        result_tx,
+    };
+    PreparedLinkEndpointSend {
+        packet,
+        message,
+        result_rx,
+    }
 }
 
 #[cfg(test)]
@@ -334,21 +397,55 @@ mod tests {
     }
 
     #[test]
-    fn queue_sends_outbound_transport_message() {
+    fn prepared_send_uses_typed_link_endpoint_transport_message() {
         let (initiator, _responder) = active_link_pair();
         let payload = LxstPacket::frame(Frame::new(CodecKind::Raw, [0x00, 0x11, 0x22]))
             .encode()
             .unwrap();
-        let (tx, mut rx) = mpsc::channel(1);
-
-        let packet = queue_link_payload(&tx, &initiator, &payload).unwrap();
-        let sent = rx.try_recv().unwrap();
-        let TransportMessage::Outbound(outbound) = sent else {
-            panic!("expected outbound transport message");
+        let prepared =
+            prepare_link_payload_send(&initiator, LinkEndpointRole::Initiator, &payload).unwrap();
+        let TransportMessage::SendLinkEndpoint {
+            link_id,
+            role,
+            request,
+            ..
+        } = prepared.message
+        else {
+            panic!("expected typed Link endpoint transport message");
         };
 
-        assert_eq!(outbound.raw, packet.raw);
-        assert_eq!(outbound.destination_hash, initiator.link_id);
+        assert_eq!(link_id, initiator.link_id);
+        assert_eq!(role, LinkEndpointRole::Initiator);
+        assert_eq!(request.raw, prepared.packet.raw);
+        assert_eq!(request.destination_hash, initiator.link_id);
+    }
+
+    #[test]
+    fn prepared_media_send_uses_best_effort_endpoint_without_receipt_registration() {
+        let (initiator, _responder) = active_link_pair();
+        let packet = pack_lxst_link_packet(
+            &initiator,
+            &LxstPacket::frame(Frame::new(CodecKind::Raw, [0x00, 0x11])),
+        )
+        .unwrap();
+        let prepared = prepare_packed_link_endpoint_best_effort_send(
+            packet.clone(),
+            LinkEndpointRole::Initiator,
+        );
+        let TransportMessage::SendLinkEndpointBestEffort {
+            link_id,
+            role,
+            request,
+            ..
+        } = prepared.message
+        else {
+            panic!("expected best-effort Link endpoint transport message");
+        };
+
+        assert_eq!(link_id, initiator.link_id);
+        assert_eq!(role, LinkEndpointRole::Initiator);
+        assert_eq!(request.raw, packet.raw);
+        assert_eq!(request.destination_hash, initiator.link_id);
     }
 
     #[test]

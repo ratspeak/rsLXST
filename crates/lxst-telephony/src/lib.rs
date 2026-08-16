@@ -5,7 +5,7 @@
 //! spawning tasks or touching audio devices so live runtime code can be a thin
 //! adapter around tested protocol behavior.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
@@ -15,8 +15,9 @@ use lxst_core::{
     TELEPHONY_DESTINATION_NAME, TelephonyAction, TelephonyCall,
 };
 use lxst_rns::{
-    InboundLxstPacket, LxstLinkIngress, LxstMediaEgress, pack_lxst_link_packet,
-    queue_lxst_link_packet,
+    InboundLxstPacket, LxstLinkIngress, LxstMediaEgress, PreparedLinkEndpointSend,
+    prepare_lxst_link_packet_send, prepare_packed_link_endpoint_best_effort_send,
+    prepare_packed_link_endpoint_final_send, prepare_packed_link_endpoint_send,
 };
 use rns_crypto::ed25519::Ed25519PublicKey;
 use rns_identity::destination::{
@@ -24,12 +25,13 @@ use rns_identity::destination::{
 };
 use rns_identity::identity::Identity;
 use rns_identity::name_hash::name_hash;
-use rns_link::link::{CloseReason, Link};
+use rns_link::link::{CloseReason, Link, LinkAction, LinkRole};
 use rns_runtime::link_manager::LinkManager;
 use rns_transport::link_messages::DestinationEvent;
 use rns_transport::messages::{
-    AnnounceHandlerEvent, AnnounceRpcEntry, OutboundRequest, TransportMessage, TransportQuery,
-    TransportQueryResponse,
+    AnnounceHandlerEvent, AnnounceRpcEntry, InterfaceId, LinkEndpointBindResult,
+    LinkEndpointBinding, LinkEndpointLifecycleEvent, LinkEndpointRole, LinkEndpointSendResult,
+    OutboundRequest, TransportMessage, TransportQuery, TransportQueryResponse,
 };
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
@@ -1249,6 +1251,7 @@ impl TelephonyService {
                     }
                 }
                 _ = interval.tick() => {
+                    self.endpoint.tick_reticulum();
                     if !self.handle_due_announce().await {
                         break;
                     }
@@ -2293,6 +2296,11 @@ pub struct TelephonyRnsEndpoint {
     identity: Identity,
     outgoing_attempts: HashMap<LinkId, OutgoingLinkAttempt>,
     outgoing_links: HashMap<LinkId, OutgoingLinkState>,
+    pending_outgoing_events: VecDeque<TelephonyLinkEvent>,
+    pending_control_results: VecDeque<PendingControlResult>,
+    pending_media_results: VecDeque<PendingMediaResult>,
+    pending_outgoing_cleanup: VecDeque<PendingOutgoingCleanup>,
+    media_drops: HashMap<LinkId, u64>,
 }
 
 struct OutgoingLinkAttempt {
@@ -2304,6 +2312,31 @@ struct OutgoingLinkAttempt {
 struct OutgoingLinkState {
     link: Link,
     event_rx: mpsc::Receiver<DestinationEvent>,
+    endpoint: Option<OutgoingEndpointState>,
+}
+
+struct OutgoingEndpointState {
+    attached_interface: InterfaceId,
+    bind_result_rx: Option<oneshot::Receiver<LinkEndpointBindResult>>,
+    lifecycle_rx: mpsc::UnboundedReceiver<LinkEndpointLifecycleEvent>,
+}
+
+struct PendingControlResult {
+    link_id: LinkId,
+    role: LinkEndpointRole,
+    result_rx: oneshot::Receiver<LinkEndpointSendResult>,
+}
+
+struct PendingMediaResult {
+    link_id: LinkId,
+    role: LinkEndpointRole,
+    encrypted_len: usize,
+    result_rx: oneshot::Receiver<LinkEndpointSendResult>,
+}
+
+struct PendingOutgoingCleanup {
+    link_id: LinkId,
+    unbind_sent: bool,
 }
 
 impl TelephonyRnsEndpoint {
@@ -2354,6 +2387,11 @@ impl TelephonyRnsEndpoint {
             identity: identity.clone(),
             outgoing_attempts: HashMap::new(),
             outgoing_links: HashMap::new(),
+            pending_outgoing_events: VecDeque::new(),
+            pending_control_results: VecDeque::new(),
+            pending_media_results: VecDeque::new(),
+            pending_outgoing_cleanup: VecDeque::new(),
+            media_drops: HashMap::new(),
         })
     }
 
@@ -2639,7 +2677,70 @@ impl TelephonyRnsEndpoint {
     }
 
     pub fn tick_reticulum(&mut self) {
+        self.flush_outgoing_cleanup();
         self.manager.tick();
+
+        let attempt_actions = self
+            .outgoing_attempts
+            .iter_mut()
+            .map(|(link_id, attempt)| (*link_id, attempt.link.tick()))
+            .collect::<Vec<_>>();
+        for (link_id, action) in attempt_actions {
+            if matches!(action, LinkAction::Closed(_)) {
+                let _ = self.close_outgoing_link_locally(link_id);
+                self.pending_outgoing_events
+                    .push_back(TelephonyLinkEvent::LinkClosed { link_id });
+            }
+        }
+
+        let active_actions = self
+            .outgoing_links
+            .iter_mut()
+            .map(|(link_id, state)| (*link_id, state.link.tick()))
+            .collect::<Vec<_>>();
+        for (link_id, action) in active_actions {
+            match action {
+                LinkAction::None => continue,
+                LinkAction::SendKeepalive | LinkAction::TransitionedToStale => {
+                    let prepared = prepare_link_context_send(
+                        link_id,
+                        LinkEndpointRole::Initiator,
+                        rns_wire::context::PacketContext::Keepalive,
+                        vec![rns_link::constants::KEEPALIVE_REQUEST],
+                    );
+                    let queued =
+                        self.queue_prepared_control(link_id, LinkEndpointRole::Initiator, prepared);
+                    if queued.is_ok()
+                        && let Some(state) = self.outgoing_links.get_mut(&link_id)
+                    {
+                        state.link.record_tx_keepalive(1);
+                    }
+                    if queued.is_err() {
+                        let _ = self.close_outgoing_link_locally(link_id);
+                        self.pending_outgoing_events
+                            .push_back(TelephonyLinkEvent::LinkClosed { link_id });
+                    }
+                }
+                LinkAction::SendTeardownAndClose(encrypted) => {
+                    let prepared = prepare_final_link_context_send(
+                        link_id,
+                        LinkEndpointRole::Initiator,
+                        rns_wire::context::PacketContext::LinkClose,
+                        encrypted,
+                    );
+                    let retained =
+                        self.queue_prepared_control(link_id, LinkEndpointRole::Initiator, prepared);
+                    let _ = self.finish_outgoing_link_locally(link_id, retained.is_err());
+                    self.pending_outgoing_events
+                        .push_back(TelephonyLinkEvent::LinkClosed { link_id });
+                }
+                LinkAction::Closed(_) => {
+                    let _ = self.close_outgoing_link_locally(link_id);
+                    self.pending_outgoing_events
+                        .push_back(TelephonyLinkEvent::LinkClosed { link_id });
+                }
+            }
+        }
     }
 
     pub fn try_drive_ready(
@@ -2670,17 +2771,23 @@ impl TelephonyRnsEndpoint {
         frames: impl IntoIterator<Item = RawAudioFrame>,
     ) -> Result<usize, Error> {
         let frames = frames.into_iter().collect::<Vec<_>>();
-        let packets = if let Some(link) = self.manager.get_link_mut(&link_id) {
-            LxstMediaEgress::PYTHON_COMPATIBLE.pack_raw_frames(link, bit_depth, frames)?
+        let (packets, role) = if let Some(link) = self.manager.get_link_mut(&link_id) {
+            (
+                LxstMediaEgress::PYTHON_COMPATIBLE.pack_raw_frames(link, bit_depth, frames)?,
+                LinkEndpointRole::Responder,
+            )
         } else {
             let link = self
                 .outgoing_links
                 .get_mut(&link_id)
                 .map(|state| &mut state.link)
                 .ok_or(Error::UnknownLink)?;
-            LxstMediaEgress::PYTHON_COMPATIBLE.pack_raw_frames(link, bit_depth, frames)?
+            (
+                LxstMediaEgress::PYTHON_COMPATIBLE.pack_raw_frames(link, bit_depth, frames)?,
+                LinkEndpointRole::Initiator,
+            )
         };
-        self.queue_packed_media_packets(packets)
+        self.queue_packed_media_packets(link_id, role, packets)
     }
 
     pub fn queue_frames(
@@ -2689,36 +2796,54 @@ impl TelephonyRnsEndpoint {
         frames: impl IntoIterator<Item = Frame>,
     ) -> Result<usize, Error> {
         let frames = frames.into_iter().collect::<Vec<_>>();
-        let packets = if let Some(link) = self.manager.get_link_mut(&link_id) {
-            LxstMediaEgress::PYTHON_COMPATIBLE.pack_frames(link, frames)?
+        let (packets, role) = if let Some(link) = self.manager.get_link_mut(&link_id) {
+            (
+                LxstMediaEgress::PYTHON_COMPATIBLE.pack_frames(link, frames)?,
+                LinkEndpointRole::Responder,
+            )
         } else {
             let link = self
                 .outgoing_links
                 .get_mut(&link_id)
                 .map(|state| &mut state.link)
                 .ok_or(Error::UnknownLink)?;
-            LxstMediaEgress::PYTHON_COMPATIBLE.pack_frames(link, frames)?
+            (
+                LxstMediaEgress::PYTHON_COMPATIBLE.pack_frames(link, frames)?,
+                LinkEndpointRole::Initiator,
+            )
         };
-        self.queue_packed_media_packets(packets)
+        self.queue_packed_media_packets(link_id, role, packets)
     }
 
     fn queue_packed_media_packets(
         &mut self,
+        link_id: LinkId,
+        role: LinkEndpointRole,
         packets: Vec<lxst_rns::PackedLinkPacket>,
     ) -> Result<usize, Error> {
-        let packet_count = packets.len();
+        let mut admitted = 0;
 
         for packet in packets {
-            try_send_transport(
-                &self.transport_tx,
-                TransportMessage::Outbound(OutboundRequest {
-                    raw: packet.raw,
-                    destination_hash: packet.destination_hash,
-                }),
-            )?;
+            let encrypted_len = packed_payload_len(&packet);
+            let prepared = prepare_packed_link_endpoint_best_effort_send(packet, role);
+            match self.transport_tx.try_send(prepared.message) {
+                Ok(()) => {
+                    admitted += 1;
+                    self.pending_media_results.push_back(PendingMediaResult {
+                        link_id,
+                        role,
+                        encrypted_len,
+                        result_rx: prepared.result_rx,
+                    });
+                }
+                Err(mpsc::error::TrySendError::Full(_)) => {
+                    *self.media_drops.entry(link_id).or_default() += 1;
+                }
+                Err(mpsc::error::TrySendError::Closed(_)) => return Err(Error::TransportClosed),
+            }
         }
 
-        Ok(packet_count)
+        Ok(admitted)
     }
 
     pub fn execute_command(
@@ -2735,41 +2860,85 @@ impl TelephonyRnsEndpoint {
         }
 
         let link_id = command.link_id();
-        if let Some(link) = self.manager.get_link_mut(&link_id) {
-            return execute_command_with_link(
-                &self.transport_tx,
-                &self.identity_pub_key,
-                &self.identity,
-                link,
-                command,
-            );
+        if self.manager.get_link(&link_id).is_some() {
+            return match command {
+                TelephonyCommand::SendSignal { signal, .. } => {
+                    let payload = signalling_packet(*signal)
+                        .encode()
+                        .map_err(lxst_rns::Error::from)?;
+                    self.manager
+                        .send_link_packet(&link_id, &payload)
+                        .map_err(|error| Error::LinkOperation(error.to_string()))?;
+                    Ok(TelephonyCommandEffect::QueuedLinkPacket {
+                        link_id,
+                        kind: QueuedLinkPacketKind::LxstData,
+                    })
+                }
+                TelephonyCommand::IdentifyLocalIdentity { .. } => {
+                    self.manager
+                        .send_link_identify(&link_id)
+                        .map_err(|error| Error::LinkOperation(error.to_string()))?;
+                    Ok(TelephonyCommandEffect::QueuedLinkPacket {
+                        link_id,
+                        kind: QueuedLinkPacketKind::LinkIdentify,
+                    })
+                }
+                TelephonyCommand::TeardownLink { .. } => {
+                    if self
+                        .manager
+                        .close_link(link_id, CloseReason::DestinationClosed, true)
+                    {
+                        Ok(TelephonyCommandEffect::QueuedLinkPacket {
+                            link_id,
+                            kind: QueuedLinkPacketKind::LinkClose,
+                        })
+                    } else {
+                        Ok(TelephonyCommandEffect::Noop)
+                    }
+                }
+                _ => Ok(TelephonyCommandEffect::Noop),
+            };
         }
 
         if matches!(command, TelephonyCommand::TeardownLink { .. })
-            && self.outgoing_attempts.remove(&link_id).is_some()
+            && self.outgoing_attempts.contains_key(&link_id)
         {
-            self.deregister_link_destination(link_id)?;
+            self.close_outgoing_link_locally(link_id)?;
             return Ok(TelephonyCommandEffect::Noop);
         }
 
-        let effect = {
+        let (effect, prepared) = {
             let link = self
                 .outgoing_links
                 .get_mut(&link_id)
                 .map(|state| &mut state.link)
                 .ok_or(Error::UnknownLink)?;
-            execute_command_with_link(
-                &self.transport_tx,
+            prepare_command_with_link(
                 &self.identity_pub_key,
                 &self.identity,
                 link,
+                LinkEndpointRole::Initiator,
                 command,
             )?
         };
 
+        if let Some(prepared) = prepared {
+            let encrypted_len = packed_payload_len(&prepared.packet);
+            if let Err(error) =
+                self.queue_prepared_control(link_id, LinkEndpointRole::Initiator, prepared)
+            {
+                if matches!(command, TelephonyCommand::TeardownLink { .. }) {
+                    let _ = self.close_outgoing_link_locally(link_id);
+                }
+                return Err(error);
+            }
+            if let Some(state) = self.outgoing_links.get_mut(&link_id) {
+                state.link.record_tx(encrypted_len);
+            }
+        }
+
         if matches!(command, TelephonyCommand::TeardownLink { .. }) {
-            self.outgoing_links.remove(&link_id);
-            self.deregister_link_destination(link_id)?;
+            self.finish_outgoing_link_locally(link_id, false)?;
         }
 
         Ok(effect)
@@ -2803,21 +2972,25 @@ impl TelephonyRnsEndpoint {
             })
             .collect::<Vec<_>>();
 
-        let mut packed = Vec::with_capacity(signal_commands.len());
+        let mut prepared = Vec::with_capacity(signal_commands.len());
         for (link_id, signal) in &signal_commands {
-            let link = if let Some(link) = self.manager.get_link_mut(link_id) {
-                link
+            let (link, role) = if let Some(link) = self.manager.get_link_mut(link_id) {
+                (link, LinkEndpointRole::Responder)
             } else {
-                self.outgoing_links
-                    .get_mut(link_id)
-                    .map(|state| &mut state.link)
-                    .ok_or(Error::UnknownLink)?
+                (
+                    self.outgoing_links
+                        .get_mut(link_id)
+                        .map(|state| &mut state.link)
+                        .ok_or(Error::UnknownLink)?,
+                    LinkEndpointRole::Initiator,
+                )
             };
-            packed.push(pack_lxst_link_packet(link, &signalling_packet(*signal))?);
+            let packet = prepare_lxst_link_packet_send(link, role, &signalling_packet(*signal))?;
+            prepared.push((*link_id, role, packet));
         }
 
-        let mut permits = Vec::with_capacity(packed.len());
-        for _ in 0..packed.len() {
+        let mut permits = Vec::with_capacity(prepared.len());
+        for _ in 0..prepared.len() {
             let permit =
                 self.transport_tx
                     .clone()
@@ -2829,11 +3002,20 @@ impl TelephonyRnsEndpoint {
             permits.push(permit);
         }
 
-        for (permit, packet) in permits.into_iter().zip(packed) {
-            permit.send(TransportMessage::Outbound(OutboundRequest {
-                raw: packet.raw,
-                destination_hash: packet.destination_hash,
-            }));
+        for (permit, (link_id, role, prepared)) in permits.into_iter().zip(prepared) {
+            let encrypted_len = packed_payload_len(&prepared.packet);
+            if let Some(link) = self.manager.get_link_mut(&link_id) {
+                link.record_tx(encrypted_len);
+            } else if let Some(state) = self.outgoing_links.get_mut(&link_id) {
+                state.link.record_tx(encrypted_len);
+            }
+            permit.send(prepared.message);
+            self.pending_control_results
+                .push_back(PendingControlResult {
+                    link_id,
+                    role,
+                    result_rx: prepared.result_rx,
+                });
         }
 
         Ok(commands
@@ -2851,6 +3033,14 @@ impl TelephonyRnsEndpoint {
     }
 
     fn try_recv_outgoing_event(&mut self) -> Result<Option<TelephonyLinkEvent>, Error> {
+        self.flush_outgoing_cleanup();
+        if let Some(event) = self.pending_outgoing_events.pop_front() {
+            return Ok(Some(event));
+        }
+        if let Some(event) = self.poll_outgoing_endpoint_state()? {
+            return Ok(Some(event));
+        }
+
         let attempt_ids = self.outgoing_attempts.keys().copied().collect::<Vec<_>>();
         for link_id in attempt_ids {
             let Some(attempt) = self.outgoing_attempts.get_mut(&link_id) else {
@@ -2864,8 +3054,8 @@ impl TelephonyRnsEndpoint {
                 }
                 Err(mpsc::error::TryRecvError::Empty) => {}
                 Err(mpsc::error::TryRecvError::Disconnected) => {
-                    self.outgoing_attempts.remove(&link_id);
-                    return Err(Error::LinkDestinationClosed);
+                    self.close_outgoing_link_locally(link_id)?;
+                    return Ok(Some(TelephonyLinkEvent::LinkClosed { link_id }));
                 }
             }
         }
@@ -2881,7 +3071,7 @@ impl TelephonyRnsEndpoint {
                 }
                 Err(mpsc::error::TryRecvError::Empty) => {}
                 Err(mpsc::error::TryRecvError::Disconnected) => {
-                    self.outgoing_links.remove(&link_id);
+                    self.close_outgoing_link_locally(link_id)?;
                     return Ok(Some(TelephonyLinkEvent::LinkClosed { link_id }));
                 }
             }
@@ -2890,18 +3080,205 @@ impl TelephonyRnsEndpoint {
         Ok(None)
     }
 
+    fn poll_outgoing_endpoint_state(&mut self) -> Result<Option<TelephonyLinkEvent>, Error> {
+        let active_ids = self.outgoing_links.keys().copied().collect::<Vec<_>>();
+        for link_id in active_ids {
+            let mut terminal = false;
+            if let Some(endpoint) = self
+                .outgoing_links
+                .get_mut(&link_id)
+                .and_then(|state| state.endpoint.as_mut())
+            {
+                if let Some(bind_result_rx) = endpoint.bind_result_rx.as_mut() {
+                    match bind_result_rx.try_recv() {
+                        Ok(
+                            LinkEndpointBindResult::Bound | LinkEndpointBindResult::AlreadyBound,
+                        ) => {
+                            endpoint.bind_result_rx = None;
+                        }
+                        Ok(_) | Err(oneshot::error::TryRecvError::Closed) => terminal = true,
+                        Err(oneshot::error::TryRecvError::Empty) => {}
+                    }
+                }
+                match endpoint.lifecycle_rx.try_recv() {
+                    Ok(_) | Err(mpsc::error::TryRecvError::Disconnected) => terminal = true,
+                    Err(mpsc::error::TryRecvError::Empty) => {}
+                }
+            }
+            if terminal {
+                self.close_outgoing_link_locally(link_id)?;
+                return Ok(Some(TelephonyLinkEvent::LinkClosed { link_id }));
+            }
+        }
+
+        let mut pending_controls = VecDeque::new();
+        let mut failed_control = None;
+        while let Some(mut pending) = self.pending_control_results.pop_front() {
+            match pending.result_rx.try_recv() {
+                Ok(LinkEndpointSendResult::Sent | LinkEndpointSendResult::Queued { .. }) => {}
+                Ok(_) | Err(oneshot::error::TryRecvError::Closed) => {
+                    failed_control.get_or_insert((pending.link_id, pending.role));
+                }
+                Err(oneshot::error::TryRecvError::Empty) => pending_controls.push_back(pending),
+            }
+        }
+        self.pending_control_results = pending_controls;
+        if let Some((link_id, role)) = failed_control {
+            self.close_link_owner(link_id, role)?;
+            return Ok(Some(TelephonyLinkEvent::LinkClosed { link_id }));
+        }
+
+        let mut pending_media = VecDeque::new();
+        let mut failed_media = None;
+        let mut sent_media = Vec::new();
+        while let Some(mut pending) = self.pending_media_results.pop_front() {
+            match pending.result_rx.try_recv() {
+                Ok(LinkEndpointSendResult::Sent | LinkEndpointSendResult::Queued { .. }) => {
+                    sent_media.push((pending.link_id, pending.role, pending.encrypted_len));
+                }
+                Ok(LinkEndpointSendResult::DroppedBackpressure) => {
+                    *self.media_drops.entry(pending.link_id).or_default() += 1;
+                }
+                Ok(_) | Err(oneshot::error::TryRecvError::Closed) => {
+                    failed_media.get_or_insert((pending.link_id, pending.role));
+                }
+                Err(oneshot::error::TryRecvError::Empty) => pending_media.push_back(pending),
+            }
+        }
+        self.pending_media_results = pending_media;
+        for (link_id, role, encrypted_len) in sent_media {
+            match role {
+                LinkEndpointRole::Responder => {
+                    if let Some(link) = self.manager.get_link_mut(&link_id) {
+                        link.record_tx(encrypted_len);
+                    }
+                }
+                LinkEndpointRole::Initiator => {
+                    if let Some(state) = self.outgoing_links.get_mut(&link_id) {
+                        state.link.record_tx(encrypted_len);
+                    }
+                }
+            }
+        }
+        if let Some((link_id, role)) = failed_media {
+            self.close_link_owner(link_id, role)?;
+            return Ok(Some(TelephonyLinkEvent::LinkClosed { link_id }));
+        }
+
+        Ok(None)
+    }
+
+    fn close_link_owner(&mut self, link_id: LinkId, role: LinkEndpointRole) -> Result<(), Error> {
+        match role {
+            LinkEndpointRole::Initiator => self.close_outgoing_link_locally(link_id),
+            LinkEndpointRole::Responder => {
+                self.manager
+                    .close_link(link_id, CloseReason::DestinationClosed, false);
+                Ok(())
+            }
+        }
+    }
+
+    fn close_outgoing_link_locally(&mut self, link_id: LinkId) -> Result<(), Error> {
+        self.finish_outgoing_link_locally(link_id, true)
+    }
+
+    fn finish_outgoing_link_locally(&mut self, link_id: LinkId, unbind: bool) -> Result<(), Error> {
+        self.outgoing_attempts.remove(&link_id);
+        self.outgoing_links.remove(&link_id);
+        self.pending_control_results
+            .retain(|pending| pending.link_id != link_id);
+        self.pending_media_results
+            .retain(|pending| pending.link_id != link_id);
+        self.media_drops.remove(&link_id);
+        if unbind {
+            let mut cleanup = PendingOutgoingCleanup {
+                link_id,
+                unbind_sent: false,
+            };
+            if !self.try_advance_outgoing_cleanup(&mut cleanup)
+                && !self
+                    .pending_outgoing_cleanup
+                    .iter()
+                    .any(|pending| pending.link_id == link_id)
+            {
+                self.pending_outgoing_cleanup.push_back(cleanup);
+            }
+        }
+        Ok(())
+    }
+
+    fn flush_outgoing_cleanup(&mut self) {
+        while let Some(mut cleanup) = self.pending_outgoing_cleanup.pop_front() {
+            if !self.try_advance_outgoing_cleanup(&mut cleanup) {
+                self.pending_outgoing_cleanup.push_front(cleanup);
+                break;
+            }
+        }
+    }
+
+    fn try_advance_outgoing_cleanup(&self, cleanup: &mut PendingOutgoingCleanup) -> bool {
+        if !cleanup.unbind_sent {
+            let (result_tx, _result_rx) = oneshot::channel();
+            match self
+                .transport_tx
+                .try_send(TransportMessage::UnbindLinkEndpoint {
+                    link_id: cleanup.link_id,
+                    role: LinkEndpointRole::Initiator,
+                    result_tx,
+                }) {
+                Ok(()) => cleanup.unbind_sent = true,
+                Err(mpsc::error::TrySendError::Full(_)) => return false,
+                Err(mpsc::error::TrySendError::Closed(_)) => return true,
+            }
+        }
+        match self
+            .transport_tx
+            .try_send(TransportMessage::DeregisterDestination {
+                hash: cleanup.link_id,
+            }) {
+            Ok(()) | Err(mpsc::error::TrySendError::Closed(_)) => true,
+            Err(mpsc::error::TrySendError::Full(_)) => false,
+        }
+    }
+
+    /// Number of media packets the exact-interface best-effort boundary
+    /// dropped for this Link since it became active.
+    pub fn media_drop_count(&self, link_id: LinkId) -> u64 {
+        self.media_drops.get(&link_id).copied().unwrap_or(0)
+    }
+
+    fn queue_prepared_control(
+        &mut self,
+        link_id: LinkId,
+        role: LinkEndpointRole,
+        prepared: PreparedLinkEndpointSend,
+    ) -> Result<(), Error> {
+        try_send_transport(&self.transport_tx, prepared.message)?;
+        self.pending_control_results
+            .push_back(PendingControlResult {
+                link_id,
+                role,
+                result_rx: prepared.result_rx,
+            });
+        Ok(())
+    }
+
     fn handle_outgoing_attempt_event(
         &mut self,
         link_id: LinkId,
         event: DestinationEvent,
     ) -> Result<Option<TelephonyLinkEvent>, Error> {
-        let raw = match event {
+        let (raw, interface_id, metrics) = match event {
             DestinationEvent::LinkClosed { link_id: closed_id } if closed_id == link_id => {
-                self.outgoing_attempts.remove(&link_id);
-                self.deregister_link_destination(link_id)?;
+                self.close_outgoing_link_locally(link_id)?;
                 return Ok(Some(TelephonyLinkEvent::LinkClosed { link_id }));
             }
-            DestinationEvent::InboundPacket { raw, .. } => raw,
+            DestinationEvent::InboundPacket {
+                raw,
+                interface_id,
+                metrics,
+            } => (raw, interface_id, metrics),
             DestinationEvent::AnnounceRequested(_)
             | DestinationEvent::DeliveryProof { .. }
             | DestinationEvent::LinkEstablished { .. }
@@ -2917,9 +3294,9 @@ impl TelephonyRnsEndpoint {
             return Ok(None);
         }
 
-        let mut attempt = self
+        let attempt = self
             .outgoing_attempts
-            .remove(&link_id)
+            .get_mut(&link_id)
             .ok_or(Error::UnknownLink)?;
         let mut identity_ed25519_pub = [0u8; 32];
         identity_ed25519_pub.copy_from_slice(&attempt.remote_public_key[32..64]);
@@ -2929,18 +3306,64 @@ impl TelephonyRnsEndpoint {
             .link
             .validate_proof(&raw[data_offset..], &verify_key, &identity_ed25519_pub)
             .map_err(|err| Error::LinkProofInvalid(format!("{err:?}")))?;
+        attempt.link.update_phy_stats_force(
+            metrics.rssi.map(f64::from),
+            metrics.snr.map(f64::from),
+            metrics.q.map(f64::from),
+        );
 
-        queue_link_context_packet(
-            &self.transport_tx,
+        // Bind and emit LRRTT in actor order. Reserving both slots before
+        // publishing either operation prevents a valid handshake from being
+        // left half-transitioned by transport mailbox pressure.
+        let bind_permit = self
+            .transport_tx
+            .clone()
+            .try_reserve_owned()
+            .map_err(map_transport_try_send_error)?;
+        let rtt_permit = self
+            .transport_tx
+            .clone()
+            .try_reserve_owned()
+            .map_err(map_transport_try_send_error)?;
+        let (lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+        let (bind_result_tx, bind_result_rx) = oneshot::channel();
+        bind_permit.send(TransportMessage::BindLinkEndpoint {
+            binding: LinkEndpointBinding {
+                link_id,
+                interface_id,
+                role: LinkEndpointRole::Initiator,
+            },
+            lifecycle_tx,
+            result_tx: bind_result_tx,
+        });
+        let prepared_rtt = prepare_link_context_send(
             link_id,
+            LinkEndpointRole::Initiator,
             rns_wire::context::PacketContext::Lrrtt,
             rtt_data,
-        )?;
+        );
+        rtt_permit.send(prepared_rtt.message);
+
+        let attempt = self
+            .outgoing_attempts
+            .remove(&link_id)
+            .ok_or(Error::UnknownLink)?;
+        self.pending_control_results
+            .push_back(PendingControlResult {
+                link_id,
+                role: LinkEndpointRole::Initiator,
+                result_rx: prepared_rtt.result_rx,
+            });
         self.outgoing_links.insert(
             link_id,
             OutgoingLinkState {
                 link: attempt.link,
                 event_rx: attempt.event_rx,
+                endpoint: Some(OutgoingEndpointState {
+                    attached_interface: interface_id,
+                    bind_result_rx: Some(bind_result_rx),
+                    lifecycle_rx,
+                }),
             },
         );
 
@@ -2952,19 +3375,30 @@ impl TelephonyRnsEndpoint {
         link_id: LinkId,
         event: DestinationEvent,
     ) -> Result<Option<TelephonyLinkEvent>, Error> {
-        let raw = match event {
+        let (raw, interface_id, metrics) = match event {
             DestinationEvent::LinkClosed { link_id: closed_id } if closed_id == link_id => {
-                self.outgoing_links.remove(&link_id);
-                self.deregister_link_destination(link_id)?;
+                self.close_outgoing_link_locally(link_id)?;
                 return Ok(Some(TelephonyLinkEvent::LinkClosed { link_id }));
             }
-            DestinationEvent::InboundPacket { raw, .. } => raw,
+            DestinationEvent::InboundPacket {
+                raw,
+                interface_id,
+                metrics,
+            } => (raw, interface_id, metrics),
             DestinationEvent::AnnounceRequested(_)
             | DestinationEvent::DeliveryProof { .. }
             | DestinationEvent::LinkEstablished { .. }
             | DestinationEvent::LinkRequest { .. }
             | DestinationEvent::LinkClosed { .. } => return Ok(None),
         };
+        if self
+            .outgoing_links
+            .get(&link_id)
+            .and_then(|state| state.endpoint.as_ref())
+            .is_some_and(|endpoint| endpoint.attached_interface != interface_id)
+        {
+            return Ok(None);
+        }
         let (header, data_offset) = rns_wire::header::PacketHeader::unpack(&raw)
             .map_err(|err| Error::LinkOperation(err.to_string()))?;
         if header.destination_hash != link_id || raw.len() < data_offset {
@@ -2975,12 +3409,16 @@ impl TelephonyRnsEndpoint {
             .outgoing_links
             .get_mut(&link_id)
             .ok_or(Error::UnknownLink)?;
+        state.link.update_phy_stats(
+            metrics.rssi.map(f64::from),
+            metrics.snr.map(f64::from),
+            metrics.q.map(f64::from),
+        );
 
         match header.context {
             rns_wire::context::PacketContext::LinkClose => {
                 if state.link.receive_teardown(body) {
-                    self.outgoing_links.remove(&link_id);
-                    self.deregister_link_destination(link_id)?;
+                    self.close_outgoing_link_locally(link_id)?;
                     Ok(Some(TelephonyLinkEvent::LinkClosed { link_id }))
                 } else {
                     Ok(None)
@@ -2991,10 +3429,13 @@ impl TelephonyRnsEndpoint {
                     .link
                     .decrypt(body)
                     .map_err(|err| Error::LinkOperation(err.to_string()))?;
+                state.link.record_inbound();
+                state.link.record_rx(body.len());
                 Ok(Some(TelephonyLinkEvent::LinkPacket { link_id, plaintext }))
             }
             rns_wire::context::PacketContext::Keepalive => {
                 state.link.record_inbound();
+                state.link.record_rx(body.len());
                 Ok(None)
             }
             _ => Ok(None),
@@ -3009,29 +3450,53 @@ pub fn execute_command_with_link(
     link: &mut Link,
     command: &TelephonyCommand,
 ) -> Result<TelephonyCommandEffect, Error> {
-    match command {
+    let role = endpoint_role(link.role());
+    let (effect, prepared) =
+        prepare_command_with_link(identity_pub_key, identity, link, role, command)?;
+    if let Some(prepared) = prepared {
+        let encrypted_len = packed_payload_len(&prepared.packet);
+        try_send_transport(transport_tx, prepared.message)?;
+        link.record_tx(encrypted_len);
+    }
+    Ok(effect)
+}
+
+fn prepare_command_with_link(
+    identity_pub_key: &[u8; 64],
+    identity: &Identity,
+    link: &mut Link,
+    role: LinkEndpointRole,
+    command: &TelephonyCommand,
+) -> Result<(TelephonyCommandEffect, Option<PreparedLinkEndpointSend>), Error> {
+    let (effect, prepared) = match command {
         TelephonyCommand::SendSignal { link_id, signal } => {
             let packet = signalling_packet(*signal);
-            queue_lxst_link_packet(transport_tx, link, &packet)?;
-            Ok(TelephonyCommandEffect::QueuedLinkPacket {
-                link_id: *link_id,
-                kind: QueuedLinkPacketKind::LxstData,
-            })
+            let prepared = prepare_lxst_link_packet_send(link, role, &packet)?;
+            (
+                TelephonyCommandEffect::QueuedLinkPacket {
+                    link_id: *link_id,
+                    kind: QueuedLinkPacketKind::LxstData,
+                },
+                Some(prepared),
+            )
         }
         TelephonyCommand::IdentifyLocalIdentity { link_id } => {
             let encrypted = link
                 .identify_with_fallible(identity_pub_key, |m| identity.sign(m))
                 .map_err(|err| Error::LinkOperation(err.to_string()))?;
-            queue_link_context_packet(
-                transport_tx,
+            let prepared = prepare_link_context_send(
                 *link_id,
+                role,
                 rns_wire::context::PacketContext::LinkIdentify,
                 encrypted,
-            )?;
-            Ok(TelephonyCommandEffect::QueuedLinkPacket {
-                link_id: *link_id,
-                kind: QueuedLinkPacketKind::LinkIdentify,
-            })
+            );
+            (
+                TelephonyCommandEffect::QueuedLinkPacket {
+                    link_id: *link_id,
+                    kind: QueuedLinkPacketKind::LinkIdentify,
+                },
+                Some(prepared),
+            )
         }
         TelephonyCommand::TeardownLink { link_id } => {
             let reason = if link.is_initiator {
@@ -3040,29 +3505,41 @@ pub fn execute_command_with_link(
                 CloseReason::DestinationClosed
             };
             let Some(encrypted) = link.teardown(reason) else {
-                return Ok(TelephonyCommandEffect::Noop);
+                return Ok((TelephonyCommandEffect::Noop, None));
             };
-            queue_link_context_packet(
-                transport_tx,
+            let prepared = prepare_final_link_context_send(
                 *link_id,
+                role,
                 rns_wire::context::PacketContext::LinkClose,
                 encrypted,
-            )?;
-            Ok(TelephonyCommandEffect::QueuedLinkPacket {
-                link_id: *link_id,
-                kind: QueuedLinkPacketKind::LinkClose,
-            })
+            );
+            (
+                TelephonyCommandEffect::QueuedLinkPacket {
+                    link_id: *link_id,
+                    kind: QueuedLinkPacketKind::LinkClose,
+                },
+                Some(prepared),
+            )
         }
-        _ => Ok(TelephonyCommandEffect::Noop),
-    }
+        _ => (TelephonyCommandEffect::Noop, None),
+    };
+    Ok((effect, prepared))
 }
 
-fn queue_link_context_packet(
-    transport_tx: &mpsc::Sender<TransportMessage>,
+fn prepare_link_context_send(
+    link_id: LinkId,
+    role: LinkEndpointRole,
+    context: rns_wire::context::PacketContext,
+    encrypted: Vec<u8>,
+) -> PreparedLinkEndpointSend {
+    prepare_packed_link_endpoint_send(pack_link_context_packet(link_id, context, encrypted), role)
+}
+
+fn pack_link_context_packet(
     link_id: LinkId,
     context: rns_wire::context::PacketContext,
     encrypted: Vec<u8>,
-) -> Result<(), Error> {
+) -> lxst_rns::PackedLinkPacket {
     let header = rns_wire::header::PacketHeader {
         flags: rns_wire::flags::PacketFlags {
             header_type: rns_wire::flags::HeaderType::Header1,
@@ -3078,13 +3555,44 @@ fn queue_link_context_packet(
     };
     let mut raw = header.pack();
     raw.extend_from_slice(&encrypted);
-    try_send_transport(
-        transport_tx,
-        TransportMessage::Outbound(OutboundRequest {
-            raw: Bytes::from(raw),
-            destination_hash: link_id,
-        }),
+    let packet_hash = rns_wire::hash::packet_hash(&raw, rns_wire::flags::HeaderType::Header1);
+    lxst_rns::PackedLinkPacket {
+        raw: Bytes::from(raw),
+        packet_hash,
+        destination_hash: link_id,
+    }
+}
+
+fn prepare_final_link_context_send(
+    link_id: LinkId,
+    role: LinkEndpointRole,
+    context: rns_wire::context::PacketContext,
+    encrypted: Vec<u8>,
+) -> PreparedLinkEndpointSend {
+    prepare_packed_link_endpoint_final_send(
+        pack_link_context_packet(link_id, context, encrypted),
+        role,
     )
+}
+
+fn endpoint_role(role: LinkRole) -> LinkEndpointRole {
+    match role {
+        LinkRole::Initiator => LinkEndpointRole::Initiator,
+        LinkRole::Responder => LinkEndpointRole::Responder,
+    }
+}
+
+fn packed_payload_len(packet: &lxst_rns::PackedLinkPacket) -> usize {
+    rns_wire::header::PacketHeader::unpack(&packet.raw)
+        .map(|(_, data_offset)| packet.raw.len().saturating_sub(data_offset))
+        .unwrap_or_default()
+}
+
+fn map_transport_try_send_error<T>(error: mpsc::error::TrySendError<T>) -> Error {
+    match error {
+        mpsc::error::TrySendError::Full(_) => Error::TransportFull,
+        mpsc::error::TrySendError::Closed(_) => Error::TransportClosed,
+    }
 }
 
 fn build_link_request_packet(dest_hash: [u8; 16], request_data: &[u8]) -> Bytes {
