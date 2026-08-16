@@ -137,22 +137,29 @@ cargo build --release
 Run the workspace test gate:
 
 ```bash
-cargo test --workspace
+cargo test --workspace --locked
 ```
 
 Run the local CI gate:
 
 ```bash
 cargo fmt --all -- --check
-cargo clippy --workspace -- -D warnings
-cargo test --workspace
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo test --workspace --locked
 ```
 
 The test gate covers wire codecs, telephony state, profile metadata, Opus
 stream boundaries, malformed-input handling, the local service runtime, Python
-LXST wire parity, Reticulum destination parity, and live headless LXST
-Telephone interop. The Python tests expect upstream LXST at `../upstream/LXST`
-or `LXST_UPSTREAM_DIR`, and upstream Reticulum at `../upstream/Reticulum`,
+LXST wire parity, and Reticulum destination parity. Live headless Telephone
+interop is intentionally excluded from ordinary `cargo test` runs because it
+starts Python processes and TCP interfaces. Run that suite explicitly with:
+
+```bash
+cargo test -p lxst-telephony --test python_telephone_live_interop -- --ignored
+```
+
+The Python parity and live tests expect upstream LXST at `../upstream/LXST` or
+`LXST_UPSTREAM_DIR`, and upstream Reticulum at `../upstream/Reticulum`,
 `RETICULUM_UPSTREAM_DIR`, or sibling `../rsReticulum`.
 
 For full Python Opus media interop, install a native Opus runtime as well as
@@ -204,6 +211,20 @@ events, and media events instead of inferring call state from raw Reticulum
 traffic. Outgoing announce/path discovery runs asynchronously inside the
 service, so an unreachable or non-LXST peer does not block hangup, announce,
 media, or shutdown controls while discovery times out.
+
+An initial Reticulum `LINKREQUEST` still follows normal destination routing.
+After proof validation, rsLXST binds the call to the exact interface that
+established the Link. Signalling, identification, keepalives, media, and close
+traffic never reroute through a newly learned path, and packets arriving on a
+different interface are rejected before decryption or call accounting.
+Interface loss terminates that exact call.
+
+Control and teardown traffic use an ordered, bounded Link endpoint queue. The
+final close packet drains in order before transport removes the endpoint and
+temporary Link destination. Realtime media uses exact-interface best-effort
+delivery instead: it never enters the lossless control queue, reports drops
+under backpressure, and intentionally does not request Reticulum delivery
+receipts.
 
 For Opus calls, applications supply and receive `RawAudioFrame` values through
 `StartOpusStream` and `StartOpusReceiveStream`. rsLXST enforces the negotiated

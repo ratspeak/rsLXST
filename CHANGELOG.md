@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Pinned every established telephony Link to the immutable interface that
+  completed its handshake; wrong-interface traffic is rejected before crypto,
+  accounting, or audio processing, and interface loss closes the call.
+- Moved signalling, identification, keepalives, and close packets to ordered
+  typed Link endpoint delivery. Final teardown now drains before atomic endpoint
+  and temporary-destination removal.
+- Kept realtime media bounded and receipt-free with exact-interface
+  best-effort delivery and explicit backpressure drop accounting.
+- Made live Python Telephone/TCP interoperability tests opt-in so the ordinary
+  locked workspace test gate remains local and non-live.
+
 ## 0.1.2 - 2026-07-26
 
 - Updated the Reticulum dependency baseline to rsReticulum 1.1.0.

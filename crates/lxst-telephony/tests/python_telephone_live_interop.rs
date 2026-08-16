@@ -1,3 +1,8 @@
+//! Opt-in live interoperability against Python LXST over real TCP interfaces.
+//!
+//! Every test in this binary is ignored by default. Run it explicitly with the
+//! command documented in the repository README.
+
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
@@ -1043,6 +1048,7 @@ impl RustCallerSession {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn python_telephone_announce_reaches_rust_transport() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -1113,6 +1119,7 @@ async fn python_telephone_announce_reaches_rust_transport() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_to_rust_call_establishes_through_python_transport_hub() {
     let port = free_tcp_port();
     let hub = PythonTelephoneHost::spawn_transport_hub(port);
@@ -1222,6 +1229,7 @@ async fn rust_to_rust_call_establishes_through_python_transport_hub() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_telephony_startup_retry_announces_after_late_tcp_hub_connection() {
     let port = free_tcp_port();
     let hub = PythonTelephoneHost::spawn_transport_hub(port);
@@ -1261,6 +1269,7 @@ async fn rust_telephony_startup_retry_announces_after_late_tcp_hub_connection() 
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_outgoing_call_reaches_python_ringing_without_audio() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -1354,6 +1363,7 @@ async fn rust_outgoing_call_reaches_python_ringing_without_audio() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_outgoing_call_establishes_when_python_answers_without_audio() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -1476,6 +1486,7 @@ async fn rust_outgoing_call_establishes_when_python_answers_without_audio() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn python_outgoing_call_reaches_rust_incoming_ringing_without_audio() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -1552,6 +1563,7 @@ async fn python_outgoing_call_reaches_rust_incoming_ringing_without_audio() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn python_outgoing_call_establishes_when_rust_answers_without_audio() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -1655,6 +1667,7 @@ async fn python_outgoing_call_establishes_when_rust_answers_without_audio() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_hangup_after_python_answer_ends_python_call_without_audio() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -1776,6 +1789,7 @@ async fn rust_hangup_after_python_answer_ends_python_call_without_audio() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn python_hangup_after_rust_answer_ends_rust_call_without_audio() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -1892,6 +1906,7 @@ async fn python_hangup_after_rust_answer_ends_rust_call_without_audio() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_outgoing_call_receives_python_busy_without_audio() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -1965,6 +1980,7 @@ async fn rust_outgoing_call_receives_python_busy_without_audio() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn python_outgoing_call_receives_rust_busy_without_audio() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -2057,6 +2073,7 @@ async fn python_outgoing_call_receives_rust_busy_without_audio() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_outgoing_call_receives_python_reject_without_audio() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -2147,6 +2164,7 @@ async fn rust_outgoing_call_receives_python_reject_without_audio() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn python_outgoing_call_receives_rust_reject_without_audio() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -2247,6 +2265,7 @@ async fn python_outgoing_call_receives_rust_reject_without_audio() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_service_outgoing_timeout_ends_python_ringing_call_without_audio() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -2382,6 +2401,7 @@ async fn rust_service_outgoing_timeout_ends_python_ringing_call_without_audio() 
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_service_incoming_timeout_ends_python_outgoing_call_without_reject() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -2509,6 +2529,7 @@ async fn rust_service_incoming_timeout_ends_python_outgoing_call_without_reject(
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_service_sends_raw_media_to_python_established_call() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -2667,6 +2688,7 @@ async fn rust_service_sends_raw_media_to_python_established_call() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_service_sends_opus_voice_profile_matrix_to_python_established_calls() {
     for profile in OPUS_VOICE_PROFILES {
         let Some(mut session) = RustCallerSession::establish(profile).await else {
@@ -2695,6 +2717,7 @@ async fn rust_service_sends_opus_voice_profile_matrix_to_python_established_call
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_profile_switch_reaches_python_and_media_uses_new_profile() {
     let Some(mut session) = RustCallerSession::establish(Profile::QualityMedium).await else {
         return;
@@ -2714,6 +2737,7 @@ async fn rust_profile_switch_reaches_python_and_media_uses_new_profile() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn python_profile_switch_reaches_rust_and_media_uses_new_profile() {
     let Some(mut session) = RustCallerSession::establish(Profile::QualityHigh).await else {
         return;
@@ -2725,6 +2749,7 @@ async fn python_profile_switch_reaches_rust_and_media_uses_new_profile() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_service_receives_python_raw_media_on_established_call() {
     let port = free_tcp_port();
     let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
@@ -2899,6 +2924,7 @@ async fn rust_service_receives_python_raw_media_on_established_call() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_service_decodes_python_opus_voice_profile_matrix() {
     for profile in OPUS_VOICE_PROFILES {
         let Some(mut session) = RustCallerSession::establish(profile).await else {
