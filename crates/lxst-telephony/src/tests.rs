@@ -1228,7 +1228,7 @@ fn rns_endpoint_try_drive_ready_pumps_reticulum_handshake_events() {
     let TransportMessage::BindLinkEndpoint {
         binding,
         lifecycle_tx: responder_lifecycle_tx,
-        ..
+        result_tx,
     } = bind
     else {
         panic!("expected responder endpoint binding, got {bind:?}");
@@ -1236,7 +1236,9 @@ fn rns_endpoint_try_drive_ready_pumps_reticulum_handshake_events() {
     assert_eq!(binding.link_id, link_id);
     assert_eq!(binding.interface_id, 7);
     assert_eq!(binding.role, LinkEndpointRole::Responder);
+    result_tx.send(LinkEndpointBindResult::Bound).unwrap();
     let _responder_lifecycle_tx = responder_lifecycle_tx;
+    assert!(endpoint.try_drive_ready(&mut core).unwrap().is_empty());
 
     let register_link = transport_rx.try_recv().unwrap();
     let TransportMessage::RegisterLink {
