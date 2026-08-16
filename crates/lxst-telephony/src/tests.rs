@@ -3073,6 +3073,29 @@ fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
 
     let (mut responder, proof_data) =
         Link::new_responder(&request_data, &remote_signing_key, destination_hash, 1).unwrap();
+    let mut invalid_proof_data = proof_data.clone();
+    *invalid_proof_data.last_mut().unwrap() ^= 0x01;
+    link_event_tx
+        .try_send(DestinationEvent::InboundPacket {
+            raw: Bytes::from(link_proof_packet(link_id, &invalid_proof_data)),
+            interface_id: 7,
+            metrics: PacketMetrics {
+                rssi: Some(-12.0),
+                snr: Some(30.0),
+                q: Some(99.0),
+            },
+        })
+        .unwrap();
+
+    assert_eq!(endpoint.try_recv_link_event().unwrap(), None);
+    let pending = &endpoint.outgoing_attempts[&link_id].link;
+    assert_eq!(pending.state, rns_link::link::LinkState::Pending);
+    assert_eq!(pending.get_rssi(), None);
+    assert!(matches!(
+        transport_rx.try_recv(),
+        Err(mpsc::error::TryRecvError::Empty)
+    ));
+
     link_event_tx
         .try_send(DestinationEvent::InboundPacket {
             raw: Bytes::from(link_proof_packet(link_id, &proof_data)),
@@ -3807,7 +3830,7 @@ fn outgoing_link_attempt_timeout_is_driven_by_endpoint_tick() {
     let (transport_tx, mut transport_rx) = mpsc::channel(8);
     let mut endpoint = TelephonyRnsEndpoint::register(transport_tx, &local_identity).unwrap();
     let _registration = transport_rx.try_recv().unwrap();
-    let (_event_tx, event_rx) = mpsc::channel(1);
+    let (event_tx, event_rx) = mpsc::channel(1);
     let (mut link, _request) = Link::new_initiator(link(0xA9), 1);
     link.establishment_timeout = Duration::ZERO;
     let link_id = link.link_id;
@@ -3819,6 +3842,26 @@ fn outgoing_link_attempt_timeout_is_driven_by_endpoint_tick() {
             event_rx,
         },
     );
+
+    event_tx
+        .try_send(DestinationEvent::InboundPacket {
+            raw: Bytes::from(link_proof_packet(link_id, &[0xA5; 96])),
+            interface_id: 44,
+            metrics: PacketMetrics {
+                rssi: Some(-1.0),
+                snr: Some(60.0),
+                q: Some(100.0),
+            },
+        })
+        .unwrap();
+    assert_eq!(endpoint.try_recv_link_event().unwrap(), None);
+    let pending = &endpoint.outgoing_attempts[&link_id].link;
+    assert_eq!(pending.state, rns_link::link::LinkState::Pending);
+    assert_eq!(pending.get_rssi(), None);
+    assert!(matches!(
+        transport_rx.try_recv(),
+        Err(mpsc::error::TryRecvError::Empty)
+    ));
 
     endpoint.tick_reticulum();
     assert_eq!(

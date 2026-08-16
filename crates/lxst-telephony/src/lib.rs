@@ -3285,8 +3285,12 @@ impl TelephonyRnsEndpoint {
             | DestinationEvent::LinkRequest { .. }
             | DestinationEvent::LinkClosed { .. } => return Ok(None),
         };
-        let (header, data_offset) = rns_wire::header::PacketHeader::unpack(&raw)
-            .map_err(|err| Error::LinkOperation(err.to_string()))?;
+        let Ok((header, data_offset)) = rns_wire::header::PacketHeader::unpack(&raw) else {
+            // A pending attempt can see unauthenticated candidates before the
+            // authentic LRPROOF arrives. Malformed candidates are not terminal
+            // and must not win that race.
+            return Ok(None);
+        };
         if header.destination_hash != link_id
             || header.flags.packet_type != rns_wire::flags::PacketType::Proof
             || raw.len() <= data_offset
@@ -3302,10 +3306,16 @@ impl TelephonyRnsEndpoint {
         identity_ed25519_pub.copy_from_slice(&attempt.remote_public_key[32..64]);
         let verify_key = Ed25519PublicKey::from_bytes(&identity_ed25519_pub)
             .map_err(|err| Error::LinkProofInvalid(err.to_string()))?;
-        let rtt_data = attempt
-            .link
-            .validate_proof(&raw[data_offset..], &verify_key, &identity_ed25519_pub)
-            .map_err(|err| Error::LinkProofInvalid(format!("{err:?}")))?;
+        let Ok(rtt_data) =
+            attempt
+                .link
+                .validate_proof(&raw[data_offset..], &verify_key, &identity_ed25519_pub)
+        else {
+            // LRPROOF candidates are unauthenticated until this validation
+            // succeeds. Ignore an invalid first arrival so the attempt remains
+            // pending for a later authentic proof or its normal timeout.
+            return Ok(None);
+        };
         attempt.link.update_phy_stats_force(
             metrics.rssi.map(f64::from),
             metrics.snr.map(f64::from),
