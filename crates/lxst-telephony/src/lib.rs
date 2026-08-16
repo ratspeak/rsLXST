@@ -2710,10 +2710,10 @@ impl TelephonyRnsEndpoint {
                     );
                     let queued =
                         self.queue_prepared_control(link_id, LinkEndpointRole::Initiator, prepared);
-                    if queued.is_ok()
-                        && let Some(state) = self.outgoing_links.get_mut(&link_id)
-                    {
-                        state.link.record_tx_keepalive(1);
+                    if queued.is_ok() {
+                        if let Some(state) = self.outgoing_links.get_mut(&link_id) {
+                            state.link.record_tx_keepalive(1);
+                        }
                     }
                     if queued.is_err() {
                         let _ = self.close_outgoing_link_locally(link_id);
