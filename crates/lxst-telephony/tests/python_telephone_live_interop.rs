@@ -1645,13 +1645,19 @@ async fn python_outgoing_call_establishes_when_rust_answers_without_audio() {
         Some(local_identity_hash.as_str())
     );
 
-    endpoint
-        .try_drive_ready(&mut core)
-        .expect("drive Rust endpoint after Python establishment response");
-    let snapshot = core.snapshot();
-    let call = snapshot
-        .active_call
-        .expect("active incoming established call");
+    // Python's callback proves it consumed our ESTABLISHED offer, but its
+    // reciprocal ESTABLISHED packet can still be in the TCP/transport queues.
+    // Drive until that causal response reaches the Rust state machine instead
+    // of treating one empty nonblocking poll as a failed handshake.
+    let call = drive_until_active_status(
+        &mut endpoint,
+        &mut core,
+        &helper,
+        SignallingStatus::Established,
+        Duration::from_secs(5),
+        "Rust incoming call did not consume Python's ESTABLISHED response",
+    )
+    .await;
     assert_eq!(call.remote_identity, python_identity_hash);
     assert_eq!(call.role, CallRole::Incoming);
     assert_eq!(call.status, SignallingStatus::Established);
@@ -1866,17 +1872,17 @@ async fn python_hangup_after_rust_answer_ends_rust_call_without_audio() {
         .expect("send Rust answer signalling");
     helper.wait_event("ESTABLISHED", Duration::from_secs(5));
 
-    endpoint
-        .try_drive_ready(&mut core)
-        .expect("drive Rust endpoint after Python establishment response");
-    assert_eq!(
-        core.snapshot()
-            .active_call
-            .as_ref()
-            .expect("active incoming established call")
-            .status,
-        SignallingStatus::Established
-    );
+    let established_call = drive_until_active_status(
+        &mut endpoint,
+        &mut core,
+        &helper,
+        SignallingStatus::Established,
+        Duration::from_secs(5),
+        "Rust incoming call did not consume Python's ESTABLISHED response before hangup",
+    )
+    .await;
+    assert_eq!(established_call.link_id, link_id);
+    assert_eq!(established_call.role, CallRole::Incoming);
 
     helper.send(json!({"cmd": "hangup", "id": "hangup-1"}));
     helper.wait_event("HUNG_UP", Duration::from_secs(5));
