@@ -26,12 +26,15 @@ use rns_identity::destination::{
 use rns_identity::identity::Identity;
 use rns_identity::name_hash::name_hash;
 use rns_link::link::{CloseReason, Link, LinkAction, LinkRole};
+use rns_runtime::destination_resolver::{
+    DestinationResolveError, DestinationResolveOptions, resolve_destination_on_transport,
+};
 use rns_runtime::link_manager::LinkManager;
 use rns_transport::link_messages::DestinationEvent;
 use rns_transport::messages::{
-    AnnounceHandlerEvent, AnnounceRpcEntry, InterfaceId, LinkEndpointBindResult,
-    LinkEndpointBinding, LinkEndpointLifecycleEvent, LinkEndpointRole, LinkEndpointSendResult,
-    OutboundRequest, TransportMessage, TransportQuery, TransportQueryResponse,
+    InterfaceId, LinkEndpointBindResult, LinkEndpointBinding, LinkEndpointLifecycleEvent,
+    LinkEndpointRole, LinkEndpointSendResult, OutboundRequest, TransportMessage, TransportQuery,
+    TransportQueryResponse,
 };
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
@@ -3630,113 +3633,33 @@ async fn discover_remote_telephony_peer_on_transport(
     discovery_timeout: Duration,
 ) -> Result<RemoteTelephonyPeer, Error> {
     let destination_hash = telephony_destination_hash(&remote_identity);
-    let aspect_filter = TELEPHONY_DESTINATION_NAME.to_string();
-    let (announce_tx, mut announce_rx) = mpsc::channel(64);
-
-    send_transport_async(
-        transport_tx.clone(),
-        TransportMessage::RegisterAnnounceHandler {
-            aspect_filter: Some(aspect_filter.clone()),
-            receive_path_responses: true,
-            callback_tx: announce_tx,
+    let recalled = resolve_destination_on_transport(
+        &transport_tx,
+        destination_hash,
+        DestinationResolveOptions {
+            timeout: discovery_timeout,
+            drop_existing_path: true,
+            refresh_cached_path: true,
         },
     )
-    .await?;
+    .await
+    .map_err(|error| match error {
+        DestinationResolveError::Timeout => Error::RemoteTelephonyPeerNotDiscovered,
+        DestinationResolveError::TransportUnavailable => Error::TransportClosed,
+        DestinationResolveError::UnexpectedResponse(_) => Error::UnexpectedTransportQueryResponse,
+    })?;
 
-    let result = async {
-        if let Some(peer) =
-            recent_telephony_peer(transport_tx.clone(), remote_identity, destination_hash).await?
-        {
-            send_transport_async(
-                transport_tx.clone(),
-                TransportMessage::RequestPath { destination_hash },
-            )
-            .await?;
-            return Ok(peer);
-        }
-
-        drop_path_on_transport(transport_tx.clone(), destination_hash).await?;
-        send_transport_async(
-            transport_tx.clone(),
-            TransportMessage::RequestPath { destination_hash },
-        )
-        .await?;
-
-        wait_for_telephony_announce(
-            &mut announce_rx,
-            remote_identity,
-            destination_hash,
-            discovery_timeout,
-        )
-        .await
+    let identity = Identity::from_public_key(&recalled.public_key)
+        .map_err(|_| Error::UnexpectedTransportQueryResponse)?;
+    if identity.hash != remote_identity {
+        return Err(Error::UnexpectedTransportQueryResponse);
     }
-    .await;
-
-    let _ = transport_tx.try_send(TransportMessage::DeregisterAnnounceHandler {
-        aspect_filter: Some(aspect_filter),
-    });
-
-    result
-}
-
-async fn recent_telephony_peer(
-    transport_tx: mpsc::Sender<TransportMessage>,
-    remote_identity: IdentityHash,
-    destination_hash: [u8; 16],
-) -> Result<Option<RemoteTelephonyPeer>, Error> {
-    let entries = query_recent_announces(transport_tx).await?;
-    for entry in entries {
-        if entry.dest_hash == destination_hash {
-            if entry.public_key.is_none() {
-                continue;
-            }
-            return announce_entry_to_peer(remote_identity, destination_hash, entry).map(Some);
-        }
-    }
-    Ok(None)
-}
-
-async fn query_recent_announces(
-    transport_tx: mpsc::Sender<TransportMessage>,
-) -> Result<Vec<AnnounceRpcEntry>, Error> {
-    let (response_tx, response_rx) = tokio::sync::oneshot::channel();
-    send_transport_async(
-        transport_tx,
-        TransportMessage::Rpc {
-            query: TransportQuery::GetRecentAnnounces,
-            response_tx,
-        },
-    )
-    .await?;
-
-    match response_rx.await.map_err(|_| Error::TransportQueryClosed)? {
-        TransportQueryResponse::Announces(entries) => Ok(entries),
-        TransportQueryResponse::Error(_) => Err(Error::UnexpectedTransportQueryResponse),
-        _ => Err(Error::UnexpectedTransportQueryResponse),
-    }
-}
-
-async fn drop_path_on_transport(
-    transport_tx: mpsc::Sender<TransportMessage>,
-    destination_hash: [u8; 16],
-) -> Result<(), Error> {
-    let (response_tx, response_rx) = tokio::sync::oneshot::channel();
-    send_transport_async(
-        transport_tx,
-        TransportMessage::Rpc {
-            query: TransportQuery::DropPath {
-                dest: destination_hash,
-            },
-            response_tx,
-        },
-    )
-    .await?;
-
-    match response_rx.await.map_err(|_| Error::TransportQueryClosed)? {
-        TransportQueryResponse::Ok => Ok(()),
-        TransportQueryResponse::Error(_) => Err(Error::UnexpectedTransportQueryResponse),
-        _ => Err(Error::UnexpectedTransportQueryResponse),
-    }
+    Ok(RemoteTelephonyPeer {
+        identity_hash: remote_identity,
+        destination_hash,
+        public_key: recalled.public_key,
+        hops: recalled.hops,
+    })
 }
 
 async fn await_path_on_transport(
@@ -3802,56 +3725,6 @@ async fn send_transport_async(
         .send(message)
         .await
         .map_err(|_| Error::TransportClosed)
-}
-
-async fn wait_for_telephony_announce(
-    announce_rx: &mut mpsc::Receiver<AnnounceHandlerEvent>,
-    remote_identity: IdentityHash,
-    destination_hash: [u8; 16],
-    discovery_timeout: Duration,
-) -> Result<RemoteTelephonyPeer, Error> {
-    timeout(discovery_timeout, async {
-        while let Some(event) = announce_rx.recv().await {
-            if event.destination_hash == destination_hash {
-                match announce_event_to_peer(remote_identity, destination_hash, event) {
-                    Ok(peer) => return Ok(peer),
-                    Err(Error::RemotePublicKeyMissing) => continue,
-                    Err(err) => return Err(err),
-                }
-            }
-        }
-        Err(Error::RemoteTelephonyPeerNotDiscovered)
-    })
-    .await
-    .map_err(|_| Error::RemoteTelephonyPeerNotDiscovered)?
-}
-
-fn announce_event_to_peer(
-    remote_identity: IdentityHash,
-    destination_hash: [u8; 16],
-    event: AnnounceHandlerEvent,
-) -> Result<RemoteTelephonyPeer, Error> {
-    let public_key = event.public_key.ok_or(Error::RemotePublicKeyMissing)?;
-    Ok(RemoteTelephonyPeer {
-        identity_hash: remote_identity,
-        destination_hash,
-        public_key,
-        hops: event.hops,
-    })
-}
-
-fn announce_entry_to_peer(
-    remote_identity: IdentityHash,
-    destination_hash: [u8; 16],
-    entry: AnnounceRpcEntry,
-) -> Result<RemoteTelephonyPeer, Error> {
-    let public_key = entry.public_key.ok_or(Error::RemotePublicKeyMissing)?;
-    Ok(RemoteTelephonyPeer {
-        identity_hash: remote_identity,
-        destination_hash,
-        public_key,
-        hops: entry.hops,
-    })
 }
 
 fn try_send_transport(

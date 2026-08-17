@@ -9,8 +9,8 @@ use rns_transport::{
     constants::InterfaceMode,
     link_messages::PacketMetrics,
     messages::{
-        AnnounceRpcEntry, InterfaceRole, PathTableRpcEntry, TransportMessage, TransportQuery,
-        TransportQueryResponse,
+        InterfaceRole, PathTableRpcEntry, RecalledDestinationRpcEntry, TransportMessage,
+        TransportQuery, TransportQueryResponse,
     },
 };
 
@@ -22,39 +22,18 @@ fn identity(byte: u8) -> IdentityHash {
     [byte; 16]
 }
 
-fn announce_event(
+fn recalled_destination(
     destination_hash: [u8; 16],
     hops: u8,
-    public_key: Option<[u8; 64]>,
-) -> AnnounceHandlerEvent {
-    AnnounceHandlerEvent {
-        destination_hash,
-        identity_hash: None,
-        announce_packet_hash: [0; 32],
-        is_path_response: false,
-        hops,
-        app_data: None,
-        public_key,
-        ratchet: None,
-        name_hash: [0; 10],
-    }
-}
-
-fn announce_entry(
-    destination_hash: [u8; 16],
-    hops: u8,
-    public_key: Option<[u8; 64]>,
-) -> AnnounceRpcEntry {
-    AnnounceRpcEntry {
+    public_key: [u8; 64],
+) -> RecalledDestinationRpcEntry {
+    RecalledDestinationRpcEntry {
         dest_hash: destination_hash,
-        hops,
-        app_data: None,
-        timestamp: 1234.0,
         public_key,
+        app_data: None,
         ratchet: None,
-        name_hash: name_hash(TELEPHONY_DESTINATION_NAME),
-        is_path_response: false,
-        retained: false,
+        hops,
+        timestamp: 1234.0,
     }
 }
 
@@ -1320,7 +1299,7 @@ fn rns_endpoint_try_drive_ready_pumps_reticulum_handshake_events() {
 }
 
 #[tokio::test]
-async fn discover_remote_telephony_peer_uses_recent_announce_pubkey() {
+async fn discover_remote_telephony_peer_uses_recalled_identity_and_refreshes_path() {
     let local_identity = Identity::new();
     let remote_identity = Identity::new();
     let remote_hash = remote_identity.hash;
@@ -1333,27 +1312,18 @@ async fn discover_remote_telephony_peer_uses_recent_announce_pubkey() {
 
     let discovery = endpoint.discover_remote_telephony_peer(remote_hash, Duration::from_secs(1));
     let transport = async {
-        let register = transport_rx.recv().await.unwrap();
-        let TransportMessage::RegisterAnnounceHandler {
-            aspect_filter: Some(aspect_filter),
-            ..
-        } = register
-        else {
-            panic!("expected RegisterAnnounceHandler, got {register:?}");
-        };
-        assert_eq!(aspect_filter, TELEPHONY_DESTINATION_NAME);
-
         let rpc = transport_rx.recv().await.unwrap();
         let TransportMessage::Rpc { query, response_tx } = rpc else {
             panic!("expected Rpc, got {rpc:?}");
         };
-        assert!(matches!(query, TransportQuery::GetRecentAnnounces));
+        assert!(matches!(
+            query,
+            TransportQuery::RecallDestination { dest } if dest == destination_hash
+        ));
         response_tx
-            .send(TransportQueryResponse::Announces(vec![announce_entry(
-                destination_hash,
-                3,
-                Some(remote_public_key),
-            )]))
+            .send(TransportQueryResponse::RecalledDestination(Some(
+                recalled_destination(destination_hash, 3, remote_public_key),
+            )))
             .unwrap();
 
         let request_path = transport_rx.recv().await.unwrap();
@@ -1364,15 +1334,7 @@ async fn discover_remote_telephony_peer_uses_recent_announce_pubkey() {
             panic!("expected RequestPath, got {request_path:?}");
         };
         assert_eq!(requested_hash, destination_hash);
-
-        let deregister = transport_rx.recv().await.unwrap();
-        let TransportMessage::DeregisterAnnounceHandler {
-            aspect_filter: Some(aspect_filter),
-        } = deregister
-        else {
-            panic!("expected DeregisterAnnounceHandler, got {deregister:?}");
-        };
-        assert_eq!(aspect_filter, TELEPHONY_DESTINATION_NAME);
+        assert!(transport_rx.try_recv().is_err());
     };
 
     let (peer, ()) = tokio::join!(discovery, transport);
@@ -1388,7 +1350,7 @@ async fn discover_remote_telephony_peer_uses_recent_announce_pubkey() {
 }
 
 #[tokio::test]
-async fn discover_remote_telephony_peer_skips_keyless_recent_announce() {
+async fn discover_remote_telephony_peer_requests_path_when_identity_is_not_recalled() {
     let local_identity = Identity::new();
     let remote_identity = Identity::new();
     let remote_hash = remote_identity.hash;
@@ -1401,28 +1363,16 @@ async fn discover_remote_telephony_peer_skips_keyless_recent_announce() {
 
     let discovery = endpoint.discover_remote_telephony_peer(remote_hash, Duration::from_secs(1));
     let transport = async {
-        let register = transport_rx.recv().await.unwrap();
-        let TransportMessage::RegisterAnnounceHandler {
-            aspect_filter: Some(aspect_filter),
-            callback_tx,
-            ..
-        } = register
-        else {
-            panic!("expected RegisterAnnounceHandler, got {register:?}");
-        };
-        assert_eq!(aspect_filter, TELEPHONY_DESTINATION_NAME);
-
         let rpc = transport_rx.recv().await.unwrap();
         let TransportMessage::Rpc { query, response_tx } = rpc else {
             panic!("expected Rpc, got {rpc:?}");
         };
-        assert!(matches!(query, TransportQuery::GetRecentAnnounces));
+        assert!(matches!(
+            query,
+            TransportQuery::RecallDestination { dest } if dest == destination_hash
+        ));
         response_tx
-            .send(TransportQueryResponse::Announces(vec![announce_entry(
-                destination_hash,
-                3,
-                None,
-            )]))
+            .send(TransportQueryResponse::RecalledDestination(None))
             .unwrap();
 
         let rpc = transport_rx.recv().await.unwrap();
@@ -1446,23 +1396,20 @@ async fn discover_remote_telephony_peer_skips_keyless_recent_announce() {
         };
         assert_eq!(requested_hash, destination_hash);
 
-        callback_tx
-            .send(announce_event(destination_hash, 2, None))
-            .await
-            .unwrap();
-        callback_tx
-            .send(announce_event(destination_hash, 1, Some(remote_public_key)))
-            .await
-            .unwrap();
-
-        let deregister = transport_rx.recv().await.unwrap();
-        let TransportMessage::DeregisterAnnounceHandler {
-            aspect_filter: Some(aspect_filter),
-        } = deregister
-        else {
-            panic!("expected DeregisterAnnounceHandler, got {deregister:?}");
+        let rpc = transport_rx.recv().await.unwrap();
+        let TransportMessage::Rpc { query, response_tx } = rpc else {
+            panic!("expected post-request RecallDestination Rpc, got {rpc:?}");
         };
-        assert_eq!(aspect_filter, TELEPHONY_DESTINATION_NAME);
+        assert!(matches!(
+            query,
+            TransportQuery::RecallDestination { dest } if dest == destination_hash
+        ));
+        response_tx
+            .send(TransportQueryResponse::RecalledDestination(Some(
+                recalled_destination(destination_hash, 1, remote_public_key),
+            )))
+            .unwrap();
+        assert!(transport_rx.try_recv().is_err());
     };
 
     let (peer, ()) = tokio::join!(discovery, transport);
@@ -1562,25 +1509,16 @@ async fn begin_outgoing_link_discovers_announce_and_sends_link_request() {
         Duration::from_secs(1),
     );
     let transport = async {
-        let register = transport_rx.recv().await.unwrap();
-        let TransportMessage::RegisterAnnounceHandler {
-            aspect_filter: Some(aspect_filter),
-            receive_path_responses,
-            callback_tx,
-        } = register
-        else {
-            panic!("expected RegisterAnnounceHandler, got {register:?}");
-        };
-        assert_eq!(aspect_filter, TELEPHONY_DESTINATION_NAME);
-        assert!(receive_path_responses);
-
         let rpc = transport_rx.recv().await.unwrap();
         let TransportMessage::Rpc { query, response_tx } = rpc else {
             panic!("expected Rpc, got {rpc:?}");
         };
-        assert!(matches!(query, TransportQuery::GetRecentAnnounces));
+        assert!(matches!(
+            query,
+            TransportQuery::RecallDestination { dest } if dest == destination_hash
+        ));
         response_tx
-            .send(TransportQueryResponse::Announces(Vec::new()))
+            .send(TransportQueryResponse::RecalledDestination(None))
             .unwrap();
 
         let rpc = transport_rx.recv().await.unwrap();
@@ -1604,19 +1542,19 @@ async fn begin_outgoing_link_discovers_announce_and_sends_link_request() {
         };
         assert_eq!(requested_hash, destination_hash);
 
-        callback_tx
-            .send(announce_event(destination_hash, 2, Some(remote_public_key)))
-            .await
-            .unwrap();
-
-        let deregister = transport_rx.recv().await.unwrap();
-        let TransportMessage::DeregisterAnnounceHandler {
-            aspect_filter: Some(aspect_filter),
-        } = deregister
-        else {
-            panic!("expected DeregisterAnnounceHandler, got {deregister:?}");
+        let rpc = transport_rx.recv().await.unwrap();
+        let TransportMessage::Rpc { query, response_tx } = rpc else {
+            panic!("expected post-request RecallDestination Rpc, got {rpc:?}");
         };
-        assert_eq!(aspect_filter, TELEPHONY_DESTINATION_NAME);
+        assert!(matches!(
+            query,
+            TransportQuery::RecallDestination { dest } if dest == destination_hash
+        ));
+        response_tx
+            .send(TransportQueryResponse::RecalledDestination(Some(
+                recalled_destination(destination_hash, 2, remote_public_key),
+            )))
+            .unwrap();
 
         let await_path = transport_rx.recv().await.unwrap();
         let TransportMessage::AwaitPath { dest, reply } = await_path else {
@@ -1935,21 +1873,14 @@ async fn telephony_service_outgoing_discovery_does_not_block_controls() {
         }
     );
 
-    let register = transport_rx.recv().await.unwrap();
-    assert!(matches!(
-        register,
-        TransportMessage::RegisterAnnounceHandler {
-            aspect_filter: Some(_),
-            receive_path_responses: true,
-            ..
-        }
-    ));
-
     let rpc = transport_rx.recv().await.unwrap();
     let TransportMessage::Rpc { query, response_tx } = rpc else {
-        panic!("expected GetRecentAnnounces Rpc, got {rpc:?}");
+        panic!("expected RecallDestination Rpc, got {rpc:?}");
     };
-    assert!(matches!(query, TransportQuery::GetRecentAnnounces));
+    assert!(matches!(
+        query,
+        TransportQuery::RecallDestination { dest } if dest == remote_destination_hash
+    ));
 
     control_tx.send(TelephonyControl::Announce).await.unwrap();
     let announce = timeout(Duration::from_secs(1), transport_rx.recv())
@@ -1967,7 +1898,7 @@ async fn telephony_service_outgoing_discovery_does_not_block_controls() {
     );
 
     response_tx
-        .send(TransportQueryResponse::Announces(Vec::new()))
+        .send(TransportQueryResponse::RecalledDestination(None))
         .unwrap();
     let rpc = transport_rx.recv().await.unwrap();
     let TransportMessage::Rpc { query, response_tx } = rpc else {
@@ -1986,6 +1917,18 @@ async fn telephony_service_outgoing_discovery_does_not_block_controls() {
         panic!("expected RequestPath, got {request_path:?}");
     };
     assert_eq!(destination_hash, remote_destination_hash);
+
+    let rpc = transport_rx.recv().await.unwrap();
+    let TransportMessage::Rpc { query, response_tx } = rpc else {
+        panic!("expected post-request RecallDestination Rpc, got {rpc:?}");
+    };
+    assert!(matches!(
+        query,
+        TransportQuery::RecallDestination { dest } if dest == remote_destination_hash
+    ));
+    response_tx
+        .send(TransportQueryResponse::RecalledDestination(None))
+        .unwrap();
 
     let event = timeout(Duration::from_secs(1), event_rx.recv())
         .await
@@ -2056,25 +1999,16 @@ async fn telephony_service_call_control_discovers_peer_and_emits_started() {
         }
     );
 
-    let register = transport_rx.recv().await.unwrap();
-    let TransportMessage::RegisterAnnounceHandler {
-        aspect_filter: Some(aspect_filter),
-        receive_path_responses,
-        callback_tx,
-    } = register
-    else {
-        panic!("expected RegisterAnnounceHandler, got {register:?}");
-    };
-    assert_eq!(aspect_filter, TELEPHONY_DESTINATION_NAME);
-    assert!(receive_path_responses);
-
     let rpc = transport_rx.recv().await.unwrap();
     let TransportMessage::Rpc { query, response_tx } = rpc else {
         panic!("expected Rpc, got {rpc:?}");
     };
-    assert!(matches!(query, TransportQuery::GetRecentAnnounces));
+    assert!(matches!(
+        query,
+        TransportQuery::RecallDestination { dest } if dest == destination_hash
+    ));
     response_tx
-        .send(TransportQueryResponse::Announces(Vec::new()))
+        .send(TransportQueryResponse::RecalledDestination(None))
         .unwrap();
 
     let rpc = transport_rx.recv().await.unwrap();
@@ -2098,19 +2032,19 @@ async fn telephony_service_call_control_discovers_peer_and_emits_started() {
     };
     assert_eq!(requested_hash, destination_hash);
 
-    callback_tx
-        .send(announce_event(destination_hash, 1, Some(remote_public_key)))
-        .await
-        .unwrap();
-
-    let deregister = transport_rx.recv().await.unwrap();
-    let TransportMessage::DeregisterAnnounceHandler {
-        aspect_filter: Some(aspect_filter),
-    } = deregister
-    else {
-        panic!("expected DeregisterAnnounceHandler, got {deregister:?}");
+    let rpc = transport_rx.recv().await.unwrap();
+    let TransportMessage::Rpc { query, response_tx } = rpc else {
+        panic!("expected post-request RecallDestination Rpc, got {rpc:?}");
     };
-    assert_eq!(aspect_filter, TELEPHONY_DESTINATION_NAME);
+    assert!(matches!(
+        query,
+        TransportQuery::RecallDestination { dest } if dest == destination_hash
+    ));
+    response_tx
+        .send(TransportQueryResponse::RecalledDestination(Some(
+            recalled_destination(destination_hash, 1, remote_public_key),
+        )))
+        .unwrap();
 
     let await_path = transport_rx.recv().await.unwrap();
     let TransportMessage::AwaitPath { dest, reply } = await_path else {

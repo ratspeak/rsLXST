@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Replaced finite telephony announce handlers with validated destination
+  recall and one deadline-bound path request, while preserving cached-path
+  refresh, stale-path removal, final path confirmation, and hop refresh.
 - Pinned every established telephony Link to the immutable interface that
   completed its handshake; wrong-interface traffic is rejected before crypto,
   accounting, or audio processing, and interface loss closes the call.
