@@ -27,6 +27,7 @@ Before a component source release, verify that the tree is clean and run:
 
 ```sh
 python3 tools/check-source-release.py
+python3 tools/check-third-party-licenses.py
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --locked
@@ -40,3 +41,6 @@ checked separately in CI.
 
 Tag creation, artifact upload, registry publication, and downstream integration
 tagging are separate operations and are not implied by passing these checks.
+The checked third-party inventory and every vendored license/provenance record
+are source-release inputs; dependency or lockfile changes must refresh and
+review them before qualification.

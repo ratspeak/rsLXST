@@ -71,6 +71,12 @@ if not (ROOT / "Cargo.lock").is_file():
 if "## Unreleased" not in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"):
     fail("CHANGELOG.md must retain an Unreleased section")
 
+subprocess.run(
+    [sys.executable, "tools/check-third-party-licenses.py"],
+    cwd=ROOT,
+    check=True,
+)
+
 workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 version_match = re.search(
     r"^\s*RSLXST_RSRETICULUM_VERSION:\s*(\S+)\s*$", workflow, re.MULTILINE

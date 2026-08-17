@@ -41,6 +41,7 @@ the reference implementation LXST.
 - [Using Telephony](#using-telephony)
 - [Contributing](#contributing)
 - [License](#license)
+- [Third-party licenses](#third-party-licenses)
 
 ## Release Scope
 
@@ -255,3 +256,10 @@ PRs are closed for now until I have time to catch up on everything.
 
 Licensed under the GNU Affero General
 Public License v3.0 or later. See [LICENSE](LICENSE).
+
+## Third-party licenses
+
+Third-party components retain their own licenses. The locked production
+dependency inventory, including the vendored BSD-3-Clause Opus implementation
+and its exact provenance, is documented in
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).

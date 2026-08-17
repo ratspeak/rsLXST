@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Record the exact vendored `opus-rs` lineage and local patch ledger, and add a
+  locked, CI-checked production dependency license inventory.
+
 - Replaced finite telephony announce handlers with validated destination
   recall and one deadline-bound path request, while preserving cached-path
   refresh, stale-path removal, final path confirmation, and hop refresh.
