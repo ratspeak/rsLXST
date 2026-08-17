@@ -39,7 +39,7 @@ the reference implementation LXST.
 - [Test It](#test-it)
 - [Crate Layout](#crate-layout)
 - [Using Telephony](#using-telephony)
-- [Telephony API boundary](TELEPHONY_API.md)
+- [Rust API](api/README.md)
 - [Contributing](#contributing)
 - [License](#license)
 - [Third-party licenses](#third-party-licenses)

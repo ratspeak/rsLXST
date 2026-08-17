@@ -1,0 +1,13 @@
+[package]
+name = "lxst-telephony-api-fixture"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+lxst-telephony = { path = "../../crates/lxst-telephony" }
+rns-identity = { path = "../../../rsReticulum/crates/rns-identity" }
+rns-transport = { path = "../../../rsReticulum/crates/rns-transport" }
+tokio = { version = "1", features = ["sync"] }

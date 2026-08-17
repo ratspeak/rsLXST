@@ -21,7 +21,40 @@
   "snapshotSource": {
     "commit": "68df3223773a9553ea458fc10b4b939915986aad",
     "capturedOn": "2026-08-17",
-    "changeRecord": "api-reviews/wave-c-telephony-service.json"
+    "review": {
+      "areas": [
+        "LXST codecs, profiles, signalling, and streams",
+        "Reticulum Link media transport",
+        "telephony service ownership and lifecycle",
+        "Opus transmit and receive streams"
+      ],
+      "canonicalPath": "lxst_telephony::TelephonyService",
+      "canonicalConstruction": [
+        "TelephonyService::registered",
+        "TelephonyService::registered_with_config",
+        "TelephonyServiceParts"
+      ],
+      "retainedImplementationPaths": [
+        "TelephonyRuntimeCore",
+        "TelephonyRnsEndpoint",
+        "TelephonyService::new",
+        "TelephonyService::with_config"
+      ],
+      "classification": "existing experimental service boundary",
+      "publicApiDiff": {
+        "added": 0,
+        "removed": 0
+      },
+      "semver": "no version consequence; documentation and consumer migration only",
+      "deprecations": "none",
+      "wirePersistenceRuntimeImpact": "none",
+      "platformEvidence": [
+        "host service tests and compiled example",
+        "stable and Rust 1.87 strict Clippy",
+        "Android and Apple compile gates",
+        "Python Telephone interoperability"
+      ]
+    }
   },
   "packages": [
     {
@@ -29,7 +62,7 @@
       "manifestPath": "Cargo.toml",
       "tier": "experimental",
       "compatibility": "reviewed-snapshot",
-      "snapshot": "api-baseline/lxst-core.txt",
+      "snapshot": "api/snapshots/lxst-core.txt",
       "itemCount": 331,
       "sha256": "87cc451d6da48cc06cd2bae9b26bae523407a20f66e842f04844ceecb8c5867d"
     },
@@ -38,7 +71,7 @@
       "manifestPath": "Cargo.toml",
       "tier": "experimental",
       "compatibility": "reviewed-snapshot",
-      "snapshot": "api-baseline/lxst-rns.txt",
+      "snapshot": "api/snapshots/lxst-rns.txt",
       "itemCount": 54,
       "sha256": "6be5ba72d749f51d4f09816dce771540491cc3747bd531b307f94cef3297d463"
     },
@@ -47,7 +80,7 @@
       "manifestPath": "Cargo.toml",
       "tier": "experimental",
       "compatibility": "reviewed-snapshot",
-      "snapshot": "api-baseline/lxst-telephony.txt",
+      "snapshot": "api/snapshots/lxst-telephony.txt",
       "itemCount": 317,
       "sha256": "e13c7c17ee723a08ce94651aa8f001f335b5abb5d17aefce5f4db695fb7c8128"
     }
