@@ -15,6 +15,15 @@ version, changelog, and interop reasoning.
 - `lxst-telephony` currently exposes both useful service controls and extensive
   runtime/state-machine machinery.
 
+[`TelephonyService`](TELEPHONY_API.md), constructed with `registered` or
+`registered_with_config`, is the selected canonical **experimental** embedding
+boundary. `TelephonyServiceParts`, `TelephonyControl`, and
+`TelephonyServiceEvent` retain their exact existing ownership, bounded-channel,
+backpressure, cancellation, event-order, and shutdown behavior. Manual
+`TelephonyRnsEndpoint`/`TelephonyRuntimeCore` assembly remains available for
+compatibility but is experimental SPI, not a second recommended application
+path.
+
 All three are classified **experimental**. Future work may promote a small
 facade while hiding orchestration internals, but this checkpoint does not move,
 rename, hide, or change anything. Ratspeak voice integration and the Python
@@ -30,6 +39,16 @@ gates rather than treated as stable Rust API by this host snapshot.
 cargo install cargo-public-api --version 0.52.0 --locked
 rustup toolchain install nightly-2026-08-01 --profile minimal
 python3 tools/check-api-baseline.py
+python3 tools/check-api-manifest.py
+python3 tools/check-api-compatibility.py
+cargo check --manifest-path api-fixtures/Cargo.toml --locked
 ```
+
+The immutable compatibility floor is separate from the current reviewed
+capture. The manifest contract covers features, targets, MSRV, and
+non-development dependencies that the Apple/all-feature snapshot cannot see.
+The compatibility check rejects removals from the Wave C floor. Selecting the
+existing service boundary changes no public API, version, wire, or runtime
+behavior.
 
 Use `--update` only after reviewing and recording the compatibility impact.

@@ -41,6 +41,15 @@ jobs:
       - name: Check reviewed public API baseline
         run: python3 tools/check-api-baseline.py
         working-directory: rsLXST
+      - name: Check manifest and feature contract
+        run: python3 tools/check-api-manifest.py
+        working-directory: rsLXST
+      - name: Check additions-only compatibility floor
+        run: python3 tools/check-api-compatibility.py
+        working-directory: rsLXST
+      - name: Check canonical and retained external consumers
+        run: cargo check --manifest-path api-fixtures/Cargo.toml --locked
+        working-directory: rsLXST
 
   lint:
     name: Lint and Docs
@@ -79,6 +88,9 @@ jobs:
         run: python3 tools/check-source-release.py
         working-directory: rsLXST
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+        working-directory: rsLXST
+      - name: Build embedding examples
+        run: cargo build -p lxst-telephony --examples --locked
         working-directory: rsLXST
       - run: cargo doc --workspace --no-deps --locked
         working-directory: rsLXST

@@ -1,5 +1,6 @@
 .DS_Store
 target/
+api-fixtures/target/
 
 # Runtime data and local identities
 .reticulum/

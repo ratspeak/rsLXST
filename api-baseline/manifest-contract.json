@@ -1,0 +1,323 @@
+{
+  "schemaVersion": 1,
+  "scope": "library Cargo manifests, public features, targets, and non-dev dependencies",
+  "packages": [
+    {
+      "name": "lxst-core",
+      "version": "0.1.2",
+      "rustVersion": "1.87",
+      "edition": "2024",
+      "features": {},
+      "targets": [
+        {
+          "name": "lxst_core",
+          "kind": [
+            "lib"
+          ],
+          "crateTypes": [
+            "lib"
+          ],
+          "requiredFeatures": []
+        }
+      ],
+      "dependencies": [
+        {
+          "name": "half",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^2",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "registry"
+        },
+        {
+          "name": "opus-rs",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "=0.1.29",
+          "optional": false,
+          "defaultFeatures": false,
+          "features": [
+            "heap"
+          ],
+          "sourceKind": "registry"
+        },
+        {
+          "name": "rmpv",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^1",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "registry"
+        },
+        {
+          "name": "thiserror",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^2",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "registry"
+        }
+      ]
+    },
+    {
+      "name": "lxst-rns",
+      "version": "0.1.2",
+      "rustVersion": "1.87",
+      "edition": "2024",
+      "features": {},
+      "targets": [
+        {
+          "name": "lxst_rns",
+          "kind": [
+            "lib"
+          ],
+          "crateTypes": [
+            "lib"
+          ],
+          "requiredFeatures": []
+        }
+      ],
+      "dependencies": [
+        {
+          "name": "bytes",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^1",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "registry"
+        },
+        {
+          "name": "lxst-core",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^0.1.2",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "path"
+        },
+        {
+          "name": "rns-link",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^1.1.0",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "path"
+        },
+        {
+          "name": "rns-transport",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^1.1.0",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "path"
+        },
+        {
+          "name": "rns-wire",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^1.1.0",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "path"
+        },
+        {
+          "name": "thiserror",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^2",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "registry"
+        },
+        {
+          "name": "tokio",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^1",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [
+            "macros",
+            "rt",
+            "sync",
+            "time"
+          ],
+          "sourceKind": "registry"
+        }
+      ]
+    },
+    {
+      "name": "lxst-telephony",
+      "version": "0.1.2",
+      "rustVersion": "1.87",
+      "edition": "2024",
+      "features": {},
+      "targets": [
+        {
+          "name": "lxst_telephony",
+          "kind": [
+            "lib"
+          ],
+          "crateTypes": [
+            "lib"
+          ],
+          "requiredFeatures": []
+        }
+      ],
+      "dependencies": [
+        {
+          "name": "bytes",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^1",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "registry"
+        },
+        {
+          "name": "lxst-core",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^0.1.2",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "path"
+        },
+        {
+          "name": "lxst-rns",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^0.1.2",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "path"
+        },
+        {
+          "name": "rns-crypto",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^1.1.0",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "path"
+        },
+        {
+          "name": "rns-identity",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^1.1.0",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "path"
+        },
+        {
+          "name": "rns-link",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^1.1.0",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "path"
+        },
+        {
+          "name": "rns-runtime",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^1.1.0",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "path"
+        },
+        {
+          "name": "rns-transport",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^1.1.0",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "path"
+        },
+        {
+          "name": "rns-wire",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^1.1.0",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "path"
+        },
+        {
+          "name": "thiserror",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^2",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "registry"
+        },
+        {
+          "name": "tokio",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^1",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [
+            "macros",
+            "rt",
+            "sync",
+            "time"
+          ],
+          "sourceKind": "registry"
+        }
+      ]
+    }
+  ]
+}

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Document the existing registered `TelephonyService` seam as the canonical
+  experimental embedding boundary, with compiled canonical/retained consumer
+  contracts and no public API or runtime behavior change.
+
 - Classified all three pre-1.0 packages as experimental and added pinned,
   CI-enforced public API snapshots without changing visibility or signatures.
 - Replace the locally modified Opus 0.1.19 snapshot with exact upstream

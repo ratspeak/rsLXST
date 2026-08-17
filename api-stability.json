@@ -14,6 +14,15 @@
     "commit": "af89a03094605dbdf7264d06fdc546526ec6980b",
     "capturedOn": "2026-08-17"
   },
+  "compatibilityFloor": {
+    "evidenceCommit": "21a54b778472343b70fd71d34ae96c61c44187c3",
+    "sourceCommit": "af89a03094605dbdf7264d06fdc546526ec6980b"
+  },
+  "snapshotSource": {
+    "basisCommit": "9ef5fb3a4da0d960846e5a8e23707e401caebd46",
+    "capturedOn": "2026-08-17",
+    "changeRecord": "api-reviews/wave-c-telephony-service.json"
+  },
   "packages": [
     {
       "name": "lxst-core",

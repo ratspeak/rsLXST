@@ -39,6 +39,7 @@ the reference implementation LXST.
 - [Test It](#test-it)
 - [Crate Layout](#crate-layout)
 - [Using Telephony](#using-telephony)
+- [Telephony API boundary](TELEPHONY_API.md)
 - [Contributing](#contributing)
 - [License](#license)
 - [Third-party licenses](#third-party-licenses)
@@ -212,6 +213,10 @@ events, and media events instead of inferring call state from raw Reticulum
 traffic. Outgoing announce/path discovery runs asynchronously inside the
 service, so an unreachable or non-LXST peer does not block hangup, announce,
 media, or shutdown controls while discovery times out.
+
+The compiled `lxst-telephony` `service` example is the conformance example for
+this embedding boundary. The lower-level endpoint and runtime types remain
+available for compatible specialist use, but are experimental SPI.
 
 An initial Reticulum `LINKREQUEST` still follows normal destination routing.
 After proof validation, rsLXST binds the call to the exact interface that
