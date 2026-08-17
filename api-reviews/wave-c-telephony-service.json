@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "snapshotSourceCommit": "68df3223773a9553ea458fc10b4b939915986aad",
   "capabilities": ["LXST-01", "LXST-02", "LXST-03", "LXST-04"],
   "canonicalPath": "lxst_telephony::TelephonyService",
   "canonicalConstruction": [

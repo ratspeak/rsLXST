@@ -19,7 +19,7 @@
     "sourceCommit": "af89a03094605dbdf7264d06fdc546526ec6980b"
   },
   "snapshotSource": {
-    "basisCommit": "9ef5fb3a4da0d960846e5a8e23707e401caebd46",
+    "commit": "68df3223773a9553ea458fc10b4b939915986aad",
     "capturedOn": "2026-08-17",
     "changeRecord": "api-reviews/wave-c-telephony-service.json"
   },
