@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-08-17
+
 - Document the existing registered `TelephonyService` seam as the canonical
   experimental embedding boundary, with compiled canonical/retained consumer
   contracts and no public API or runtime behavior change.
@@ -28,6 +30,8 @@
   best-effort delivery and explicit backpressure drop accounting.
 - Made live Python Telephone/TCP interoperability tests opt-in so the ordinary
   locked workspace test gate remains local and non-live.
+- Advanced the experimental source boundary to 0.2 for the current telephony,
+  exact-Link, Opus, and rsReticulum 1.2 integration APIs.
 
 ## 0.1.2 - 2026-07-26
 

@@ -13,8 +13,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_PACKAGES = {"lxst-core", "lxst-rns", "lxst-telephony"}
 EXPECTED_MSRV = "1.87"
-EXPECTED_RETICULUM_VERSION = "1.1.0"
-EXPECTED_RETICULUM_COMMIT = "ab53670f988fc15a6a3ec0207932f63b6aa65534"
+EXPECTED_RETICULUM_VERSION = "1.2.0"
+EXPECTED_RETICULUM_COMMIT = "4a924ce2819a55fb3bf70bca0aff86c8c2174c91"
 EXPECTED_OPUS_DEPENDENCY = (
     'opus-rs = { version = "=0.1.29", default-features = false, '
     'features = ["heap"] }'
