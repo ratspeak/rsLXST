@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Replace the locally modified Opus 0.1.19 snapshot with exact upstream
+  `opus-rs` 0.1.29 using heap-backed codec state, raise the unified stack MSRV
+  to Rust 1.87, retain Android ARMv7 support, and explicitly exclude Android
+  i686 from the supported artifact matrix.
 - Record the exact vendored `opus-rs` lineage and local patch ledger, and add a
   locked, CI-checked production dependency license inventory.
 

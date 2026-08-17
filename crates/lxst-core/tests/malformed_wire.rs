@@ -120,8 +120,8 @@ fn raw_payload_errors_are_explicit() {
 
 /// T3-5a finding: a SILK packet whose duration exceeds the profile's
 /// frame size used to clamp the resampler output but not its input,
-/// overrunning the buffer (vendor opus-rs silk/resampler.rs). libopus
-/// rejects such packets with OPUS_BUFFER_TOO_SMALL; the port now does too.
+/// overrunning the pure-Rust Opus resampler input buffer. libopus rejects such
+/// packets with OPUS_BUFFER_TOO_SMALL; the codec boundary must do so as well.
 #[test]
 fn opus_decoder_rejects_packet_longer_than_frame_size() {
     let mut decoder = OpusDecoderState::new(Profile::LatencyLow).expect("decoder");

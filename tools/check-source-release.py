@@ -11,10 +11,14 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_PACKAGES = {"lxst-core", "lxst-rns", "lxst-telephony", "opus-rs"}
-EXPECTED_MSRV = "1.85"
+EXPECTED_PACKAGES = {"lxst-core", "lxst-rns", "lxst-telephony"}
+EXPECTED_MSRV = "1.87"
 EXPECTED_RETICULUM_VERSION = "1.1.0"
-EXPECTED_RETICULUM_COMMIT = "092cf5ac30112fa5d7e31bb82761dbea660b4322"
+EXPECTED_RETICULUM_COMMIT = "b927f26ca6bf5edf0e0e5f0a3ac78794a513bf60"
+EXPECTED_OPUS_DEPENDENCY = (
+    'opus-rs = { version = "=0.1.29", default-features = false, '
+    'features = ["heap"] }'
+)
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -71,6 +75,12 @@ if not (ROOT / "Cargo.lock").is_file():
 if "## Unreleased" not in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"):
     fail("CHANGELOG.md must retain an Unreleased section")
 
+root_manifest = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
+if EXPECTED_OPUS_DEPENDENCY not in root_manifest:
+    fail("workspace must consume exact upstream opus-rs 0.1.29 with heap state")
+if (ROOT / "vendor/opus-rs").exists():
+    fail("local opus-rs vendor/fork must not exist")
+
 subprocess.run(
     [sys.executable, "tools/check-third-party-licenses.py"],
     cwd=ROOT,
@@ -120,6 +130,17 @@ expected_ref = "ref: ${{ env.RSLXST_RSRETICULUM_COMMIT }}"
 for checkout in reticulum_checkouts:
     if expected_ref not in checkout:
         fail("every CI rsReticulum checkout must use the qualified commit")
+
+for target in (
+    "aarch64-linux-android",
+    "armv7-linux-androideabi",
+    "x86_64-linux-android",
+    "aarch64-apple-ios",
+):
+    if target not in workflow:
+        fail(f"CI does not qualify supported target {target}")
+if "i686-linux-android" in workflow:
+    fail("Android i686 is unsupported and must not appear in the CI target matrix")
 
 reticulum_root = ROOT.parent / "rsReticulum"
 if not reticulum_root.is_dir():

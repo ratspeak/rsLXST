@@ -8,19 +8,22 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY = ROOT / "THIRD_PARTY_LICENSES.json"
-VENDORED_OPUS_COMMIT = "a61f6d3f93623080e3e146ec267602802abb6313"
-VENDORED_OPUS_VERSION = "0.1.19"
-VENDORED_OPUS_LICENSE = "BSD-3-Clause"
-VENDORED_OPUS_REPOSITORY = "https://github.com/restsend/opus-rs"
-VENDORED_OPUS_COPYING_SHA256 = (
-    "f9116d266d13dfd1350182113b59e007a32180642d158f789becb92bb4abef4b"
+UPSTREAM_OPUS_COMMIT = "95f8b76430beb8c1bed067354d519c918ceade21"
+UPSTREAM_OPUS_VERSION = "0.1.29"
+UPSTREAM_OPUS_LICENSE = "BSD-3-Clause"
+UPSTREAM_OPUS_REPOSITORY = "https://github.com/restsend/opus-rs"
+UPSTREAM_OPUS_SOURCE = "registry+https://github.com/rust-lang/crates.io-index"
+UPSTREAM_OPUS_CRATE_CHECKSUM = (
+    "eadaf84d53a021172447a8771d74f805ac3719a61041dafa95720ef86b8e271d"
 )
-VENDORED_OPUS_SOURCE_SHA256 = (
-    "9468dbcfea089350057c0bb16deef8e50abd008f02e6ac3e3115e749f15e1e53"
+UPSTREAM_OPUS_COPYING = "third_party/opus-rs-0.1.29-COPYING"
+UPSTREAM_OPUS_COPYING_SHA256 = (
+    "67c6f0a4bac3019fb08948838d7203bf661a629416f69057081c6f39db5e96a5"
 )
 
 
@@ -39,18 +42,6 @@ def load_metadata() -> dict:
             text=True,
         ).stdout
     )
-
-
-def directory_sha256(root: Path) -> str:
-    digest = hashlib.sha256()
-    for path in sorted(root.rglob("*")):
-        if not path.is_file():
-            continue
-        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
-        digest.update(b"\0")
-        digest.update(path.read_bytes())
-        digest.update(b"\0")
-    return digest.hexdigest()
 
 
 def build_inventory() -> dict:
@@ -73,16 +64,11 @@ def build_inventory() -> dict:
                 pending.append(dependency["pkg"])
 
     entries = []
-    vendored_opus_count = 0
+    upstream_opus_count = 0
     for package_id in reachable:
         package = packages[package_id]
         source = package["source"]
-        is_vendored_opus = (
-            package["name"] == "opus-rs"
-            and source is None
-            and Path(package["manifest_path"]).is_relative_to(ROOT / "vendor")
-        )
-        if source is None and not is_vendored_opus:
+        if source is None:
             continue
         if not package["license"]:
             fail(f"{package['name']} {package['version']} has no declared license")
@@ -94,65 +80,61 @@ def build_inventory() -> dict:
             "repository": package["repository"],
             "source": source,
         }
-        if is_vendored_opus:
-            vendored_opus_count += 1
+        if package["name"] == "opus-rs":
+            upstream_opus_count += 1
             expected_manifest = (
-                VENDORED_OPUS_VERSION,
-                VENDORED_OPUS_LICENSE,
-                VENDORED_OPUS_REPOSITORY,
+                UPSTREAM_OPUS_VERSION,
+                UPSTREAM_OPUS_LICENSE,
+                UPSTREAM_OPUS_REPOSITORY,
+                UPSTREAM_OPUS_SOURCE,
             )
             actual_manifest = (
                 package["version"],
                 package["license"],
                 package["repository"],
+                package["source"],
             )
             if actual_manifest != expected_manifest:
                 fail(
-                    "vendored opus-rs manifest provenance changed "
+                    "upstream opus-rs manifest provenance changed "
                     f"(expected {expected_manifest!r}, found {actual_manifest!r})"
                 )
             entry.update(
                 {
-                    "source": (
-                        "vendored+https://github.com/restsend/opus-rs#"
-                        f"{VENDORED_OPUS_COMMIT}"
-                    ),
-                    "provenance": "vendor/opus-rs/PROVENANCE.md",
-                    "licenseText": "vendor/opus-rs/COPYING",
+                    "crateChecksum": UPSTREAM_OPUS_CRATE_CHECKSUM,
+                    "upstreamCommit": UPSTREAM_OPUS_COMMIT,
+                    "licenseText": UPSTREAM_OPUS_COPYING,
                 }
             )
         entries.append(entry)
 
-    if vendored_opus_count != 1:
-        fail(f"expected one vendored opus-rs package, found {vendored_opus_count}")
+    if upstream_opus_count != 1:
+        fail(f"expected one upstream opus-rs package, found {upstream_opus_count}")
 
+    lock = tomllib.loads((ROOT / "Cargo.lock").read_text(encoding="utf-8"))
+    locked_opus = [
+        package
+        for package in lock["package"]
+        if package["name"] == "opus-rs" and package["version"] == UPSTREAM_OPUS_VERSION
+    ]
+    if len(locked_opus) != 1:
+        fail(f"expected one locked opus-rs {UPSTREAM_OPUS_VERSION} package")
+    if locked_opus[0].get("source") != UPSTREAM_OPUS_SOURCE:
+        fail("locked opus-rs source is not crates.io")
+    if locked_opus[0].get("checksum") != UPSTREAM_OPUS_CRATE_CHECKSUM:
+        fail("locked opus-rs crate checksum changed")
     copying_hash = hashlib.sha256(
-        (ROOT / "vendor/opus-rs/COPYING").read_bytes()
+        (ROOT / UPSTREAM_OPUS_COPYING).read_bytes()
     ).hexdigest()
-    if copying_hash != VENDORED_OPUS_COPYING_SHA256:
-        fail(f"vendored opus-rs COPYING changed (found {copying_hash})")
-    source_hash = directory_sha256(ROOT / "vendor/opus-rs/src")
-    if source_hash != VENDORED_OPUS_SOURCE_SHA256:
-        fail(
-            "vendored opus-rs source changed without a provenance decision "
-            f"(found {source_hash})"
-        )
-
-    provenance = (ROOT / "vendor/opus-rs/PROVENANCE.md").read_text(encoding="utf-8")
-    for value in (
-        VENDORED_OPUS_COMMIT,
-        VENDORED_OPUS_COPYING_SHA256,
-        VENDORED_OPUS_SOURCE_SHA256,
-    ):
-        if value not in provenance:
-            fail(f"vendored opus-rs provenance does not record {value}")
+    if copying_hash != UPSTREAM_OPUS_COPYING_SHA256:
+        fail(f"preserved opus-rs COPYING changed (found {copying_hash})")
 
     entries.sort(key=lambda entry: (entry["name"], entry["version"], entry["source"]))
     lockfile_hash = hashlib.sha256((ROOT / "Cargo.lock").read_bytes()).hexdigest()
     return {
         "schemaVersion": 1,
         "scope": (
-            "All registry and vendored third-party normal/build dependencies "
+            "All registry third-party normal/build dependencies "
             "reachable from rsLXST workspace members across declared targets; "
             "dev-only and first-party path packages are excluded."
         ),

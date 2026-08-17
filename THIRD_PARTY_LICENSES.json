@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "scope": "All registry and vendored third-party normal/build dependencies reachable from rsLXST workspace members across declared targets; dev-only and first-party path packages are excluded.",
-  "cargoLockSha256": "769e89dfa3ca70c11c8ae6fca2efd577c5b42134ab34a167530c1104cf6f0a59",
+  "scope": "All registry third-party normal/build dependencies reachable from rsLXST workspace members across declared targets; dev-only and first-party path packages are excluded.",
+  "cargoLockSha256": "c61dbf553a29182eddb8dffd5bfd511a8851e31369782972e8991780780642de",
   "packages": [
     {
       "name": "aes",
@@ -390,12 +390,13 @@
     },
     {
       "name": "opus-rs",
-      "version": "0.1.19",
+      "version": "0.1.29",
       "license": "BSD-3-Clause",
       "repository": "https://github.com/restsend/opus-rs",
-      "source": "vendored+https://github.com/restsend/opus-rs#a61f6d3f93623080e3e146ec267602802abb6313",
-      "provenance": "vendor/opus-rs/PROVENANCE.md",
-      "licenseText": "vendor/opus-rs/COPYING"
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "crateChecksum": "eadaf84d53a021172447a8771d74f805ac3719a61041dafa95720ef86b8e271d",
+      "upstreamCommit": "95f8b76430beb8c1bed067354d519c918ceade21",
+      "licenseText": "third_party/opus-rs-0.1.29-COPYING"
     },
     {
       "name": "parking_lot",

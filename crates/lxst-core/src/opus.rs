@@ -852,6 +852,12 @@ mod tests {
     use super::*;
     use crate::SyntheticSourceKind;
 
+    #[test]
+    fn upstream_opus_state_remains_heap_backed() {
+        assert!(std::mem::size_of::<OpusEncoder>() < 4_096);
+        assert!(std::mem::size_of::<OpusDecoder>() < 4_096);
+    }
+
     fn source_for(profile: Profile) -> crate::SyntheticSource {
         crate::SyntheticSource::new(
             profile.channels(),

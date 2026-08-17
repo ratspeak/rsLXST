@@ -36,11 +36,17 @@ cargo doc --workspace --no-deps --locked
 
 The committed `Cargo.lock` is part of the qualified source. Release-oriented
 commands must use `--locked`; an unexpected lockfile change is a dependency-set
-change that requires review. Rust 1.85 remains the declared minimum and is
+change that requires review. Rust 1.87 remains the declared minimum and is
 checked separately in CI.
+
+The Opus implementation is the exact registry package `opus-rs` 0.1.29 with
+its heap-backed codec state feature selected explicitly. rsLXST does not carry
+a local codec fork. Android arm64, ARMv7, and x86_64 are qualified targets;
+Android i686 is not supported and must not be added to a release matrix without
+an upstream compatibility review and a passing target gate.
 
 Tag creation, artifact upload, registry publication, and downstream integration
 tagging are separate operations and are not implied by passing these checks.
-The checked third-party inventory and every vendored license/provenance record
+The checked third-party inventory and every preserved license/provenance record
 are source-release inputs; dependency or lockfile changes must refresh and
 review them before qualification.

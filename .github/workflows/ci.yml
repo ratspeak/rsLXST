@@ -11,7 +11,7 @@ permissions:
 
 env:
   RSLXST_RSRETICULUM_VERSION: 1.1.0
-  RSLXST_RSRETICULUM_COMMIT: 092cf5ac30112fa5d7e31bb82761dbea660b4322
+  RSLXST_RSRETICULUM_COMMIT: b927f26ca6bf5edf0e0e5f0a3ac78794a513bf60
 
 jobs:
   lint:
@@ -104,7 +104,7 @@ jobs:
         working-directory: rsLXST
 
   msrv:
-    name: Rust 1.85 MSRV
+    name: Rust 1.87 MSRV
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -126,7 +126,7 @@ jobs:
           path: upstream/Reticulum
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
-          toolchain: 1.85.0
+          toolchain: 1.87.0
           components: clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
@@ -149,15 +149,27 @@ jobs:
           - os: ubuntu-latest
             target: aarch64-linux-android
             toolchain: stable
+          - os: ubuntu-latest
+            target: armv7-linux-androideabi
+            toolchain: stable
+          - os: ubuntu-latest
+            target: x86_64-linux-android
+            toolchain: stable
           - os: macos-latest
             target: aarch64-apple-ios
             toolchain: stable
           - os: ubuntu-latest
             target: aarch64-linux-android
-            toolchain: 1.85.0
+            toolchain: 1.87.0
+          - os: ubuntu-latest
+            target: armv7-linux-androideabi
+            toolchain: 1.87.0
+          - os: ubuntu-latest
+            target: x86_64-linux-android
+            toolchain: 1.87.0
           - os: macos-latest
             target: aarch64-apple-ios
-            toolchain: 1.85.0
+            toolchain: 1.87.0
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -177,7 +189,7 @@ jobs:
           workspaces: rsLXST -> target
           cache-bin: false
       - uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1
-        if: matrix.target == 'aarch64-linux-android'
+        if: contains(matrix.target, 'android')
         id: setup-ndk
         with:
           ndk-version: r27d
@@ -189,6 +201,24 @@ jobs:
           AR_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
           CC_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
           CXX_aarch64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++
+        run: cargo clippy --workspace --all-targets --all-features --target ${{ matrix.target }} --locked -- -D warnings
+        working-directory: rsLXST
+      - name: Clippy Android ARMv7
+        if: matrix.target == 'armv7-linux-androideabi'
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          AR_armv7_linux_androideabi: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+          CC_armv7_linux_androideabi: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang
+          CXX_armv7_linux_androideabi: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi24-clang++
+        run: cargo clippy --workspace --all-targets --all-features --target ${{ matrix.target }} --locked -- -D warnings
+        working-directory: rsLXST
+      - name: Clippy Android x86_64
+        if: matrix.target == 'x86_64-linux-android'
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          AR_x86_64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+          CC_x86_64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang
+          CXX_x86_64_linux_android: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android24-clang++
         run: cargo clippy --workspace --all-targets --all-features --target ${{ matrix.target }} --locked -- -D warnings
         working-directory: rsLXST
       - name: Clippy iOS

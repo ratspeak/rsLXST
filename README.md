@@ -5,7 +5,7 @@
 **Rust LXST telephony and media streaming for Reticulum.**
 
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
-[![Rust 1.85+](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust 1.87+](https://img.shields.io/badge/rust-1.87%2B-orange.svg)](https://www.rust-lang.org)
 [![LXST 0.4.5](https://img.shields.io/badge/target-LXST%200.4.5-success.svg)](https://github.com/markqvist/LXST)
 [![Status](https://img.shields.io/badge/status-library-yellow.svg)](#feature-status)
 
@@ -260,6 +260,6 @@ Public License v3.0 or later. See [LICENSE](LICENSE).
 ## Third-party licenses
 
 Third-party components retain their own licenses. The locked production
-dependency inventory, including the vendored BSD-3-Clause Opus implementation
-and its exact provenance, is documented in
+dependency inventory, including the exact upstream BSD-3-Clause Opus package,
+checksum, source commit, and preserved notice, is documented in
 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
