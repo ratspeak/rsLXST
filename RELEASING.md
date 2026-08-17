@@ -16,6 +16,13 @@ decision.
 
 ## Source qualification
 
+The Cargo manifests declare rsReticulum `1.1.0` compatibility. CI resolves
+that compatibility contract to the immutable rsReticulum commit recorded in
+`.github/workflows/ci.yml`; the semantic version describes what the manifests
+accept, while the commit identifies the source that qualification actually
+uses. Update both values deliberately and prove the new pair in isolated
+sibling checkouts whenever the dependency set changes.
+
 Before a component source release, verify that the tree is clean and run:
 
 ```sh
