@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "tool": {
+    "name": "cargo-public-api",
+    "version": "0.52.0",
+    "rustdocToolchain": "nightly-2026-08-01",
+    "target": "aarch64-apple-darwin",
+    "arguments": [
+      "--all-features",
+      "-sss"
+    ]
+  },
+  "baseline": {
+    "commit": "af89a03094605dbdf7264d06fdc546526ec6980b",
+    "capturedOn": "2026-08-17"
+  },
+  "packages": [
+    {
+      "name": "lxst-core",
+      "manifestPath": "Cargo.toml",
+      "tier": "experimental",
+      "compatibility": "reviewed-snapshot",
+      "snapshot": "api-baseline/lxst-core.txt",
+      "itemCount": 331,
+      "sha256": "87cc451d6da48cc06cd2bae9b26bae523407a20f66e842f04844ceecb8c5867d"
+    },
+    {
+      "name": "lxst-rns",
+      "manifestPath": "Cargo.toml",
+      "tier": "experimental",
+      "compatibility": "reviewed-snapshot",
+      "snapshot": "api-baseline/lxst-rns.txt",
+      "itemCount": 54,
+      "sha256": "6be5ba72d749f51d4f09816dce771540491cc3747bd531b307f94cef3297d463"
+    },
+    {
+      "name": "lxst-telephony",
+      "manifestPath": "Cargo.toml",
+      "tier": "experimental",
+      "compatibility": "reviewed-snapshot",
+      "snapshot": "api-baseline/lxst-telephony.txt",
+      "itemCount": 317,
+      "sha256": "e13c7c17ee723a08ce94651aa8f001f335b5abb5d17aefce5f4db695fb7c8128"
+    }
+  ]
+}

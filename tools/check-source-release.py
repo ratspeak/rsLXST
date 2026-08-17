@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_PACKAGES = {"lxst-core", "lxst-rns", "lxst-telephony"}
 EXPECTED_MSRV = "1.87"
 EXPECTED_RETICULUM_VERSION = "1.1.0"
-EXPECTED_RETICULUM_COMMIT = "47dbbf1febc0a9d3259f179a0512d9b56bb2320d"
+EXPECTED_RETICULUM_COMMIT = "c9b210a52b139ac9754b46c5c2639c4113e7ae53"
 EXPECTED_OPUS_DEPENDENCY = (
     'opus-rs = { version = "=0.1.29", default-features = false, '
     'features = ["heap"] }'
@@ -157,5 +157,11 @@ if actual_reticulum_commit != EXPECTED_RETICULUM_COMMIT:
         f"rsReticulum sibling is {actual_reticulum_commit}, "
         f"expected {EXPECTED_RETICULUM_COMMIT}"
     )
+
+subprocess.run(
+    [sys.executable, "tools/check-api-baseline.py", "--metadata-only"],
+    cwd=ROOT,
+    check=True,
+)
 
 print("source-release contract: ok")

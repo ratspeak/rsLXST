@@ -1,0 +1,331 @@
+pub mod lxst_core
+pub enum lxst_core::AudioCodec
+pub lxst_core::AudioCodec::Codec2(lxst_core::Codec2Mode)
+pub lxst_core::AudioCodec::Opus(lxst_core::OpusProfile)
+impl lxst_core::AudioCodec
+pub const fn lxst_core::AudioCodec::channels(self) -> u8
+pub const fn lxst_core::AudioCodec::codec_kind(self) -> lxst_core::CodecKind
+pub const fn lxst_core::AudioCodec::sample_rate_hz(self) -> u32
+pub enum lxst_core::CallRole
+pub lxst_core::CallRole::Incoming
+pub lxst_core::CallRole::Outgoing
+#[repr(u8)] pub enum lxst_core::Codec2Mode
+pub lxst_core::Codec2Mode::Mode1200 = 1
+pub lxst_core::Codec2Mode::Mode1300 = 2
+pub lxst_core::Codec2Mode::Mode1400 = 3
+pub lxst_core::Codec2Mode::Mode1600 = 4
+pub lxst_core::Codec2Mode::Mode2400 = 5
+pub lxst_core::Codec2Mode::Mode3200 = 6
+pub lxst_core::Codec2Mode::Mode700C = 0
+impl lxst_core::Codec2Mode
+pub const fn lxst_core::Codec2Mode::bitrate(self) -> u16
+pub const fn lxst_core::Codec2Mode::from_header(u8) -> core::result::Result<Self, lxst_core::Error>
+pub const fn lxst_core::Codec2Mode::header(self) -> u8
+#[repr(u8)] pub enum lxst_core::CodecKind
+pub lxst_core::CodecKind::Codec2 = 2
+pub lxst_core::CodecKind::Null = 255
+pub lxst_core::CodecKind::Opus = 1
+pub lxst_core::CodecKind::Raw = 0
+impl lxst_core::CodecKind
+pub const fn lxst_core::CodecKind::from_wire(u8) -> core::result::Result<Self, lxst_core::Error>
+pub const fn lxst_core::CodecKind::is_transmittable(self) -> bool
+pub const fn lxst_core::CodecKind::wire_id(self) -> u8
+pub enum lxst_core::DropPolicy
+pub lxst_core::DropPolicy::DropNewest
+pub lxst_core::DropPolicy::DropOldest
+pub enum lxst_core::Error
+pub lxst_core::Error::Decode(alloc::string::String)
+pub lxst_core::Error::EmptyFrame
+pub lxst_core::Error::EmptyRawPayload
+pub lxst_core::Error::Encode(alloc::string::String)
+pub lxst_core::Error::InvalidFieldKey
+pub lxst_core::Error::InvalidFieldType
+pub lxst_core::Error::InvalidFieldType::field: u8
+pub lxst_core::Error::InvalidRawChannels(u8)
+pub lxst_core::Error::InvalidRawFrameCodec(lxst_core::CodecKind)
+pub lxst_core::Error::InvalidRawSampleBytes
+pub lxst_core::Error::InvalidRawSampleBytes::bytes_per_sample: usize
+pub lxst_core::Error::InvalidRawSampleCount
+pub lxst_core::Error::InvalidRawSampleCount::channels: u8
+pub lxst_core::Error::InvalidRawSampleCount::samples: usize
+pub lxst_core::Error::InvalidSignal
+pub lxst_core::Error::NonTransmittableCodec(lxst_core::CodecKind)
+pub lxst_core::Error::RootNotMap
+pub lxst_core::Error::UnknownCodec(u8)
+pub lxst_core::Error::UnknownCodec2Mode(u8)
+pub lxst_core::Error::UnknownRawBitDepth(u8)
+pub enum lxst_core::FrameStreamEvent
+pub lxst_core::FrameStreamEvent::CodecChanged
+pub lxst_core::FrameStreamEvent::CodecChanged::from: core::option::Option<lxst_core::CodecKind>
+pub lxst_core::FrameStreamEvent::CodecChanged::to: lxst_core::CodecKind
+pub lxst_core::FrameStreamEvent::Frame(lxst_core::Frame)
+pub enum lxst_core::JitterPush<T>
+pub lxst_core::JitterPush::Accepted
+pub lxst_core::JitterPush::DroppedIncoming(T)
+pub lxst_core::JitterPush::DroppedOldest(T)
+pub enum lxst_core::OpusApplication
+pub lxst_core::OpusApplication::Audio
+pub lxst_core::OpusApplication::Voip
+pub enum lxst_core::OpusCodecError
+pub lxst_core::OpusCodecError::ChannelMismatch
+pub lxst_core::OpusCodecError::ChannelMismatch::actual: u8
+pub lxst_core::OpusCodecError::ChannelMismatch::expected: u8
+pub lxst_core::OpusCodecError::Codec(alloc::string::String)
+pub lxst_core::OpusCodecError::DecodedPacketDurationMismatch
+pub lxst_core::OpusCodecError::DecodedPacketDurationMismatch::actual: usize
+pub lxst_core::OpusCodecError::DecodedPacketDurationMismatch::expected: usize
+pub lxst_core::OpusCodecError::EncodedFrameTooLarge
+pub lxst_core::OpusCodecError::EncodedFrameTooLarge::actual: usize
+pub lxst_core::OpusCodecError::EncodedFrameTooLarge::index: usize
+pub lxst_core::OpusCodecError::EncodedFrameTooLarge::maximum: usize
+pub lxst_core::OpusCodecError::EncodedPacketTooLarge
+pub lxst_core::OpusCodecError::EncodedPacketTooLarge::actual: usize
+pub lxst_core::OpusCodecError::EncodedPacketTooLarge::maximum: usize
+pub lxst_core::OpusCodecError::InvalidFrameCodec(lxst_core::CodecKind)
+pub lxst_core::OpusCodecError::MalformedPacket(&'static str)
+pub lxst_core::OpusCodecError::NonOpusProfile(lxst_core::Profile)
+pub lxst_core::OpusCodecError::SampleFrameMismatch
+pub lxst_core::OpusCodecError::SampleFrameMismatch::actual: usize
+pub lxst_core::OpusCodecError::SampleFrameMismatch::expected: usize
+pub lxst_core::OpusCodecError::UnsupportedFrameDuration
+pub lxst_core::OpusCodecError::UnsupportedFrameDuration::sample_frames: usize
+pub lxst_core::OpusCodecError::UnsupportedFrameDuration::sample_rate_hz: u32
+pub lxst_core::OpusCodecError::UnsupportedPacketDuration
+pub lxst_core::OpusCodecError::UnsupportedPacketDuration::samples_48k: usize
+pub lxst_core::OpusCodecError::UnsupportedSubframePayloadLength(usize)
+pub lxst_core::OpusCodecError::UnsupportedSubpacketLayout
+pub lxst_core::OpusCodecError::Wire(lxst_core::Error)
+#[repr(u8)] pub enum lxst_core::OpusProfile
+pub lxst_core::OpusProfile::AudioHigh = 7
+pub lxst_core::OpusProfile::AudioLow = 5
+pub lxst_core::OpusProfile::AudioMax = 8
+pub lxst_core::OpusProfile::AudioMedium = 6
+pub lxst_core::OpusProfile::AudioMin = 4
+pub lxst_core::OpusProfile::VoiceHigh = 2
+pub lxst_core::OpusProfile::VoiceLow = 0
+pub lxst_core::OpusProfile::VoiceMax = 3
+pub lxst_core::OpusProfile::VoiceMedium = 1
+impl lxst_core::OpusProfile
+pub const lxst_core::OpusProfile::FRAME_MAX_MS: f32
+pub const lxst_core::OpusProfile::FRAME_QUANTA_MS: f32
+pub const lxst_core::OpusProfile::VALID_FRAME_MS: [f32; 6]
+pub const fn lxst_core::OpusProfile::application(self) -> lxst_core::OpusApplication
+pub const fn lxst_core::OpusProfile::bitrate_ceiling(self) -> u32
+pub const fn lxst_core::OpusProfile::channels(self) -> u8
+pub const fn lxst_core::OpusProfile::max_bytes_per_frame_ms(self, u16) -> usize
+pub const fn lxst_core::OpusProfile::sample_rate(self) -> u32
+#[repr(u32)] pub enum lxst_core::Profile
+pub lxst_core::Profile::BandwidthLow = 48
+pub lxst_core::Profile::BandwidthUltraLow = 16
+pub lxst_core::Profile::BandwidthVeryLow = 32
+pub lxst_core::Profile::LatencyLow = 128
+pub lxst_core::Profile::LatencyUltraLow = 112
+pub lxst_core::Profile::QualityHigh = 80
+pub lxst_core::Profile::QualityMax = 96
+pub lxst_core::Profile::QualityMedium = 64
+impl lxst_core::Profile
+pub const lxst_core::Profile::DEFAULT: Self
+pub const lxst_core::Profile::ORDER: [Self; 8]
+pub const fn lxst_core::Profile::abbreviation(self) -> &'static str
+pub const fn lxst_core::Profile::audio_codec(self) -> lxst_core::AudioCodec
+pub const fn lxst_core::Profile::channels(self) -> u8
+pub const fn lxst_core::Profile::frame_time_ms(self) -> u16
+pub const fn lxst_core::Profile::from_wire(u32) -> core::option::Option<Self>
+pub const fn lxst_core::Profile::name(self) -> &'static str
+pub fn lxst_core::Profile::next(self) -> Self
+pub const fn lxst_core::Profile::opus_payload_ceiling_bytes(self) -> core::option::Option<usize>
+pub const fn lxst_core::Profile::sample_frames_per_packet(self) -> usize
+pub const fn lxst_core::Profile::sample_rate_hz(self) -> u32
+pub const fn lxst_core::Profile::wire_value(self) -> u32
+impl core::convert::From<lxst_core::Profile> for lxst_core::Signal
+pub fn lxst_core::Signal::from(lxst_core::Profile) -> Self
+#[repr(u8)] pub enum lxst_core::RawBitDepth
+pub lxst_core::RawBitDepth::Float128 = 3
+pub lxst_core::RawBitDepth::Float16 = 0
+pub lxst_core::RawBitDepth::Float32 = 1
+pub lxst_core::RawBitDepth::Float64 = 2
+impl lxst_core::RawBitDepth
+pub const fn lxst_core::RawBitDepth::bits(self) -> u16
+pub const fn lxst_core::RawBitDepth::bytes_per_sample(self) -> usize
+pub const fn lxst_core::RawBitDepth::from_header_bits(u8) -> core::result::Result<Self, lxst_core::Error>
+pub const fn lxst_core::RawBitDepth::numpy_dtype(self) -> &'static str
+pub enum lxst_core::Signal
+pub lxst_core::Signal::PreferredProfile(lxst_core::Profile)
+pub lxst_core::Signal::Raw(u32)
+pub lxst_core::Signal::Status(lxst_core::SignallingStatus)
+impl lxst_core::Signal
+pub const fn lxst_core::Signal::from_wire(u32) -> Self
+pub const fn lxst_core::Signal::wire_value(self) -> u32
+impl core::convert::From<lxst_core::Profile> for lxst_core::Signal
+pub fn lxst_core::Signal::from(lxst_core::Profile) -> Self
+impl core::convert::From<lxst_core::SignallingStatus> for lxst_core::Signal
+pub fn lxst_core::Signal::from(lxst_core::SignallingStatus) -> Self
+#[repr(u32)] pub enum lxst_core::SignallingStatus
+pub lxst_core::SignallingStatus::Available = 3
+pub lxst_core::SignallingStatus::Busy = 0
+pub lxst_core::SignallingStatus::Calling = 2
+pub lxst_core::SignallingStatus::Connecting = 5
+pub lxst_core::SignallingStatus::Established = 6
+pub lxst_core::SignallingStatus::Rejected = 1
+pub lxst_core::SignallingStatus::Ringing = 4
+impl lxst_core::SignallingStatus
+pub const lxst_core::SignallingStatus::AUTO_STATUS_CODES: [Self; 5]
+pub const fn lxst_core::SignallingStatus::from_wire(u32) -> core::option::Option<Self>
+pub fn lxst_core::SignallingStatus::is_auto_status(self) -> bool
+pub const fn lxst_core::SignallingStatus::wire_value(self) -> u32
+impl core::convert::From<lxst_core::SignallingStatus> for lxst_core::Signal
+pub fn lxst_core::Signal::from(lxst_core::SignallingStatus) -> Self
+pub enum lxst_core::StreamError
+pub lxst_core::StreamError::InvalidBatchSize
+pub lxst_core::StreamError::InvalidJitterCapacity
+pub enum lxst_core::SyntheticError
+pub lxst_core::SyntheticError::InvalidFrameSamples
+pub lxst_core::SyntheticError::InvalidSampleRate
+pub lxst_core::SyntheticError::NonFiniteParameter
+pub lxst_core::SyntheticError::Raw(lxst_core::Error)
+pub enum lxst_core::SyntheticSourceKind
+pub lxst_core::SyntheticSourceKind::Ramp
+pub lxst_core::SyntheticSourceKind::Ramp::start: f32
+pub lxst_core::SyntheticSourceKind::Ramp::step: f32
+pub lxst_core::SyntheticSourceKind::Silence
+pub lxst_core::SyntheticSourceKind::Sine
+pub lxst_core::SyntheticSourceKind::Sine::amplitude: f32
+pub lxst_core::SyntheticSourceKind::Sine::frequency_hz: f32
+pub enum lxst_core::TelephonyAction
+pub lxst_core::TelephonyAction::IdentifyLocalIdentity
+pub lxst_core::TelephonyAction::IgnoreSignal(lxst_core::Signal)
+pub lxst_core::TelephonyAction::OpenAudioPipelines
+pub lxst_core::TelephonyAction::PrepareDialingPipelines
+pub lxst_core::TelephonyAction::ResetDialingPipelines
+pub lxst_core::TelephonyAction::RingIncomingCall
+pub lxst_core::TelephonyAction::SelectProfile(lxst_core::Profile)
+pub lxst_core::TelephonyAction::SendSignal(lxst_core::Signal)
+pub lxst_core::TelephonyAction::StartAudioPipelines
+pub lxst_core::TelephonyAction::StartDialTone
+pub lxst_core::TelephonyAction::SwitchProfile(lxst_core::Profile)
+pub lxst_core::TelephonyAction::TeardownLink
+pub lxst_core::TelephonyAction::Terminate(core::option::Option<lxst_core::SignallingStatus>)
+pub struct lxst_core::Frame
+pub lxst_core::Frame::codec: lxst_core::CodecKind
+pub lxst_core::Frame::payload: alloc::vec::Vec<u8>
+impl lxst_core::Frame
+pub fn lxst_core::Frame::from_wire_bytes(&[u8]) -> core::result::Result<Self, lxst_core::Error>
+pub fn lxst_core::Frame::new(lxst_core::CodecKind, impl core::convert::Into<alloc::vec::Vec<u8>>) -> Self
+pub fn lxst_core::Frame::to_wire_bytes(&self) -> core::result::Result<alloc::vec::Vec<u8>, lxst_core::Error>
+pub struct lxst_core::FramePacketizer
+impl lxst_core::FramePacketizer
+pub const lxst_core::FramePacketizer::PYTHON_COMPATIBLE: Self
+pub const fn lxst_core::FramePacketizer::frames_per_packet(self) -> usize
+pub fn lxst_core::FramePacketizer::new(usize) -> core::result::Result<Self, lxst_core::StreamError>
+pub fn lxst_core::FramePacketizer::packetize(self, impl core::iter::traits::collect::IntoIterator<Item = lxst_core::Frame>) -> alloc::vec::Vec<lxst_core::LxstPacket>
+pub fn lxst_core::FramePacketizer::packetize_one(self, lxst_core::Frame) -> lxst_core::LxstPacket
+pub struct lxst_core::FrameStreamState
+impl lxst_core::FrameStreamState
+pub fn lxst_core::FrameStreamState::accept_packet(&mut self, lxst_core::LxstPacket) -> alloc::vec::Vec<lxst_core::FrameStreamEvent>
+pub const fn lxst_core::FrameStreamState::current_codec(&self) -> core::option::Option<lxst_core::CodecKind>
+pub fn lxst_core::FrameStreamState::new() -> Self
+pub struct lxst_core::JitterBuffer<T>
+impl<T> lxst_core::JitterBuffer<T>
+pub const fn lxst_core::JitterBuffer<T>::capacity(&self) -> usize
+pub fn lxst_core::JitterBuffer<T>::clear(&mut self)
+pub const fn lxst_core::JitterBuffer<T>::drop_policy(&self) -> lxst_core::DropPolicy
+pub fn lxst_core::JitterBuffer<T>::is_empty(&self) -> bool
+pub fn lxst_core::JitterBuffer<T>::len(&self) -> usize
+pub fn lxst_core::JitterBuffer<T>::new(usize, lxst_core::DropPolicy) -> core::result::Result<Self, lxst_core::StreamError>
+pub fn lxst_core::JitterBuffer<T>::pop(&mut self) -> core::option::Option<T>
+pub fn lxst_core::JitterBuffer<T>::push(&mut self, T) -> lxst_core::JitterPush<T>
+pub const fn lxst_core::JitterBuffer<T>::stats(&self) -> lxst_core::JitterStats
+pub struct lxst_core::JitterStats
+pub lxst_core::JitterStats::dropped_newest: u64
+pub lxst_core::JitterStats::dropped_oldest: u64
+pub lxst_core::JitterStats::popped: u64
+pub lxst_core::JitterStats::pushed: u64
+pub lxst_core::JitterStats::underruns: u64
+pub struct lxst_core::LxstPacket
+pub lxst_core::LxstPacket::frames: alloc::vec::Vec<lxst_core::Frame>
+pub lxst_core::LxstPacket::signals: alloc::vec::Vec<lxst_core::Signal>
+impl lxst_core::LxstPacket
+pub fn lxst_core::LxstPacket::decode(&[u8]) -> core::result::Result<Self, lxst_core::Error>
+pub fn lxst_core::LxstPacket::encode(&self) -> core::result::Result<alloc::vec::Vec<u8>, lxst_core::Error>
+pub fn lxst_core::LxstPacket::frame(lxst_core::Frame) -> Self
+pub fn lxst_core::LxstPacket::new() -> Self
+pub fn lxst_core::LxstPacket::signalling(impl core::iter::traits::collect::IntoIterator<Item = lxst_core::Signal>) -> Self
+pub struct lxst_core::OpusDecoderState
+impl lxst_core::OpusDecoderState
+pub fn lxst_core::OpusDecoderState::decode_frame(&mut self, &lxst_core::Frame) -> core::result::Result<lxst_core::RawAudioFrame, lxst_core::OpusCodecError>
+pub fn lxst_core::OpusDecoderState::new(lxst_core::Profile) -> core::result::Result<Self, lxst_core::OpusCodecError>
+pub const fn lxst_core::OpusDecoderState::profile(&self) -> lxst_core::Profile
+pub const fn lxst_core::OpusDecoderState::subframe_count(&self) -> usize
+pub const fn lxst_core::OpusDecoderState::subframe_sample_frames(&self) -> usize
+pub struct lxst_core::OpusEncoderState
+impl lxst_core::OpusEncoderState
+pub const fn lxst_core::OpusEncoderState::channels(&self) -> u8
+pub fn lxst_core::OpusEncoderState::encode_frame(&mut self, &lxst_core::RawAudioFrame) -> core::result::Result<lxst_core::Frame, lxst_core::OpusCodecError>
+pub const fn lxst_core::OpusEncoderState::max_payload_bytes(&self) -> usize
+pub fn lxst_core::OpusEncoderState::new(lxst_core::Profile) -> core::result::Result<Self, lxst_core::OpusCodecError>
+pub const fn lxst_core::OpusEncoderState::profile(&self) -> lxst_core::Profile
+pub const fn lxst_core::OpusEncoderState::sample_frames(&self) -> usize
+pub const fn lxst_core::OpusEncoderState::subframe_count(&self) -> usize
+pub const fn lxst_core::OpusEncoderState::subframe_sample_frames(&self) -> usize
+pub struct lxst_core::OpusMonoDecoder
+impl lxst_core::OpusMonoDecoder
+pub const fn lxst_core::OpusMonoDecoder::channels(&self) -> u8
+pub fn lxst_core::OpusMonoDecoder::decode_packet(&mut self, &[u8]) -> core::result::Result<lxst_core::RawAudioFrame, lxst_core::OpusCodecError>
+pub fn lxst_core::OpusMonoDecoder::new() -> core::result::Result<Self, lxst_core::OpusCodecError>
+pub const fn lxst_core::OpusMonoDecoder::sample_rate_hz(&self) -> u32
+pub struct lxst_core::RawAudioFrame
+pub lxst_core::RawAudioFrame::channels: u8
+pub lxst_core::RawAudioFrame::samples: alloc::vec::Vec<f32>
+impl lxst_core::RawAudioFrame
+pub fn lxst_core::RawAudioFrame::from_frame(&lxst_core::Frame) -> core::result::Result<Self, lxst_core::Error>
+pub fn lxst_core::RawAudioFrame::from_payload(&[u8]) -> core::result::Result<Self, lxst_core::Error>
+pub fn lxst_core::RawAudioFrame::new(u8, impl core::convert::Into<alloc::vec::Vec<f32>>) -> core::result::Result<Self, lxst_core::Error>
+pub fn lxst_core::RawAudioFrame::sample_frames(&self) -> usize
+pub fn lxst_core::RawAudioFrame::to_frame(&self, lxst_core::RawBitDepth) -> core::result::Result<lxst_core::Frame, lxst_core::Error>
+pub fn lxst_core::RawAudioFrame::to_payload(&self, lxst_core::RawBitDepth) -> core::result::Result<alloc::vec::Vec<u8>, lxst_core::Error>
+pub struct lxst_core::RawFrameCollector
+impl lxst_core::RawFrameCollector
+pub fn lxst_core::RawFrameCollector::frames(&self) -> &[lxst_core::RawAudioFrame]
+pub fn lxst_core::RawFrameCollector::into_frames(self) -> alloc::vec::Vec<lxst_core::RawAudioFrame>
+pub fn lxst_core::RawFrameCollector::new() -> Self
+pub fn lxst_core::RawFrameCollector::push(&mut self, lxst_core::RawAudioFrame)
+pub const fn lxst_core::RawFrameCollector::sample_frames(&self) -> usize
+pub struct lxst_core::RawFrameHeader
+pub lxst_core::RawFrameHeader::bit_depth: lxst_core::RawBitDepth
+pub lxst_core::RawFrameHeader::channels: u8
+impl lxst_core::RawFrameHeader
+pub const fn lxst_core::RawFrameHeader::encode(self) -> u8
+pub const fn lxst_core::RawFrameHeader::new(u8, lxst_core::RawBitDepth) -> core::result::Result<Self, lxst_core::Error>
+pub fn lxst_core::RawFrameHeader::parse(u8) -> core::result::Result<Self, lxst_core::Error>
+pub struct lxst_core::SyntheticSource
+impl lxst_core::SyntheticSource
+pub const fn lxst_core::SyntheticSource::channels(&self) -> u8
+pub const fn lxst_core::SyntheticSource::cursor_samples(&self) -> u64
+pub const fn lxst_core::SyntheticSource::frame_samples(&self) -> usize
+pub fn lxst_core::SyntheticSource::new(u8, u32, usize, lxst_core::SyntheticSourceKind) -> core::result::Result<Self, lxst_core::SyntheticError>
+pub fn lxst_core::SyntheticSource::next_raw_frame(&mut self) -> core::result::Result<lxst_core::RawAudioFrame, lxst_core::SyntheticError>
+pub const fn lxst_core::SyntheticSource::sample_rate_hz(&self) -> u32
+pub struct lxst_core::TelephonyCall
+impl lxst_core::TelephonyCall
+pub fn lxst_core::TelephonyCall::answer(&mut self) -> alloc::vec::Vec<lxst_core::TelephonyAction>
+pub const fn lxst_core::TelephonyCall::answered(&self) -> bool
+pub fn lxst_core::TelephonyCall::caller_identified(&mut self, bool, bool) -> alloc::vec::Vec<lxst_core::TelephonyAction>
+pub fn lxst_core::TelephonyCall::hangup(&mut self, bool) -> alloc::vec::Vec<lxst_core::TelephonyAction>
+pub fn lxst_core::TelephonyCall::incoming() -> Self
+pub fn lxst_core::TelephonyCall::incoming_link_established(bool) -> alloc::vec::Vec<lxst_core::TelephonyAction>
+pub fn lxst_core::TelephonyCall::outgoing(core::option::Option<lxst_core::Profile>) -> Self
+pub const fn lxst_core::TelephonyCall::profile(&self) -> core::option::Option<lxst_core::Profile>
+pub fn lxst_core::TelephonyCall::receive_signal(&mut self, lxst_core::Signal) -> alloc::vec::Vec<lxst_core::TelephonyAction>
+pub fn lxst_core::TelephonyCall::retry_answer(&self) -> alloc::vec::Vec<lxst_core::TelephonyAction>
+pub const fn lxst_core::TelephonyCall::role(&self) -> lxst_core::CallRole
+pub const fn lxst_core::TelephonyCall::status(&self) -> lxst_core::SignallingStatus
+pub fn lxst_core::TelephonyCall::switch_profile(&mut self, lxst_core::Profile) -> alloc::vec::Vec<lxst_core::TelephonyAction>
+pub const lxst_core::APP_NAME: &str
+pub const lxst_core::FIELD_FRAMES: u8
+pub const lxst_core::FIELD_SIGNALLING: u8
+pub const lxst_core::OPUS_ENCODED_FRAME_MAX_BYTES: usize
+pub const lxst_core::OPUS_ENCODED_PACKET_MAX_BYTES: usize
+pub const lxst_core::OPUS_MONO_DECODE_SAMPLE_RATE_HZ: u32
+pub const lxst_core::TELEPHONY_DESTINATION_NAME: &str
+pub const lxst_core::TELEPHONY_PRIMITIVE_NAME: &str
+pub fn lxst_core::opus_packet_duration_samples_48k(&[u8]) -> core::result::Result<usize, lxst_core::OpusCodecError>

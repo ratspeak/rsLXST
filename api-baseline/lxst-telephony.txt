@@ -1,0 +1,317 @@
+pub mod lxst_telephony
+pub enum lxst_telephony::CallerAllowPolicy
+pub lxst_telephony::CallerAllowPolicy::All
+pub lxst_telephony::CallerAllowPolicy::List(alloc::vec::Vec<lxst_telephony::IdentityHash>)
+pub lxst_telephony::CallerAllowPolicy::None
+pub enum lxst_telephony::Error
+pub lxst_telephony::Error::CallNotAnswerable
+pub lxst_telephony::Error::CallNotEstablished
+pub lxst_telephony::Error::Destination(rns_identity::destination::DestinationError)
+pub lxst_telephony::Error::LineBusy
+pub lxst_telephony::Error::LinkDestinationClosed
+pub lxst_telephony::Error::LinkOperation(alloc::string::String)
+pub lxst_telephony::Error::LinkProofInvalid(alloc::string::String)
+pub lxst_telephony::Error::MediaProfileMismatch
+pub lxst_telephony::Error::MediaProfileMismatch::active: lxst_core::profile::Profile
+pub lxst_telephony::Error::MediaProfileMismatch::requested: lxst_core::profile::Profile
+pub lxst_telephony::Error::NoActiveCall
+pub lxst_telephony::Error::NoSigningKey
+pub lxst_telephony::Error::Opus(lxst_core::opus::OpusCodecError)
+pub lxst_telephony::Error::RemotePathNotDiscovered
+pub lxst_telephony::Error::RemotePublicKeyMissing
+pub lxst_telephony::Error::RemoteTelephonyPeerNotDiscovered
+pub lxst_telephony::Error::Rns(lxst_rns::Error)
+pub lxst_telephony::Error::ServiceControlClosed
+pub lxst_telephony::Error::ServiceEventClosed
+pub lxst_telephony::Error::ServiceEventFull
+pub lxst_telephony::Error::TransportClosed
+pub lxst_telephony::Error::TransportFull
+pub lxst_telephony::Error::TransportQueryClosed
+pub lxst_telephony::Error::UnexpectedLinkEvent
+pub lxst_telephony::Error::UnexpectedTransportQueryResponse
+pub lxst_telephony::Error::UnknownLink
+pub lxst_telephony::Error::WrongActiveLink
+pub enum lxst_telephony::OpusReceiveStreamStopReason
+pub lxst_telephony::OpusReceiveStreamStopReason::CallEnded
+pub lxst_telephony::OpusReceiveStreamStopReason::ProfileChanged
+pub lxst_telephony::OpusReceiveStreamStopReason::Replaced
+pub lxst_telephony::OpusReceiveStreamStopReason::Requested
+pub lxst_telephony::OpusReceiveStreamStopReason::SinkClosed
+pub enum lxst_telephony::OpusTransmitStreamStopReason
+pub lxst_telephony::OpusTransmitStreamStopReason::CallEnded
+pub lxst_telephony::OpusTransmitStreamStopReason::ProfileChanged
+pub lxst_telephony::OpusTransmitStreamStopReason::Replaced
+pub lxst_telephony::OpusTransmitStreamStopReason::Requested
+pub lxst_telephony::OpusTransmitStreamStopReason::SourceClosed
+pub enum lxst_telephony::QueuedLinkPacketKind
+pub lxst_telephony::QueuedLinkPacketKind::LinkClose
+pub lxst_telephony::QueuedLinkPacketKind::LinkIdentify
+pub lxst_telephony::QueuedLinkPacketKind::LxstData
+pub enum lxst_telephony::TelephonyCommand
+pub lxst_telephony::TelephonyCommand::CallTerminated
+pub lxst_telephony::TelephonyCommand::CallTerminated::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyCommand::CallTerminated::reason: core::option::Option<lxst_core::profile::SignallingStatus>
+pub lxst_telephony::TelephonyCommand::IdentifyLocalIdentity
+pub lxst_telephony::TelephonyCommand::IdentifyLocalIdentity::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyCommand::IgnoredSignal
+pub lxst_telephony::TelephonyCommand::IgnoredSignal::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyCommand::IgnoredSignal::signal: lxst_core::wire::Signal
+pub lxst_telephony::TelephonyCommand::OpenAudioPipelines
+pub lxst_telephony::TelephonyCommand::OpenAudioPipelines::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyCommand::PrepareDialingPipelines
+pub lxst_telephony::TelephonyCommand::PrepareDialingPipelines::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyCommand::ResetDialingPipelines
+pub lxst_telephony::TelephonyCommand::ResetDialingPipelines::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyCommand::RingIncomingCall
+pub lxst_telephony::TelephonyCommand::RingIncomingCall::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyCommand::RingIncomingCall::remote_identity: lxst_telephony::IdentityHash
+pub lxst_telephony::TelephonyCommand::SelectProfile
+pub lxst_telephony::TelephonyCommand::SelectProfile::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyCommand::SelectProfile::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyCommand::SendSignal
+pub lxst_telephony::TelephonyCommand::SendSignal::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyCommand::SendSignal::signal: lxst_core::wire::Signal
+pub lxst_telephony::TelephonyCommand::StartAudioPipelines
+pub lxst_telephony::TelephonyCommand::StartAudioPipelines::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyCommand::StartDialTone
+pub lxst_telephony::TelephonyCommand::StartDialTone::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyCommand::StopAudioPipelines
+pub lxst_telephony::TelephonyCommand::StopAudioPipelines::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyCommand::SwitchProfile
+pub lxst_telephony::TelephonyCommand::SwitchProfile::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyCommand::SwitchProfile::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyCommand::TeardownLink
+pub lxst_telephony::TelephonyCommand::TeardownLink::link_id: lxst_telephony::LinkId
+impl lxst_telephony::TelephonyCommand
+pub const fn lxst_telephony::TelephonyCommand::link_id(&self) -> lxst_telephony::LinkId
+pub const fn lxst_telephony::TelephonyCommand::signal(&self) -> core::option::Option<lxst_core::wire::Signal>
+pub fn lxst_telephony::TelephonyCommand::to_lxst_packet(&self) -> core::option::Option<lxst_core::wire::LxstPacket>
+pub enum lxst_telephony::TelephonyCommandEffect
+pub lxst_telephony::TelephonyCommandEffect::Noop
+pub lxst_telephony::TelephonyCommandEffect::QueuedLinkPacket
+pub lxst_telephony::TelephonyCommandEffect::QueuedLinkPacket::kind: lxst_telephony::QueuedLinkPacketKind
+pub lxst_telephony::TelephonyCommandEffect::QueuedLinkPacket::link_id: lxst_telephony::LinkId
+pub enum lxst_telephony::TelephonyControl
+pub lxst_telephony::TelephonyControl::Announce
+pub lxst_telephony::TelephonyControl::Answer
+pub lxst_telephony::TelephonyControl::Answer::expected_link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyControl::Answer::reply: tokio::sync::oneshot::Sender<core::result::Result<lxst_telephony::ActiveCallSnapshot, lxst_telephony::Error>>
+pub lxst_telephony::TelephonyControl::Call
+pub lxst_telephony::TelephonyControl::Call::discovery_timeout: core::time::Duration
+pub lxst_telephony::TelephonyControl::Call::profile: core::option::Option<lxst_core::profile::Profile>
+pub lxst_telephony::TelephonyControl::Call::remote_identity: lxst_telephony::IdentityHash
+pub lxst_telephony::TelephonyControl::Hangup
+pub lxst_telephony::TelephonyControl::Hangup::ring_timeout: bool
+pub lxst_telephony::TelephonyControl::SendOpusFrames
+pub lxst_telephony::TelephonyControl::SendOpusFrames::frames: alloc::vec::Vec<lxst_core::raw::RawAudioFrame>
+pub lxst_telephony::TelephonyControl::SendOpusFrames::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyControl::SendRawFrames
+pub lxst_telephony::TelephonyControl::SendRawFrames::bit_depth: lxst_core::wire::RawBitDepth
+pub lxst_telephony::TelephonyControl::SendRawFrames::frames: alloc::vec::Vec<lxst_core::raw::RawAudioFrame>
+pub lxst_telephony::TelephonyControl::SetAccessPolicy(lxst_telephony::CallerAccessPolicy)
+pub lxst_telephony::TelephonyControl::SetExternalBusy(bool)
+pub lxst_telephony::TelephonyControl::Shutdown
+pub lxst_telephony::TelephonyControl::StartOpusReceiveStream
+pub lxst_telephony::TelephonyControl::StartOpusReceiveStream::frames: tokio::sync::mpsc::bounded::Sender<lxst_core::raw::RawAudioFrame>
+pub lxst_telephony::TelephonyControl::StartOpusStream
+pub lxst_telephony::TelephonyControl::StartOpusStream::frames: tokio::sync::mpsc::bounded::Receiver<lxst_core::raw::RawAudioFrame>
+pub lxst_telephony::TelephonyControl::StartOpusStream::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyControl::StopOpusReceiveStream
+pub lxst_telephony::TelephonyControl::StopOpusStream
+pub lxst_telephony::TelephonyControl::SwitchProfile
+pub lxst_telephony::TelephonyControl::SwitchProfile::profile: lxst_core::profile::Profile
+pub enum lxst_telephony::TelephonyLinkEvent
+pub lxst_telephony::TelephonyLinkEvent::IncomingLinkEstablished
+pub lxst_telephony::TelephonyLinkEvent::IncomingLinkEstablished::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyLinkEvent::LinkClosed
+pub lxst_telephony::TelephonyLinkEvent::LinkClosed::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyLinkEvent::LinkEstablished
+pub lxst_telephony::TelephonyLinkEvent::LinkEstablished::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyLinkEvent::LinkPacket
+pub lxst_telephony::TelephonyLinkEvent::LinkPacket::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyLinkEvent::LinkPacket::plaintext: alloc::vec::Vec<u8>
+pub lxst_telephony::TelephonyLinkEvent::OutgoingLinkEstablished
+pub lxst_telephony::TelephonyLinkEvent::OutgoingLinkEstablished::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyLinkEvent::RemoteIdentified
+pub lxst_telephony::TelephonyLinkEvent::RemoteIdentified::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyLinkEvent::RemoteIdentified::remote_identity: lxst_telephony::IdentityHash
+pub enum lxst_telephony::TelephonyServiceEvent
+pub lxst_telephony::TelephonyServiceEvent::CallTerminated
+pub lxst_telephony::TelephonyServiceEvent::CallTerminated::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::CallTerminated::reason: core::option::Option<lxst_core::profile::SignallingStatus>
+pub lxst_telephony::TelephonyServiceEvent::Drive(lxst_telephony::TelephonyDriveStep)
+pub lxst_telephony::TelephonyServiceEvent::Error
+pub lxst_telephony::TelephonyServiceEvent::Error::message: alloc::string::String
+pub lxst_telephony::TelephonyServiceEvent::IncomingCall
+pub lxst_telephony::TelephonyServiceEvent::IncomingCall::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::IncomingCall::remote_identity: lxst_telephony::IdentityHash
+pub lxst_telephony::TelephonyServiceEvent::MediaReceived
+pub lxst_telephony::TelephonyServiceEvent::MediaReceived::frames: usize
+pub lxst_telephony::TelephonyServiceEvent::MediaReceived::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::MediaSent
+pub lxst_telephony::TelephonyServiceEvent::MediaSent::frames: usize
+pub lxst_telephony::TelephonyServiceEvent::MediaSent::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::MediaSent::packets: usize
+pub lxst_telephony::TelephonyServiceEvent::OpusFramesReceived
+pub lxst_telephony::TelephonyServiceEvent::OpusFramesReceived::frames: alloc::vec::Vec<lxst_core::raw::RawAudioFrame>
+pub lxst_telephony::TelephonyServiceEvent::OpusFramesReceived::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::OpusFramesReceived::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyServiceEvent::OpusReceiveStreamFrames
+pub lxst_telephony::TelephonyServiceEvent::OpusReceiveStreamFrames::dropped: usize
+pub lxst_telephony::TelephonyServiceEvent::OpusReceiveStreamFrames::frames: usize
+pub lxst_telephony::TelephonyServiceEvent::OpusReceiveStreamFrames::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::OpusReceiveStreamFrames::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyServiceEvent::OpusReceiveStreamStarted
+pub lxst_telephony::TelephonyServiceEvent::OpusReceiveStreamStarted::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::OpusReceiveStreamStarted::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyServiceEvent::OpusReceiveStreamStopped
+pub lxst_telephony::TelephonyServiceEvent::OpusReceiveStreamStopped::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::OpusReceiveStreamStopped::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyServiceEvent::OpusReceiveStreamStopped::reason: lxst_telephony::OpusReceiveStreamStopReason
+pub lxst_telephony::TelephonyServiceEvent::OpusTransmitStreamStarted
+pub lxst_telephony::TelephonyServiceEvent::OpusTransmitStreamStarted::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::OpusTransmitStreamStarted::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyServiceEvent::OpusTransmitStreamStopped
+pub lxst_telephony::TelephonyServiceEvent::OpusTransmitStreamStopped::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::OpusTransmitStreamStopped::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyServiceEvent::OpusTransmitStreamStopped::reason: lxst_telephony::OpusTransmitStreamStopReason
+pub lxst_telephony::TelephonyServiceEvent::OutgoingCallFailed
+pub lxst_telephony::TelephonyServiceEvent::OutgoingCallFailed::message: alloc::string::String
+pub lxst_telephony::TelephonyServiceEvent::OutgoingCallFailed::remote_identity: lxst_telephony::IdentityHash
+pub lxst_telephony::TelephonyServiceEvent::OutgoingCallPending
+pub lxst_telephony::TelephonyServiceEvent::OutgoingCallPending::remote_identity: lxst_telephony::IdentityHash
+pub lxst_telephony::TelephonyServiceEvent::OutgoingCallStarted
+pub lxst_telephony::TelephonyServiceEvent::OutgoingCallStarted::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::OutgoingCallStarted::remote_identity: lxst_telephony::IdentityHash
+pub lxst_telephony::TelephonyServiceEvent::Snapshot(lxst_telephony::TelephonyRuntimeSnapshot)
+pub lxst_telephony::TelephonyServiceEvent::Stopped
+pub struct lxst_telephony::ActiveCall
+pub lxst_telephony::ActiveCall::call: lxst_core::telephony::TelephonyCall
+pub lxst_telephony::ActiveCall::link_id: lxst_telephony::LinkId
+pub lxst_telephony::ActiveCall::remote_identity: lxst_telephony::IdentityHash
+pub struct lxst_telephony::ActiveCallSnapshot
+pub lxst_telephony::ActiveCallSnapshot::answered: bool
+pub lxst_telephony::ActiveCallSnapshot::link_id: lxst_telephony::LinkId
+pub lxst_telephony::ActiveCallSnapshot::profile: core::option::Option<lxst_core::profile::Profile>
+pub lxst_telephony::ActiveCallSnapshot::remote_identity: lxst_telephony::IdentityHash
+pub lxst_telephony::ActiveCallSnapshot::role: lxst_core::telephony::CallRole
+pub lxst_telephony::ActiveCallSnapshot::status: lxst_core::profile::SignallingStatus
+pub struct lxst_telephony::CallerAccessPolicy
+pub lxst_telephony::CallerAccessPolicy::allowed: lxst_telephony::CallerAllowPolicy
+pub lxst_telephony::CallerAccessPolicy::blocked: alloc::vec::Vec<lxst_telephony::IdentityHash>
+impl lxst_telephony::CallerAccessPolicy
+pub fn lxst_telephony::CallerAccessPolicy::is_allowed(&self, &lxst_telephony::IdentityHash) -> bool
+impl core::default::Default for lxst_telephony::CallerAccessPolicy
+pub fn lxst_telephony::CallerAccessPolicy::default() -> Self
+pub struct lxst_telephony::RemoteTelephonyPeer
+pub lxst_telephony::RemoteTelephonyPeer::destination_hash: [u8; 16]
+pub lxst_telephony::RemoteTelephonyPeer::hops: u8
+pub lxst_telephony::RemoteTelephonyPeer::identity_hash: lxst_telephony::IdentityHash
+pub lxst_telephony::RemoteTelephonyPeer::public_key: [u8; 64]
+pub struct lxst_telephony::TelephonyDriveStep
+pub lxst_telephony::TelephonyDriveStep::effects: alloc::vec::Vec<lxst_telephony::TelephonyCommandEffect>
+pub lxst_telephony::TelephonyDriveStep::step: lxst_telephony::TelephonyStep
+pub struct lxst_telephony::TelephonyRnsEndpoint
+pub lxst_telephony::TelephonyRnsEndpoint::destination_hash: [u8; 16]
+pub lxst_telephony::TelephonyRnsEndpoint::link_closed_rx: tokio::sync::mpsc::bounded::Receiver<lxst_telephony::LinkId>
+pub lxst_telephony::TelephonyRnsEndpoint::link_established_rx: tokio::sync::mpsc::bounded::Receiver<lxst_telephony::LinkId>
+pub lxst_telephony::TelephonyRnsEndpoint::link_identified_rx: tokio::sync::mpsc::bounded::Receiver<(lxst_telephony::LinkId, lxst_telephony::IdentityHash)>
+pub lxst_telephony::TelephonyRnsEndpoint::link_packet_rx: tokio::sync::mpsc::unbounded::UnboundedReceiver<(alloc::vec::Vec<u8>, lxst_telephony::LinkId)>
+pub lxst_telephony::TelephonyRnsEndpoint::manager: rns_runtime::link_manager::LinkManager
+impl lxst_telephony::TelephonyRnsEndpoint
+pub fn lxst_telephony::TelephonyRnsEndpoint::announce(&self) -> core::result::Result<(), lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::await_path_to_identity(&self, lxst_telephony::IdentityHash, core::time::Duration) -> impl core::future::future::Future<Output = core::result::Result<(), lxst_telephony::Error>> + core::marker::Send + 'static
+pub async fn lxst_telephony::TelephonyRnsEndpoint::begin_outgoing_link(&mut self, &mut lxst_telephony::TelephonyRuntimeCore, lxst_telephony::IdentityHash, core::option::Option<lxst_core::profile::Profile>, core::time::Duration) -> core::result::Result<lxst_telephony::LinkId, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::begin_outgoing_link_with_remote_pubkey(&mut self, &mut lxst_telephony::TelephonyRuntimeCore, lxst_telephony::IdentityHash, [u8; 64], core::option::Option<lxst_core::profile::Profile>, u8) -> core::result::Result<lxst_telephony::LinkId, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::deregister_destination(&self) -> core::result::Result<(), lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::deregister_link_destination(&self, lxst_telephony::LinkId) -> core::result::Result<(), lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::discover_remote_telephony_peer(&self, lxst_telephony::IdentityHash, core::time::Duration) -> impl core::future::future::Future<Output = core::result::Result<lxst_telephony::RemoteTelephonyPeer, lxst_telephony::Error>> + core::marker::Send + 'static
+pub async fn lxst_telephony::TelephonyRnsEndpoint::drive_once(&mut self, &mut lxst_telephony::TelephonyRuntimeCore) -> core::result::Result<core::option::Option<lxst_telephony::TelephonyDriveStep>, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::execute_command(&mut self, &lxst_telephony::TelephonyCommand) -> core::result::Result<lxst_telephony::TelephonyCommandEffect, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::execute_commands(&mut self, &[lxst_telephony::TelephonyCommand]) -> core::result::Result<alloc::vec::Vec<lxst_telephony::TelephonyCommandEffect>, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::media_drop_count(&self, lxst_telephony::LinkId) -> u64
+pub fn lxst_telephony::TelephonyRnsEndpoint::queue_frames(&mut self, lxst_telephony::LinkId, impl core::iter::traits::collect::IntoIterator<Item = lxst_core::wire::Frame>) -> core::result::Result<usize, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::queue_raw_frames(&mut self, lxst_telephony::LinkId, lxst_core::wire::RawBitDepth, impl core::iter::traits::collect::IntoIterator<Item = lxst_core::raw::RawAudioFrame>) -> core::result::Result<usize, lxst_telephony::Error>
+pub async fn lxst_telephony::TelephonyRnsEndpoint::recv_link_event(&mut self) -> core::result::Result<core::option::Option<lxst_telephony::TelephonyLinkEvent>, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::register(tokio::sync::mpsc::bounded::Sender<rns_transport::messages::TransportMessage>, &rns_identity::identity::Identity) -> core::result::Result<Self, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::request_path_to_identity(&self, &lxst_telephony::IdentityHash) -> core::result::Result<(), lxst_telephony::Error>
+pub async fn lxst_telephony::TelephonyRnsEndpoint::step(&mut self, &mut lxst_telephony::TelephonyRuntimeCore) -> core::result::Result<core::option::Option<lxst_telephony::TelephonyStep>, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::tick_reticulum(&mut self)
+pub fn lxst_telephony::TelephonyRnsEndpoint::try_drive_once(&mut self, &mut lxst_telephony::TelephonyRuntimeCore) -> core::result::Result<core::option::Option<lxst_telephony::TelephonyDriveStep>, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::try_drive_ready(&mut self, &mut lxst_telephony::TelephonyRuntimeCore) -> core::result::Result<alloc::vec::Vec<lxst_telephony::TelephonyDriveStep>, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::try_pump_reticulum(&mut self) -> bool
+pub fn lxst_telephony::TelephonyRnsEndpoint::try_recv_link_event(&mut self) -> core::result::Result<core::option::Option<lxst_telephony::TelephonyLinkEvent>, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRnsEndpoint::try_step(&mut self, &mut lxst_telephony::TelephonyRuntimeCore) -> core::result::Result<core::option::Option<lxst_telephony::TelephonyStep>, lxst_telephony::Error>
+pub struct lxst_telephony::TelephonyRuntimeCore
+impl lxst_telephony::TelephonyRuntimeCore
+pub fn lxst_telephony::TelephonyRuntimeCore::accept_link_event(&mut self, lxst_telephony::TelephonyLinkEvent) -> core::result::Result<lxst_telephony::TelephonyStep, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRuntimeCore::accept_lxst_plaintext(&mut self, lxst_telephony::LinkId, &[u8]) -> core::result::Result<lxst_telephony::TelephonyStep, lxst_telephony::Error>
+pub const fn lxst_telephony::TelephonyRuntimeCore::access_policy(&self) -> &lxst_telephony::CallerAccessPolicy
+pub fn lxst_telephony::TelephonyRuntimeCore::active_call(&self) -> core::option::Option<&lxst_telephony::ActiveCall>
+pub fn lxst_telephony::TelephonyRuntimeCore::answer_active(&mut self, lxst_telephony::LinkId) -> core::result::Result<alloc::vec::Vec<lxst_telephony::TelephonyCommand>, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRuntimeCore::caller_identified(&mut self, lxst_telephony::LinkId, lxst_telephony::IdentityHash) -> core::result::Result<alloc::vec::Vec<lxst_telephony::TelephonyCommand>, lxst_telephony::Error>
+pub const fn lxst_telephony::TelephonyRuntimeCore::external_busy(&self) -> bool
+pub fn lxst_telephony::TelephonyRuntimeCore::hangup_active(&mut self, bool) -> core::result::Result<alloc::vec::Vec<lxst_telephony::TelephonyCommand>, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRuntimeCore::incoming_link_established(&mut self, lxst_telephony::LinkId) -> alloc::vec::Vec<lxst_telephony::TelephonyCommand>
+pub fn lxst_telephony::TelephonyRuntimeCore::line_busy(&self) -> bool
+pub fn lxst_telephony::TelephonyRuntimeCore::link_closed(&mut self, lxst_telephony::LinkId) -> alloc::vec::Vec<lxst_telephony::TelephonyCommand>
+pub fn lxst_telephony::TelephonyRuntimeCore::new() -> Self
+pub fn lxst_telephony::TelephonyRuntimeCore::outgoing_link_established(&mut self, lxst_telephony::LinkId) -> core::result::Result<(), lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRuntimeCore::pending_link_count(&self) -> usize
+pub fn lxst_telephony::TelephonyRuntimeCore::receive_signal(&mut self, lxst_telephony::LinkId, lxst_core::wire::Signal) -> core::result::Result<alloc::vec::Vec<lxst_telephony::TelephonyCommand>, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRuntimeCore::set_access_policy(&mut self, lxst_telephony::CallerAccessPolicy)
+pub fn lxst_telephony::TelephonyRuntimeCore::set_external_busy(&mut self, bool)
+pub fn lxst_telephony::TelephonyRuntimeCore::shutdown(&mut self) -> alloc::vec::Vec<lxst_telephony::TelephonyCommand>
+pub fn lxst_telephony::TelephonyRuntimeCore::snapshot(&self) -> lxst_telephony::TelephonyRuntimeSnapshot
+pub fn lxst_telephony::TelephonyRuntimeCore::start_outgoing_call(&mut self, lxst_telephony::LinkId, lxst_telephony::IdentityHash, core::option::Option<lxst_core::profile::Profile>) -> core::result::Result<(), lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRuntimeCore::switch_active_profile(&mut self, lxst_core::profile::Profile) -> core::result::Result<alloc::vec::Vec<lxst_telephony::TelephonyCommand>, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyRuntimeCore::with_access_policy(lxst_telephony::CallerAccessPolicy) -> Self
+pub struct lxst_telephony::TelephonyRuntimeSnapshot
+pub lxst_telephony::TelephonyRuntimeSnapshot::active_call: core::option::Option<lxst_telephony::ActiveCallSnapshot>
+pub lxst_telephony::TelephonyRuntimeSnapshot::external_busy: bool
+pub lxst_telephony::TelephonyRuntimeSnapshot::pending_link_count: usize
+pub struct lxst_telephony::TelephonyService
+impl lxst_telephony::TelephonyService
+pub fn lxst_telephony::TelephonyService::new(lxst_telephony::TelephonyRnsEndpoint, lxst_telephony::TelephonyRuntimeCore, tokio::sync::mpsc::bounded::Receiver<lxst_telephony::TelephonyControl>, tokio::sync::mpsc::bounded::Sender<lxst_telephony::TelephonyServiceEvent>) -> Self
+pub fn lxst_telephony::TelephonyService::registered(tokio::sync::mpsc::bounded::Sender<rns_transport::messages::TransportMessage>, &rns_identity::identity::Identity) -> core::result::Result<lxst_telephony::TelephonyServiceParts, lxst_telephony::Error>
+pub fn lxst_telephony::TelephonyService::registered_with_config(tokio::sync::mpsc::bounded::Sender<rns_transport::messages::TransportMessage>, &rns_identity::identity::Identity, lxst_telephony::TelephonyServiceConfig, lxst_telephony::TelephonyServiceChannelConfig) -> core::result::Result<lxst_telephony::TelephonyServiceParts, lxst_telephony::Error>
+pub async fn lxst_telephony::TelephonyService::run(self)
+pub fn lxst_telephony::TelephonyService::with_config(lxst_telephony::TelephonyRnsEndpoint, lxst_telephony::TelephonyRuntimeCore, tokio::sync::mpsc::bounded::Receiver<lxst_telephony::TelephonyControl>, tokio::sync::mpsc::bounded::Sender<lxst_telephony::TelephonyServiceEvent>, lxst_telephony::TelephonyServiceConfig) -> Self
+pub struct lxst_telephony::TelephonyServiceChannelConfig
+pub lxst_telephony::TelephonyServiceChannelConfig::control_capacity: usize
+pub lxst_telephony::TelephonyServiceChannelConfig::event_capacity: usize
+impl core::default::Default for lxst_telephony::TelephonyServiceChannelConfig
+pub fn lxst_telephony::TelephonyServiceChannelConfig::default() -> Self
+pub struct lxst_telephony::TelephonyServiceConfig
+pub lxst_telephony::TelephonyServiceConfig::announce_interval: core::option::Option<core::time::Duration>
+pub lxst_telephony::TelephonyServiceConfig::announce_on_start: bool
+pub lxst_telephony::TelephonyServiceConfig::answer_retry_interval: core::option::Option<core::time::Duration>
+pub lxst_telephony::TelephonyServiceConfig::answer_timeout: core::option::Option<core::time::Duration>
+pub lxst_telephony::TelephonyServiceConfig::incoming_ring_timeout: core::option::Option<core::time::Duration>
+pub lxst_telephony::TelephonyServiceConfig::media_frames_per_tick: usize
+pub lxst_telephony::TelephonyServiceConfig::outgoing_call_timeout: core::option::Option<core::time::Duration>
+pub lxst_telephony::TelephonyServiceConfig::poll_interval: core::time::Duration
+pub lxst_telephony::TelephonyServiceConfig::startup_announce_retries: u8
+pub lxst_telephony::TelephonyServiceConfig::startup_announce_retry_interval: core::option::Option<core::time::Duration>
+impl core::default::Default for lxst_telephony::TelephonyServiceConfig
+pub fn lxst_telephony::TelephonyServiceConfig::default() -> Self
+pub struct lxst_telephony::TelephonyServiceParts
+pub lxst_telephony::TelephonyServiceParts::control_tx: tokio::sync::mpsc::bounded::Sender<lxst_telephony::TelephonyControl>
+pub lxst_telephony::TelephonyServiceParts::event_rx: tokio::sync::mpsc::bounded::Receiver<lxst_telephony::TelephonyServiceEvent>
+pub lxst_telephony::TelephonyServiceParts::service: lxst_telephony::TelephonyService
+pub struct lxst_telephony::TelephonyStep
+pub lxst_telephony::TelephonyStep::commands: alloc::vec::Vec<lxst_telephony::TelephonyCommand>
+pub lxst_telephony::TelephonyStep::inbound: core::option::Option<lxst_rns::InboundLxstPacket>
+impl lxst_telephony::TelephonyStep
+pub fn lxst_telephony::TelephonyStep::commands(alloc::vec::Vec<lxst_telephony::TelephonyCommand>) -> Self
+pub const lxst_telephony::TELEPHONY_ANNOUNCE_INTERVAL: core::time::Duration
+pub const lxst_telephony::TELEPHONY_STARTUP_ANNOUNCE_RETRIES: u8
+pub const lxst_telephony::TELEPHONY_STARTUP_ANNOUNCE_RETRY_INTERVAL: core::time::Duration
+pub fn lxst_telephony::execute_command_with_link(&tokio::sync::mpsc::bounded::Sender<rns_transport::messages::TransportMessage>, &[u8; 64], &rns_identity::identity::Identity, &mut rns_link::link::Link, &lxst_telephony::TelephonyCommand) -> core::result::Result<lxst_telephony::TelephonyCommandEffect, lxst_telephony::Error>
+pub async fn lxst_telephony::request_answer(&tokio::sync::mpsc::bounded::Sender<lxst_telephony::TelephonyControl>, lxst_telephony::LinkId) -> core::result::Result<lxst_telephony::ActiveCallSnapshot, lxst_telephony::Error>
+pub fn lxst_telephony::signalling_packet(lxst_core::wire::Signal) -> lxst_core::wire::LxstPacket
+pub fn lxst_telephony::signalling_packets_from_commands(&[lxst_telephony::TelephonyCommand]) -> alloc::vec::Vec<(lxst_telephony::LinkId, lxst_core::wire::LxstPacket)>
+pub fn lxst_telephony::telephony_destination_hash(&lxst_telephony::IdentityHash) -> [u8; 16]
+pub fn lxst_telephony::telephony_inbound_destination(&rns_identity::identity::Identity) -> core::result::Result<rns_identity::destination::Destination, lxst_telephony::Error>
+pub type lxst_telephony::IdentityHash = [u8; 16]
+pub type lxst_telephony::LinkId = [u8; 16]

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Classified all three pre-1.0 packages as experimental and added pinned,
+  CI-enforced public API snapshots without changing visibility or signatures.
 - Replace the locally modified Opus 0.1.19 snapshot with exact upstream
   `opus-rs` 0.1.29 using heap-backed codec state, raise the unified stack MSRV
   to Rust 1.87, retain Android ARMv7 support, and explicitly exclude Android

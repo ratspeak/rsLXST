@@ -1,0 +1,54 @@
+pub mod lxst_rns
+pub enum lxst_rns::Error
+pub lxst_rns::Error::LinkEncrypt(alloc::string::String)
+pub lxst_rns::Error::LinkNotActive(rns_link::link::LinkState)
+pub lxst_rns::Error::Lxst(lxst_core::wire::Error)
+pub lxst_rns::Error::Opus(lxst_core::opus::OpusCodecError)
+pub lxst_rns::Error::PayloadExceedsMdu
+pub lxst_rns::Error::PayloadExceedsMdu::mdu: usize
+pub lxst_rns::Error::PayloadExceedsMdu::payload_len: usize
+pub lxst_rns::Error::Stream(lxst_core::stream::StreamError)
+pub struct lxst_rns::InboundLxstPacket
+pub lxst_rns::InboundLxstPacket::frame_events: alloc::vec::Vec<lxst_core::stream::FrameStreamEvent>
+pub lxst_rns::InboundLxstPacket::link_id: [u8; 16]
+pub lxst_rns::InboundLxstPacket::packet: lxst_core::wire::LxstPacket
+pub struct lxst_rns::LxstLinkIngress
+impl lxst_rns::LxstLinkIngress
+pub fn lxst_rns::LxstLinkIngress::accept_plaintext(&mut self, [u8; 16], &[u8]) -> core::result::Result<lxst_rns::InboundLxstPacket, lxst_rns::Error>
+pub const fn lxst_rns::LxstLinkIngress::current_codec(&self) -> core::option::Option<lxst_core::wire::CodecKind>
+pub fn lxst_rns::LxstLinkIngress::new() -> Self
+pub struct lxst_rns::LxstMediaEgress
+impl lxst_rns::LxstMediaEgress
+pub const lxst_rns::LxstMediaEgress::PYTHON_COMPATIBLE: Self
+pub fn lxst_rns::LxstMediaEgress::new(usize) -> core::result::Result<Self, lxst_rns::Error>
+pub fn lxst_rns::LxstMediaEgress::pack_frames(self, &rns_link::link::Link, impl core::iter::traits::collect::IntoIterator<Item = lxst_core::wire::Frame>) -> core::result::Result<alloc::vec::Vec<lxst_rns::PackedLinkPacket>, lxst_rns::Error>
+pub fn lxst_rns::LxstMediaEgress::pack_raw_frames(self, &rns_link::link::Link, lxst_core::wire::RawBitDepth, impl core::iter::traits::collect::IntoIterator<Item = lxst_core::raw::RawAudioFrame>) -> core::result::Result<alloc::vec::Vec<lxst_rns::PackedLinkPacket>, lxst_rns::Error>
+pub const fn lxst_rns::LxstMediaEgress::packetizer(&self) -> lxst_core::stream::FramePacketizer
+pub struct lxst_rns::LxstMediaIngress
+impl lxst_rns::LxstMediaIngress
+pub fn lxst_rns::LxstMediaIngress::accept_plaintext(&mut self, [u8; 16], &[u8]) -> core::result::Result<lxst_rns::MediaIngressResult, lxst_rns::Error>
+pub const fn lxst_rns::LxstMediaIngress::current_codec(&self) -> core::option::Option<lxst_core::wire::CodecKind>
+pub fn lxst_rns::LxstMediaIngress::jitter_len(&self) -> usize
+pub const fn lxst_rns::LxstMediaIngress::jitter_stats(&self) -> lxst_core::stream::JitterStats
+pub fn lxst_rns::LxstMediaIngress::new(usize, lxst_core::stream::DropPolicy) -> core::result::Result<Self, lxst_rns::Error>
+pub fn lxst_rns::LxstMediaIngress::pop_frame(&mut self) -> core::option::Option<lxst_core::wire::Frame>
+pub fn lxst_rns::LxstMediaIngress::pop_opus_frame(&mut self, &mut lxst_core::opus::OpusDecoderState) -> core::result::Result<core::option::Option<lxst_core::raw::RawAudioFrame>, lxst_rns::Error>
+pub fn lxst_rns::LxstMediaIngress::pop_raw_frame(&mut self) -> core::result::Result<core::option::Option<lxst_core::raw::RawAudioFrame>, lxst_rns::Error>
+pub struct lxst_rns::MediaIngressResult
+pub lxst_rns::MediaIngressResult::inbound: lxst_rns::InboundLxstPacket
+pub lxst_rns::MediaIngressResult::jitter_pushes: alloc::vec::Vec<lxst_core::stream::JitterPush<lxst_core::wire::Frame>>
+pub struct lxst_rns::PackedLinkPacket
+pub lxst_rns::PackedLinkPacket::destination_hash: [u8; 16]
+pub lxst_rns::PackedLinkPacket::packet_hash: [u8; 32]
+pub lxst_rns::PackedLinkPacket::raw: bytes::bytes::Bytes
+pub struct lxst_rns::PreparedLinkEndpointSend
+pub lxst_rns::PreparedLinkEndpointSend::message: rns_transport::messages::TransportMessage
+pub lxst_rns::PreparedLinkEndpointSend::packet: lxst_rns::PackedLinkPacket
+pub lxst_rns::PreparedLinkEndpointSend::result_rx: tokio::sync::oneshot::Receiver<rns_transport::messages::LinkEndpointSendResult>
+pub fn lxst_rns::pack_link_payload(&rns_link::link::Link, &[u8]) -> core::result::Result<lxst_rns::PackedLinkPacket, lxst_rns::Error>
+pub fn lxst_rns::pack_lxst_link_packet(&rns_link::link::Link, &lxst_core::wire::LxstPacket) -> core::result::Result<lxst_rns::PackedLinkPacket, lxst_rns::Error>
+pub fn lxst_rns::prepare_link_payload_send(&rns_link::link::Link, rns_transport::messages::LinkEndpointRole, &[u8]) -> core::result::Result<lxst_rns::PreparedLinkEndpointSend, lxst_rns::Error>
+pub fn lxst_rns::prepare_lxst_link_packet_send(&rns_link::link::Link, rns_transport::messages::LinkEndpointRole, &lxst_core::wire::LxstPacket) -> core::result::Result<lxst_rns::PreparedLinkEndpointSend, lxst_rns::Error>
+pub fn lxst_rns::prepare_packed_link_endpoint_best_effort_send(lxst_rns::PackedLinkPacket, rns_transport::messages::LinkEndpointRole) -> lxst_rns::PreparedLinkEndpointSend
+pub fn lxst_rns::prepare_packed_link_endpoint_final_send(lxst_rns::PackedLinkPacket, rns_transport::messages::LinkEndpointRole) -> lxst_rns::PreparedLinkEndpointSend
+pub fn lxst_rns::prepare_packed_link_endpoint_send(lxst_rns::PackedLinkPacket, rns_transport::messages::LinkEndpointRole) -> lxst_rns::PreparedLinkEndpointSend

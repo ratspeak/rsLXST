@@ -11,9 +11,37 @@ permissions:
 
 env:
   RSLXST_RSRETICULUM_VERSION: 1.1.0
-  RSLXST_RSRETICULUM_COMMIT: 47dbbf1febc0a9d3259f179a0512d9b56bb2320d
+  RSLXST_RSRETICULUM_COMMIT: c9b210a52b139ac9754b46c5c2639c4113e7ae53
 
 jobs:
+  api-compat:
+    name: Public API baseline
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          path: rsLXST
+          fetch-depth: 0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: ${{ github.repository_owner }}/rsReticulum
+          ref: ${{ env.RSLXST_RSRETICULUM_COMMIT }}
+          path: rsReticulum
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: nightly-2026-08-01
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: rsLXST -> target
+          cache-bin: true
+      - name: Install API snapshot tool
+        run: cargo install cargo-public-api --version 0.52.0 --locked
+      - name: Check reviewed public API baseline
+        run: python3 tools/check-api-baseline.py
+        working-directory: rsLXST
+
   lint:
     name: Lint and Docs
     runs-on: ubuntu-latest
