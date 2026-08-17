@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_PACKAGES = {"lxst-core", "lxst-rns", "lxst-telephony", "opus-rs"}
 EXPECTED_MSRV = "1.85"
 EXPECTED_RETICULUM_VERSION = "1.1.0"
-EXPECTED_RETICULUM_COMMIT = "ccf2f11419c3824bfcceda7abf777772de783c60"
+EXPECTED_RETICULUM_COMMIT = "092cf5ac30112fa5d7e31bb82761dbea660b4322"
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 
 
