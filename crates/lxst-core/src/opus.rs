@@ -448,7 +448,7 @@ fn inspect_opus_packet(packet: &[u8]) -> Result<InspectedOpusPacket<'_>, OpusCod
             "packet duration exceeds 120 milliseconds",
         ));
     }
-    if duration_samples_48k == 0 || duration_samples_48k % 120 != 0 {
+    if duration_samples_48k == 0 || !duration_samples_48k.is_multiple_of(120) {
         return Err(OpusCodecError::UnsupportedPacketDuration {
             samples_48k: duration_samples_48k,
         });
@@ -486,7 +486,7 @@ fn parse_opus_packet_frames(packet: &[u8]) -> Result<Vec<&[u8]>, OpusCodecError>
     match toc & 0x03 {
         0 => Ok(vec![body]),
         1 => {
-            if body.len() % 2 != 0 {
+            if !body.len().is_multiple_of(2) {
                 return Err(OpusCodecError::MalformedPacket(
                     "code 1 CBR payload has odd length",
                 ));
@@ -558,7 +558,7 @@ fn parse_code3_packet_frames(packet: &[u8]) -> Result<Vec<&[u8]>, OpusCodecError
 
     if count_byte & 0x80 == 0 {
         let payload = &packet[cursor..payload_end];
-        if payload.len() % frame_count != 0 {
+        if !payload.len().is_multiple_of(frame_count) {
             return Err(OpusCodecError::MalformedPacket(
                 "code 3 CBR payload is not evenly divisible",
             ));
@@ -619,7 +619,7 @@ impl PacketLayout {
         let subframe_sample_frames = (sample_rate_hz as usize) / 50;
         if sample_frames != 0
             && subframe_sample_frames != 0
-            && sample_frames % subframe_sample_frames == 0
+            && sample_frames.is_multiple_of(subframe_sample_frames)
             && supports_direct_frame(sample_rate_hz, subframe_sample_frames)
         {
             return Ok(Self {
@@ -666,7 +666,7 @@ fn scale_sample_frames(
             sample_frames,
         })?;
     let denominator = source_sample_rate as usize;
-    if numerator % denominator != 0 {
+    if !numerator.is_multiple_of(denominator) {
         return Err(OpusCodecError::UnsupportedFrameDuration {
             sample_rate_hz: encode_sample_rate,
             sample_frames,
@@ -676,7 +676,7 @@ fn scale_sample_frames(
 }
 
 fn supports_direct_frame(sample_rate_hz: u32, sample_frames: usize) -> bool {
-    sample_frames != 0 && (sample_rate_hz as usize) % sample_frames == 0
+    sample_frames != 0 && (sample_rate_hz as usize).is_multiple_of(sample_frames)
 }
 
 fn resample_interleaved_linear(
@@ -816,7 +816,7 @@ fn parse_code3_subframe_payloads(
         Ok(payloads)
     } else {
         let compressed = &packet[cursor..payload_end];
-        if compressed.len() % frame_count != 0 {
+        if !compressed.len().is_multiple_of(frame_count) {
             return Err(OpusCodecError::MalformedPacket(
                 "CBR code 3 payload is not evenly divisible",
             ));

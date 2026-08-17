@@ -58,7 +58,7 @@ impl RawAudioFrame {
 
 fn validate_sample_count(channels: u8, samples: usize) -> Result<(), Error> {
     RawFrameHeader::new(channels, RawBitDepth::Float16)?;
-    if samples % usize::from(channels) != 0 {
+    if !samples.is_multiple_of(usize::from(channels)) {
         Err(Error::InvalidRawSampleCount { samples, channels })
     } else {
         Ok(())
@@ -67,7 +67,7 @@ fn validate_sample_count(channels: u8, samples: usize) -> Result<(), Error> {
 
 fn decode_samples(bytes: &[u8], bit_depth: RawBitDepth) -> Result<Vec<f32>, Error> {
     let bytes_per_sample = bit_depth.bytes_per_sample();
-    if bytes.len() % bytes_per_sample != 0 {
+    if !bytes.len().is_multiple_of(bytes_per_sample) {
         return Err(Error::InvalidRawSampleBytes { bytes_per_sample });
     }
 
