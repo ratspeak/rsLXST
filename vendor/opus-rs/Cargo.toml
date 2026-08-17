@@ -7,5 +7,7 @@ description = "pure Rust implementation of Opus codec"
 readme = "README.md"
 license = "BSD-3-Clause"
 repository = "https://github.com/restsend/opus-rs"
+rust-version = "1.85"
+publish = false
 
 [dependencies]

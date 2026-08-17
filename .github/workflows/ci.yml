@@ -31,8 +31,9 @@ jobs:
         with:
           repository: markqvist/Reticulum
           path: upstream/Reticulum
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
+          toolchain: stable
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
@@ -41,6 +42,9 @@ jobs:
       - name: Install Linux system deps
         run: sudo apt-get update && sudo apt-get install -y libudev-dev libdbus-1-dev pkg-config libopus0 libogg0
       - run: cargo fmt --all -- --check
+        working-directory: rsLXST
+      - name: Check source-release contract
+        run: python3 tools/check-source-release.py
         working-directory: rsLXST
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
         working-directory: rsLXST
@@ -74,7 +78,9 @@ jobs:
         with:
           repository: markqvist/Reticulum
           path: upstream/Reticulum
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: stable
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -114,8 +120,9 @@ jobs:
         with:
           repository: markqvist/Reticulum
           path: upstream/Reticulum
-      - uses: dtolnay/rust-toolchain@1.85.0
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
+          toolchain: 1.85.0
           components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
@@ -156,7 +163,7 @@ jobs:
           repository: ${{ github.repository_owner }}/rsReticulum
           ref: main
           path: rsReticulum
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
           toolchain: ${{ matrix.toolchain }}
           targets: ${{ matrix.target }}

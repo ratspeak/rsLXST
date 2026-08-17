@@ -87,7 +87,7 @@ Build the workspace:
 
 ```bash
 cd rsLXST
-cargo build --release
+cargo build --release --locked
 ```
 
 ### Linux / Raspberry Pi
@@ -117,7 +117,7 @@ Build the workspace:
 
 ```bash
 cd rsLXST
-cargo build --release
+cargo build --release --locked
 ```
 
 ### Windows
@@ -129,7 +129,7 @@ Build from PowerShell:
 
 ```powershell
 cd rsLXST
-cargo build --release
+cargo build --release --locked
 ```
 
 ## Test It

@@ -11,6 +11,7 @@ version = "0.1.2"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 rust-version = "1.85"
+publish = false
 
 [workspace.dependencies]
 rmpv = "1"
