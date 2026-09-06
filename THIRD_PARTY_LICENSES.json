@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "scope": "All registry third-party normal/build dependencies reachable from rsLXST workspace members across declared targets; dev-only and first-party path packages are excluded.",
-  "cargoLockSha256": "4aba9010ca26d3e4d24a3743e3bef5dc206f6e5ef7d0c7e940285dd296509f78",
+  "cargoLockSha256": "cd32603417b8ff48eb336bd9df8b2bd06e2709dec80226c906f9f52391bb0efc",
   "packages": [
     {
       "name": "aes",
