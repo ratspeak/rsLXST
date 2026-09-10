@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Adopt rsReticulum 1.3 with a patch-line (`~1.3.0`) requirement and an exact
+  reviewed source pin; codec dependencies and telephony APIs are unchanged.
+
 ## 0.2.0 - 2026-08-17
 
 - Document the existing registered `TelephonyService` seam as the canonical
