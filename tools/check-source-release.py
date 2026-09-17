@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_PACKAGES = {"lxst-core", "lxst-rns", "lxst-telephony"}
 EXPECTED_MSRV = "1.87"
 EXPECTED_RETICULUM_VERSION = "1.3.0"
-EXPECTED_RETICULUM_COMMIT = "6abe1f3d4a3c53a1a838d726ac168b22c9463b27"
+EXPECTED_RETICULUM_COMMIT = "306eaa8a18200fb26f850917d02e9ee1433d76ab"
 EXPECTED_OPUS_DEPENDENCY = (
     'opus-rs = { version = "=0.1.29", default-features = false, '
     'features = ["heap"] }'
