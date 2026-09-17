@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "scope": "All registry third-party normal/build dependencies reachable from rsLXST workspace members across declared targets; dev-only and first-party path packages are excluded.",
-  "cargoLockSha256": "ac5c71919a076e2bae30b16155ad98447ce66e91b254a638010840c44a9380c8",
+  "cargoLockSha256": "a852bb18196793d321a908544d9b1beaafe7947073f7477ae6b6c9e2823c3218",
   "packages": [
     {
       "name": "aes",
@@ -327,7 +327,7 @@
     },
     {
       "name": "mio",
-      "version": "1.2.0",
+      "version": "1.2.3",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/mio",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
