@@ -2,8 +2,10 @@
 
 ## Unreleased
 
-- Adopt rsReticulum 1.3 with a patch-line (`~1.3.0`) requirement and an exact
-  reviewed source pin; codec dependencies and telephony APIs are unchanged.
+### Build and compatibility
+
+- Restricted rsReticulum compatibility to the 1.3 patch line and updated the pinned source. Codec dependencies and telephony APIs are unchanged.
+
 
 ## 0.2.0 - 2026-08-17
 
