@@ -83,3 +83,24 @@ pub mod embedded {
         lxst_embedded::wire::Packet::decode(bytes)
     }
 }
+
+pub mod live_audio {
+    use lxst_core::{Profile, RawAudioFrame};
+    use lxst_telephony::{AudioTransmitGate, LinkId, TelephonyControl};
+    use std::sync::Arc;
+    use tokio::sync::mpsc;
+    pub fn stream(
+        link_id: LinkId,
+        profile: Profile,
+        frames: mpsc::Receiver<RawAudioFrame>,
+    ) -> (Arc<AudioTransmitGate>, TelephonyControl) {
+        let gate = Arc::new(AudioTransmitGate::new());
+        let command = TelephonyControl::StartAudioStream {
+            link_id,
+            profile,
+            frames,
+            gate: Some(gate.clone()),
+        };
+        (gate, command)
+    }
+}

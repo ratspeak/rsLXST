@@ -3941,3 +3941,130 @@ fn outgoing_teardown_is_atomic_final_endpoint_send() {
     ));
     assert!(transport_rx.try_recv().is_err());
 }
+
+#[tokio::test]
+async fn native_codec2_duplex_and_input_lease_use_the_real_link() {
+    use std::sync::Arc;
+    for profile in [Profile::BandwidthVeryLow, Profile::BandwidthLow] {
+        let (mut service, remote, link_id, incoming, mut events, mut transport) =
+            established_outgoing_service_with_transport(profile, 0x95, 32);
+        let gate = Arc::new(AudioTransmitGate::new());
+        let (source, frames) = mpsc::channel(3);
+        assert!(
+            service
+                .handle_control(TelephonyControl::StartAudioStream {
+                    link_id,
+                    profile,
+                    frames,
+                    gate: Some(gate.clone())
+                })
+                .await
+        );
+        assert!(matches!(
+            events.recv().await.unwrap(),
+            TelephonyServiceEvent::AudioTransmitStreamStarted { .. }
+        ));
+        source
+            .try_send(synthetic_frame_for_profile(profile))
+            .unwrap();
+        assert!(service.pump_opus_stream().await);
+        assert!(transport.try_recv().is_err());
+        assert!(gate.update(1, true));
+        // Opening a new lease drops any samples queued before that edge.
+        source
+            .try_send(synthetic_frame_for_profile(profile))
+            .unwrap();
+        assert!(service.pump_opus_stream().await);
+        assert!(transport.try_recv().is_err());
+        source
+            .try_send(synthetic_frame_for_profile(profile))
+            .unwrap();
+        assert!(service.pump_opus_stream().await);
+        assert!(matches!(
+            events.recv().await.unwrap(),
+            TelephonyServiceEvent::MediaSent { .. }
+        ));
+        let (_, encrypted) = take_outbound(&mut transport);
+        let packet = LxstPacket::decode(&remote.decrypt(&encrypted).unwrap()).unwrap();
+        assert_eq!(packet.frames.len(), 1);
+        assert_eq!(packet.frames[0].codec, CodecKind::Codec2);
+        assert_eq!(
+            packet.frames[0].payload.len(),
+            if profile == Profile::BandwidthVeryLow {
+                65
+            } else {
+                81
+            }
+        );
+        let mut decoder = media::AudioDecoder::new(profile).unwrap();
+        assert_eq!(
+            decoder
+                .decode_frame(&packet.frames[0])
+                .unwrap()
+                .sample_frames(),
+            profile.sample_frames_per_packet()
+        );
+        source
+            .try_send(synthetic_frame_for_profile(profile))
+            .unwrap();
+        assert!(gate.update(2, false));
+        assert!(!gate.update(1, true));
+        assert!(service.pump_opus_stream().await);
+        assert!(transport.try_recv().is_err());
+        let (sink, mut output) = mpsc::channel(3);
+        service.start_opus_receive_stream(sink).await.unwrap();
+        assert!(matches!(
+            events.recv().await.unwrap(),
+            TelephonyServiceEvent::AudioReceiveStreamStarted { .. }
+        ));
+        let mut encoder = media::AudioEncoder::new(profile).unwrap();
+        let frame = encoder
+            .encode_frame(&synthetic_frame_for_profile(profile))
+            .unwrap();
+        let encrypted = remote
+            .encrypt(&LxstPacket::frame(frame).encode().unwrap())
+            .unwrap();
+        incoming
+            .try_send(DestinationEvent::InboundPacket {
+                raw: Bytes::from(link_data_packet(
+                    link_id,
+                    rns_wire::context::PacketContext::None,
+                    &encrypted,
+                )),
+                interface_id: 1,
+                metrics: PacketMetrics::default(),
+            })
+            .unwrap();
+        assert!(service.drive_ready().await);
+        let decoded = output.try_recv().unwrap();
+        assert_eq!(decoded.sample_frames(), profile.sample_frames_per_packet());
+        assert!(
+            decoded
+                .samples
+                .iter()
+                .all(|v| v.is_finite() && (-1.0..=1.0).contains(v))
+        );
+        gate.close();
+        assert!(!gate.update(3, true));
+    }
+}
+
+#[test]
+fn native_codec2_rejects_bad_shapes_and_mode_without_poisoning_valid_media() {
+    for profile in [Profile::BandwidthVeryLow, Profile::BandwidthLow] {
+        let mut encoder = media::AudioEncoder::new(profile).unwrap();
+        let mut invalid = synthetic_frame_for_profile(profile);
+        invalid.samples[0] = f32::NAN;
+        assert!(encoder.encode_frame(&invalid).is_err());
+        let mut packet = encoder
+            .encode_frame(&synthetic_frame_for_profile(profile))
+            .unwrap();
+        let mut decoder = media::AudioDecoder::new(profile).unwrap();
+        let mode = packet.payload[0];
+        packet.payload[0] ^= 1;
+        assert!(decoder.decode_frame(&packet).is_err());
+        packet.payload[0] = mode;
+        assert!(decoder.decode_frame(&packet).is_ok());
+    }
+    assert!(media::AudioEncoder::new(Profile::BandwidthUltraLow).is_err());
+}

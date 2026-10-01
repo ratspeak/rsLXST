@@ -278,6 +278,17 @@
           "sourceKind": "registry"
         },
         {
+          "name": "lxst-codec2",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^0.2.0",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "path"
+        },
+        {
           "name": "lxst-core",
           "rename": null,
           "kind": null,

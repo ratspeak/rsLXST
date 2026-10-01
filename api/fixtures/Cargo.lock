@@ -440,6 +440,7 @@ name = "lxst-telephony"
 version = "0.2.0"
 dependencies = [
  "bytes",
+ "lxst-codec2",
  "lxst-core",
  "lxst-rns",
  "rns-crypto",

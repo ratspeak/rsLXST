@@ -602,6 +602,7 @@ version = "0.2.0"
 dependencies = [
  "bytes",
  "hex",
+ "lxst-codec2",
  "lxst-core",
  "lxst-rns",
  "rns-crypto",

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "scope": "Adapted Codec2 and all registry third-party normal/build dependencies reachable from rsLXST workspace members across declared targets; dev-only and first-party path packages are excluded.",
-  "cargoLockSha256": "d89f1983abe87e964464193fdda5503b4eade5283405291a958dec77559e66cb",
+  "cargoLockSha256": "f0a803031d628d68904e4f1ced49378c9bc494ca3efdad111cac6b9bc1aef784",
   "packages": [
     {
       "name": "aes",

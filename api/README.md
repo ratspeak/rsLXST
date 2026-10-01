@@ -57,3 +57,19 @@ cargo check --manifest-path api/fixtures/Cargo.toml --locked
 Snapshot updates require a clean source commit and an explicit review recorded
 in `api/stability.json`. Additions, removals, deprecations, platform impact, and
 version consequences must be reviewed before accepting new evidence.
+
+## Live audio and constrained peers
+
+`SendAudioFrames`, `StartAudioStream` and the corresponding receive/stop controls
+accept negotiated Opus and native Codec2 1600/3200 profiles. Original Opus
+controls remain available. Codec2 media emits `Audio*` service events; the
+existing Opus event stream is unchanged. 700C is not implemented.
+
+`StartAudioStream` binds the exact active Link and optionally shares an
+`AudioTransmitGate` with the local input owner. Renew one press serial while
+held, use a newer serial on release, and close the gate when its owner retires.
+Expired, cancelled or superseded input cannot admit queued PCM; new edges clear
+pending PCM. The gate times out after 750 ms without renewal and after a ten
+second burst. This is local PTT policy, not a remote floor-control extension.
+Applications must still bind UI events to the current call and stop on lost
+focus, suspension and release. No memo/container format is changed.

@@ -10,9 +10,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
 use lxst_core::{
-    CallRole, CodecKind, Frame, FrameStreamEvent, LxstPacket, OpusCodecError, OpusDecoderState,
-    OpusEncoderState, Profile, RawAudioFrame, RawBitDepth, Signal, SignallingStatus,
-    TELEPHONY_DESTINATION_NAME, TelephonyAction, TelephonyCall,
+    CallRole, CodecKind, Frame, FrameStreamEvent, LxstPacket, OpusCodecError, Profile,
+    RawAudioFrame, RawBitDepth, Signal, SignallingStatus, TELEPHONY_DESTINATION_NAME,
+    TelephonyAction, TelephonyCall,
 };
 use lxst_rns::{
     InboundLxstPacket, LxstLinkIngress, LxstMediaEgress, PreparedLinkEndpointSend,
@@ -40,6 +40,11 @@ use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Duration, Instant, timeout};
 
+mod capture_gate;
+mod media;
+pub use capture_gate::AudioTransmitGate;
+use media::{AudioDecoder, AudioEncoder};
+
 pub type LinkId = [u8; 16];
 pub type IdentityHash = [u8; 16];
 
@@ -55,6 +60,8 @@ pub enum Error {
     Rns(#[from] lxst_rns::Error),
     #[error("LXST Opus codec error: {0}")]
     Opus(#[from] OpusCodecError),
+    #[error("LXST audio codec error: {0}")]
+    Audio(String),
     #[error("unknown LXST link")]
     UnknownLink,
     #[error("line is busy")]
@@ -751,6 +758,22 @@ pub enum TelephonyControl {
         bit_depth: RawBitDepth,
         frames: Vec<RawAudioFrame>,
     },
+    /// Encode negotiated Opus or native Codec2 1600/3200 PCM.
+    SendAudioFrames {
+        profile: Profile,
+        frames: Vec<RawAudioFrame>,
+    },
+    StartAudioStream {
+        link_id: LinkId,
+        gate: Option<std::sync::Arc<AudioTransmitGate>>,
+        profile: Profile,
+        frames: mpsc::Receiver<RawAudioFrame>,
+    },
+    StopAudioStream,
+    StartAudioReceiveStream {
+        frames: mpsc::Sender<RawAudioFrame>,
+    },
+    StopAudioReceiveStream,
     SendOpusFrames {
         profile: Profile,
         frames: Vec<RawAudioFrame>,
@@ -867,6 +890,35 @@ pub enum TelephonyServiceEvent {
         frames: usize,
         dropped: usize,
     },
+    AudioFramesReceived {
+        link_id: LinkId,
+        profile: Profile,
+        frames: Vec<RawAudioFrame>,
+    },
+    AudioTransmitStreamStarted {
+        link_id: LinkId,
+        profile: Profile,
+    },
+    AudioTransmitStreamStopped {
+        link_id: LinkId,
+        profile: Profile,
+        reason: OpusTransmitStreamStopReason,
+    },
+    AudioReceiveStreamStarted {
+        link_id: LinkId,
+        profile: Profile,
+    },
+    AudioReceiveStreamStopped {
+        link_id: LinkId,
+        profile: Profile,
+        reason: OpusReceiveStreamStopReason,
+    },
+    AudioReceiveStreamFrames {
+        link_id: LinkId,
+        profile: Profile,
+        frames: usize,
+        dropped: usize,
+    },
     Snapshot(TelephonyRuntimeSnapshot),
     Drive(TelephonyDriveStep),
     Error {
@@ -975,19 +1027,21 @@ struct TelephonyServiceMedia {
 struct ActiveOpusEncoder {
     link_id: LinkId,
     profile: Profile,
-    encoder: OpusEncoderState,
+    encoder: AudioEncoder,
 }
 
 struct ActiveOpusDecoder {
     link_id: LinkId,
     profile: Profile,
-    decoder: OpusDecoderState,
+    decoder: AudioDecoder,
 }
 
 struct ActiveOpusTransmitStream {
     link_id: LinkId,
     profile: Profile,
     frames_rx: mpsc::Receiver<RawAudioFrame>,
+    gate: Option<std::sync::Arc<AudioTransmitGate>>,
+    gate_serial: u64,
 }
 
 struct ActiveOpusReceiveStream {
@@ -1076,7 +1130,7 @@ impl TelephonyServiceMedia {
         &mut self,
         link_id: LinkId,
         profile: Profile,
-    ) -> Result<&mut OpusEncoderState, OpusCodecError> {
+    ) -> Result<&mut AudioEncoder, Error> {
         let needs_new = self
             .opus_encoder
             .as_ref()
@@ -1087,7 +1141,7 @@ impl TelephonyServiceMedia {
             self.opus_encoder = Some(ActiveOpusEncoder {
                 link_id,
                 profile,
-                encoder: OpusEncoderState::new(profile)?,
+                encoder: AudioEncoder::new(profile)?,
             });
         }
 
@@ -1102,7 +1156,7 @@ impl TelephonyServiceMedia {
         &mut self,
         link_id: LinkId,
         profile: Profile,
-    ) -> Result<&mut OpusDecoderState, OpusCodecError> {
+    ) -> Result<&mut AudioDecoder, Error> {
         let needs_new = self
             .opus_decoder
             .as_ref()
@@ -1113,7 +1167,7 @@ impl TelephonyServiceMedia {
             self.opus_decoder = Some(ActiveOpusDecoder {
                 link_id,
                 profile,
-                decoder: OpusDecoderState::new(profile)?,
+                decoder: AudioDecoder::new(profile)?,
             });
         }
 
@@ -1397,9 +1451,33 @@ impl TelephonyService {
                     Err(err) => emit_service_error(self.event_tx.clone(), err).await,
                 };
             }
-            TelephonyControl::SendOpusFrames { profile, frames } => {
+            TelephonyControl::SendOpusFrames { profile, frames }
+            | TelephonyControl::SendAudioFrames { profile, frames } => {
                 return match self.send_opus_frames(profile, frames).await {
                     Ok(()) => true,
+                    Err(err) => emit_service_error(self.event_tx.clone(), err).await,
+                };
+            }
+            TelephonyControl::StartAudioStream {
+                link_id,
+                profile,
+                frames,
+                gate,
+            } => {
+                if self
+                    .core
+                    .active_call()
+                    .is_none_or(|call| call.link_id != link_id)
+                {
+                    return emit_service_error(self.event_tx.clone(), Error::WrongActiveLink).await;
+                }
+                return match self.start_opus_stream(profile, frames).await {
+                    Ok(()) => {
+                        if let Some(stream) = self.media.opus_transmit_stream.as_mut() {
+                            stream.gate = gate;
+                        }
+                        true
+                    }
                     Err(err) => emit_service_error(self.event_tx.clone(), err).await,
                 };
             }
@@ -1409,18 +1487,19 @@ impl TelephonyService {
                     Err(err) => emit_service_error(self.event_tx.clone(), err).await,
                 };
             }
-            TelephonyControl::StopOpusStream => {
+            TelephonyControl::StopOpusStream | TelephonyControl::StopAudioStream => {
                 return self
                     .stop_opus_stream(OpusTransmitStreamStopReason::Requested)
                     .await;
             }
-            TelephonyControl::StartOpusReceiveStream { frames } => {
+            TelephonyControl::StartOpusReceiveStream { frames }
+            | TelephonyControl::StartAudioReceiveStream { frames } => {
                 return match self.start_opus_receive_stream(frames).await {
                     Ok(()) => true,
                     Err(err) => emit_service_error(self.event_tx.clone(), err).await,
                 };
             }
-            TelephonyControl::StopOpusReceiveStream => {
+            TelephonyControl::StopOpusReceiveStream | TelephonyControl::StopAudioReceiveStream => {
                 return self
                     .stop_opus_receive_stream(OpusReceiveStreamStopReason::Requested)
                     .await;
@@ -1636,6 +1715,8 @@ impl TelephonyService {
             link_id,
             profile,
             frames_rx,
+            gate: None,
+            gate_serial: 0,
         });
 
         if emit_service_event(
@@ -1687,13 +1768,24 @@ impl TelephonyService {
 
     fn drain_opus_stream_frames(&mut self) -> Option<(Profile, Vec<RawAudioFrame>, bool)> {
         let stream = self.media.opus_transmit_stream.as_mut()?;
+        if let Some(gate) = &stream.gate {
+            let serial = gate.serial();
+            if serial != stream.gate_serial {
+                while stream.frames_rx.try_recv().is_ok() {}
+                stream.gate_serial = serial;
+            }
+        }
         let mut frames = Vec::new();
         let mut source_closed = false;
         let max_frames = self.config.media_frames_per_tick.max(1);
 
         for _ in 0..max_frames {
             match stream.frames_rx.try_recv() {
-                Ok(frame) => frames.push(frame),
+                Ok(frame) => {
+                    if stream.gate.as_ref().is_none_or(|gate| gate.allows()) {
+                        frames.push(frame);
+                    }
+                }
                 Err(mpsc::error::TryRecvError::Empty) => break,
                 Err(mpsc::error::TryRecvError::Disconnected) => {
                     source_closed = true;
@@ -1844,6 +1936,12 @@ impl TelephonyService {
         }
 
         let link_id = active.link_id;
+        let gate = self
+            .media
+            .opus_transmit_stream
+            .as_ref()
+            .and_then(|stream| stream.gate.clone());
+        let serial = gate.as_ref().map(|gate| gate.serial());
         let frame_count = frames.len();
         let encoded = {
             let encoder = self.media.opus_encoder_for(link_id, profile)?;
@@ -1852,6 +1950,21 @@ impl TelephonyService {
                 .map(|frame| encoder.encode_frame(frame))
                 .collect::<Result<Vec<_>, _>>()?
         };
+        if self
+            .media
+            .opus_transmit_stream
+            .as_ref()
+            .and_then(|stream| stream.gate.as_ref())
+            .is_some_and(|gate| !gate.allows())
+        {
+            return Ok(());
+        }
+        if gate
+            .as_ref()
+            .is_some_and(|gate| Some(gate.serial()) != serial)
+        {
+            return Ok(());
+        }
         let packet_count = self.endpoint.queue_frames(link_id, encoded)?;
         if emit_service_event(
             self.event_tx.clone(),
@@ -1939,7 +2052,11 @@ impl TelephonyService {
             .frame_events
             .iter()
             .filter_map(|event| match event {
-                FrameStreamEvent::Frame(frame) if frame.codec == CodecKind::Opus => Some(frame),
+                FrameStreamEvent::Frame(frame)
+                    if matches!(frame.codec, CodecKind::Opus | CodecKind::Codec2) =>
+                {
+                    Some(frame)
+                }
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -1952,6 +2069,9 @@ impl TelephonyService {
             return Err(Error::WrongActiveLink);
         }
         let link_id = active.link_id;
+        if active.call.status() != SignallingStatus::Established {
+            return Ok(Vec::new());
+        }
         let profile = active.call.profile().unwrap_or(Profile::DEFAULT);
         let decoded = {
             let decoder = self.media.opus_decoder_for(active.link_id, profile)?;
@@ -2284,6 +2404,65 @@ async fn emit_service_event(
     event_tx: mpsc::Sender<TelephonyServiceEvent>,
     event: TelephonyServiceEvent,
 ) -> bool {
+    let event = match event {
+        TelephonyServiceEvent::OpusFramesReceived {
+            link_id,
+            profile,
+            frames,
+        } if profile.opus_payload_ceiling_bytes().is_none() => {
+            TelephonyServiceEvent::AudioFramesReceived {
+                link_id,
+                profile,
+                frames,
+            }
+        }
+        TelephonyServiceEvent::OpusTransmitStreamStarted { link_id, profile }
+            if profile.opus_payload_ceiling_bytes().is_none() =>
+        {
+            TelephonyServiceEvent::AudioTransmitStreamStarted { link_id, profile }
+        }
+        TelephonyServiceEvent::OpusTransmitStreamStopped {
+            link_id,
+            profile,
+            reason,
+        } if profile.opus_payload_ceiling_bytes().is_none() => {
+            TelephonyServiceEvent::AudioTransmitStreamStopped {
+                link_id,
+                profile,
+                reason,
+            }
+        }
+        TelephonyServiceEvent::OpusReceiveStreamStarted { link_id, profile }
+            if profile.opus_payload_ceiling_bytes().is_none() =>
+        {
+            TelephonyServiceEvent::AudioReceiveStreamStarted { link_id, profile }
+        }
+        TelephonyServiceEvent::OpusReceiveStreamStopped {
+            link_id,
+            profile,
+            reason,
+        } if profile.opus_payload_ceiling_bytes().is_none() => {
+            TelephonyServiceEvent::AudioReceiveStreamStopped {
+                link_id,
+                profile,
+                reason,
+            }
+        }
+        TelephonyServiceEvent::OpusReceiveStreamFrames {
+            link_id,
+            profile,
+            frames,
+            dropped,
+        } if profile.opus_payload_ceiling_bytes().is_none() => {
+            TelephonyServiceEvent::AudioReceiveStreamFrames {
+                link_id,
+                profile,
+                frames,
+                dropped,
+            }
+        }
+        other => other,
+    };
     event_tx.send(event).await.is_ok()
 }
 
