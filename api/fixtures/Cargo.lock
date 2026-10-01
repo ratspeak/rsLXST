@@ -435,6 +435,7 @@ dependencies = [
 name = "lxst-telephony-api-fixture"
 version = "0.0.0"
 dependencies = [
+ "lxst-core",
  "lxst-telephony",
  "rns-identity",
  "rns-transport",

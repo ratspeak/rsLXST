@@ -56,6 +56,13 @@ The experimental release is to cover basic voice calls, with several features st
 Those are expected future work. They should not be implied by the first public
 Opus telephony release.
 
+`lxst-core::Codec2PacketCodec` provides bounded, fixed-profile Codec2 packet
+processing over an application-supplied `Codec2Backend`. It uses caller-owned
+PCM16/output buffers, validates complete packets before calling the backend,
+and requires replacement after a backend error. This is a codec integration
+boundary; a qualified Codec2 implementation and telephony stream integration
+are still required. Its mode header belongs to LXST, not LXMF audio fields.
+
 ## Build It
 
 The current development layout requires `rsReticulum` as a sibling checkout

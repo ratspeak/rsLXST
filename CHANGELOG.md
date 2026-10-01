@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Codec foundations
+
+- Add a fixed-profile Codec2 packet adapter over caller-owned PCM16/output
+  buffers and an application-supplied native backend. Reject malformed lengths,
+  unexpected modes and insufficient capacity before codec processing; stop
+  further processing after a backend failure. Preserve native 700C frame padding.
+  Codec backend selection and live Codec2 telephony remain separate work.
+
 ### Build and compatibility
 
 - Restricted rsReticulum compatibility to the 1.3 patch line and updated the pinned source. Codec dependencies and telephony APIs are unchanged.
