@@ -1,7 +1,67 @@
 use lxst_embedded::{
-    CallRole, EndReason, Event, Profile, ProfileSet, Session, SessionConfig, Signal,
+    CallRole, CallState, EndReason, Event, Profile, ProfileSet, Session, SessionConfig, Signal,
     SignallingStatus as Status, TelephonyAction as Action,
 };
+
+#[test]
+fn crossed_profile_offers_converge_before_media_without_an_echo_loop() {
+    for (preferred, offered) in [
+        (Profile::BandwidthLow, Profile::BandwidthVeryLow),
+        (Profile::BandwidthVeryLow, Profile::BandwidthLow),
+    ] {
+        let mut cfg = config();
+        cfg.preferred = preferred;
+        let mut receiver = Session::new(CallRole::Incoming, cfg, 0).unwrap();
+        let mut caller = CallState::outgoing(Some(offered));
+        receiver.link_established();
+        caller.receive_signal(Status::Available.into());
+        let mut in_flight = Vec::new();
+        // Delay the caller's response until it has received both RINGING and
+        // the receiver preference, reproducing the actual TCP interop race.
+        for event in receiver.peer_verified(1).as_slice() {
+            if let Event::Transition(Action::SendSignal(signal)) = event {
+                for action in caller.receive_signal(*signal).as_slice() {
+                    if let Action::SendSignal(signal) = action {
+                        in_flight.push(*signal);
+                    }
+                }
+            }
+        }
+        assert_eq!(caller.profile(), Some(preferred));
+        assert_eq!(in_flight, vec![Signal::from(offered)]);
+        for signal in in_flight {
+            for event in receiver.receive_signal(signal, 2).as_slice() {
+                if let Event::Transition(Action::SendSignal(signal)) = event {
+                    caller.receive_signal(*signal);
+                }
+            }
+        }
+        assert_eq!(receiver.profile(), Some(offered));
+        assert_eq!(caller.profile(), receiver.profile());
+        assert!(!receiver.media_ready());
+        assert!(
+            receiver
+                .receive_signal(offered.into(), 3)
+                .as_slice()
+                .is_empty()
+        );
+        let answer = receiver.answer(4);
+        receiver.audio_ready(receiver.audio_generation(), true);
+        for event in answer.as_slice() {
+            if let Event::Transition(Action::SendSignal(signal)) = event {
+                for action in caller.receive_signal(*signal).as_slice() {
+                    if let Action::SendSignal(signal) = action {
+                        receiver.receive_signal(*signal, 5);
+                    }
+                }
+            }
+        }
+        assert_eq!(caller.status(), Status::Established);
+        assert_eq!(caller.profile(), receiver.profile());
+        assert!(receiver.media_ready());
+        assert!(!receiver.transmitting());
+    }
+}
 
 fn config() -> SessionConfig {
     SessionConfig {

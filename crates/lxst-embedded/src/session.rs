@@ -225,6 +225,15 @@ impl Session {
                 self.ready = false;
                 self.audio_generation = self.audio_generation.wrapping_add(1);
                 events.push(Event::FlushMedia);
+                // Our incoming preference can cross the caller's offer. Confirm
+                // the adopted profile so the caller does not retain our older
+                // preference while we start using its offer. Only the incoming
+                // side echoes changes; duplicate offers cannot create a loop.
+                if self.call.role() == CallRole::Incoming {
+                    events.push(Event::Transition(TelephonyAction::SendSignal(
+                        profile.into(),
+                    )));
+                }
             }
         }
         if let Signal::Status(status) = signal {
