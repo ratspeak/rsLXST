@@ -8,7 +8,9 @@ there as well. Original author/function notices remain in the adapted sources.
 
 Modified for rsLXST on 2026-10-01: bounded storage and scratch; in-place state
 initialisation; per-instance synthesis RNG; exact libm math on all targets;
-checked public frame shapes; corrected real-FFT input copying. The public API
+checked public frame shapes; corrected real-FFT input copying; shared the
+identical forward FFT plan and removed unreachable mode/rate storage; separated
+phase scratch lifetime from inverse FFT scratch for the MCU stack. The public API
 exposes only native 1600/3200 modes at 8 kHz mono. Other private upstream modes
 are not a supported API. See UPSTREAM.json for immutable original provenance.
 

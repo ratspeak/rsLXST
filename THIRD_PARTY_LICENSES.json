@@ -111,7 +111,7 @@
       "crateChecksum": "3c3c8ba70382a99c0b5ebadf6ad50e7d98fb6eb9bcc4c0e30d422f6321798d99",
       "provenance": "crates/lxst-codec2/UPSTREAM.json",
       "notices": {
-        "crates/lxst-codec2/NOTICE": "d0b296649684d3c365a6afd5737fd7183ad3a7b6fa15057333390600f0f920e2",
+        "crates/lxst-codec2/NOTICE": "33cc10cd398e8e724030091025d885ec10ee16b9d95d707ad5df7fe812c17f84",
         "crates/lxst-codec2/licenses/KISS-FFT-BSD-3-Clause.txt": "49eea0111dfb7038dc18f74034cc517690395ebac8f7768f999133b16e4bf064",
         "crates/lxst-codec2/licenses/LGPL-2.1.txt": "9ebb6f82b7380a62ac74c5f0322c88e6744dedf2ebe1f54d6f088282b39844bf",
         "crates/lxst-codec2/licenses/upstream-Cargo.toml": "939e2818dcb2945f52eceb71b37b512bf1796da53a05e0a69276d5a2e55f9eed",

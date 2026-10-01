@@ -256,8 +256,9 @@ fn fdmdv_16_to_8(out8k: &mut [f32], in16k: &mut [f32], in16koff: usize, n: i32) 
 
 pub fn nlp(
     nlp: &mut NLP,
+    fft_cfg: &codec2_fft_cfg,
     Sn: &[f32],        /* input speech vector                                */
-    mut n: usize,      /* frames shift (no. new samples in Sn[])             */
+    n: usize,          /* frames shift (no. new samples in Sn[])             */
     pitch: &mut f32,   /* estimated pitch period in samples at current Fs    */
     _Sw: &[COMP],      /* Freq domain version of Sn[]                        */
     _W: &[f32],        /* Freq domain window                                 */
@@ -268,7 +269,7 @@ pub fn nlp(
     //    PROFILE_VAR(start, tnotch, filter, peakpick, window, fft, magsq, shiftmem);
     //    assert(nlp_state != NULL);
     //    nlp = (NLP*)nlp_state;
-    let mut m = nlp.m;
+    let m = nlp.m;
 
     /* Square, notch filter at DC, and LP filter vector */
 
@@ -276,39 +277,9 @@ pub fn nlp(
     Fs = 8kHz. The decimating filter introduces about 3ms of delay,
     that shouldn't be a problem as pitch changes slowly. */
 
-    if nlp.Fs == 8000 {
-        /* Square latest input samples */
-
-        for i in m - n..m {
-            nlp.sq[i] = Sn[i] * Sn[i];
-        }
-    } else {
-        //assert(nlp.Fs == 16000);
-
-        /* re-sample at 8 KHz */
-
-        for i in 0..n {
-            nlp.Sn16k[FDMDV_OS_TAPS_16K as usize + i] = Sn[m + i - n];
-        }
-
-        m /= 2;
-        n /= 2;
-
-        let mut Sn8k = Buffer::<f32, PMAX_M>::filled(n, 0.0);
-        fdmdv_16_to_8(
-            &mut Sn8k,
-            &mut nlp.Sn16k,
-            FDMDV_OS_TAPS_16K as usize,
-            n as i32,
-        );
-
-        /* Square latest input samples */
-        let mut j = 0;
-        for i in m - n..m {
-            nlp.sq[i] = Sn8k[j] * Sn8k[j];
-            j += 1;
-        }
-        //        assert(j <= n);
+    // This backend admits 8 kHz only; no 16 kHz resampling owner is retained.
+    for i in m - n..m {
+        nlp.sq[i] = Sn[i] * Sn[i];
     }
     //fprintf(stderr, "n: %d m: %d\n", n, m);
 
@@ -360,7 +331,7 @@ pub fn nlp(
 
     // FIXME: check if this can be converted to a real fft
     // since all imag inputs are 0
-    super::codec2_fft_inplace(&nlp.fft_cfg, &mut Fw);
+    super::codec2_fft_inplace(fft_cfg, &mut Fw);
     //    PROFILE_SAMPLE_AND_LOG(fft, window, "      fft");
 
     for i in 0..PE_FFT_SIZE as usize {

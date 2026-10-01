@@ -1300,6 +1300,8 @@ pub fn lsp_to_lpc(
   window to smoothly interpolate betwen frames.
 
 \*---------------------------------------------------------------------------*/
+// Keep the large inverse-FFT scratch out of the caller's live phase buffer.
+#[inline(never)]
 pub fn synthesise(
     n_samp: usize,
     fftr_inv_cfg: &mut codec2_fftr_cfg,

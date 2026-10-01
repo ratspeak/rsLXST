@@ -217,11 +217,9 @@ mod inner {
         pub w: [f32; PMAX_M / DEC], //  DFT window
         pub sq: [f32; PMAX_M],      //  squared speech samples
         pub mem_x: f32,
-        pub mem_y: f32,               //  memory for notch filter
+        pub mem_y: f32, //  memory for notch filter
         pub mem_fir: [f32; NLP_NTAP], //  decimation FIR filter memory
-        pub fft_cfg: codec2_fft_cfg,  //  kiss FFT config
-        pub Sn16k: Buffer<f32, 128>,  //  Fs=16kHz input speech vector
-                                      //    FILE         *f,
+                        //    FILE         *f,
     }
     impl NLP {
         pub fn initialise(&mut self, c2const: &C2const) {
@@ -232,8 +230,6 @@ mod inner {
                 self.w[i] = 0.5
                     - 0.5 * (2.0 * PI * i as f32 / (self.m as f32 / DEC as f32 - 1.0)).dsp_cos();
             }
-            self.fft_cfg.initialise(PE_FFT_SIZE, 0);
-            self.Sn16k.initialise(0, 0.0);
         }
     }
 
@@ -322,7 +318,7 @@ struct Codec2Internal {
     gray: i32,                     //  non-zero for gray encoding
 
     fftr_inv_cfg: codec2_fftr_cfg, //  inverse FFT config
-    Sn_: Buffer<f32, 320>,         //  [2*n_samp] synthesised output speech
+    Sn_: Buffer<f32, 160>,         //  [2*n_samp] synthesised output speech
     ex_phase: f32,                 //  excitation model phase track
     bg_est: f32,                   //  background noise estimate for post filter
     prev_f0_enc: f32,              //  previous frame's f0    estimate
@@ -603,11 +599,8 @@ fn unpack_natural_or_gray(
 #[repr(u8)]
 pub enum Codec2Mode {
     MODE_3200,
-    MODE_2400,
+
     MODE_1600,
-    MODE_1400,
-    MODE_1300,
-    MODE_1200,
     //MODE_700C,
     //MODE_450,
     //MODE_450PWB,
@@ -637,7 +630,7 @@ impl Codec2 {
         c2.internal.w.initialise(m_pitch, 0.0);
         c2.internal.Pn.initialise(2 * n_samp, 0.0);
         c2.internal.Sn.initialise(m_pitch, 1.0);
-        c2.internal.Sn_.initialise(m_pitch, 0.0);
+        c2.internal.Sn_.initialise(2 * n_samp, 0.0);
         c2.internal.nlp.initialise(&c2const);
         c2.internal.gray = 1;
         c2.internal.prev_f0_enc = 1.0 / P_MAX_S;
@@ -666,11 +659,8 @@ impl Codec2 {
     pub fn bits_per_frame(&self) -> usize {
         match self.internal.mode {
             MODE_3200 => 64,
-            MODE_2400 => 48,
+
             MODE_1600 => 64,
-            MODE_1400 => 56,
-            MODE_1300 => 52,
-            MODE_1200 => 48,
             // MODE_700C => 28,
             // MODE_450 => 18,
             // MODE_450PWB => 18,
@@ -680,8 +670,8 @@ impl Codec2 {
     /// How many samples an encoded (compressed) frame represents; generally 160 (20ms of speech).
     pub fn samples_per_frame(&self) -> usize {
         match self.internal.mode {
-            MODE_3200 | MODE_2400 => 160,
-            MODE_1600 | MODE_1400 | MODE_1300 | MODE_1200 /* | MODE_700C | MODE_450*/ => 320,
+            MODE_3200 => 160,
+            MODE_1600 => 320,
             //MODE_450PWB => 640,
         }
     }
@@ -691,11 +681,8 @@ impl Codec2 {
     pub fn encode(&mut self, bits: &mut [u8], speech: &[i16]) {
         match self.internal.mode {
             MODE_3200 => self.codec2_encode_3200(bits, speech),
-            MODE_2400 => self.codec2_encode_2400(bits, speech),
+
             MODE_1600 => self.codec2_encode_1600(bits, speech),
-            MODE_1400 => self.codec2_encode_1400(bits, speech),
-            MODE_1300 => self.codec2_encode_1300(bits, speech),
-            MODE_1200 => self.codec2_encode_1200(bits, speech),
         }
     }
 
@@ -704,11 +691,8 @@ impl Codec2 {
     pub fn decode(&mut self, speech: &mut [i16], bits: &[u8]) {
         match self.internal.mode {
             MODE_3200 => self.codec2_decode_3200(speech, bits),
-            MODE_2400 => self.codec2_decode_2400(speech, bits),
+
             MODE_1600 => self.codec2_decode_1600(speech, bits),
-            MODE_1400 => self.codec2_decode_1400(speech, bits),
-            MODE_1300 => self.codec2_decode_1300(speech, bits, 0.0),
-            MODE_1200 => self.codec2_decode_1200(speech, bits),
         }
     }
 
@@ -790,7 +774,8 @@ impl Codec2 {
     fn codec2_decode_3200(&mut self, speech: &mut [i16], bits: &[u8]) {
         let mut ak = [[0.0; LPC_ORD + 1]; 2];
         let mut nbit = 0;
-        let mut Aw = [COMP::new(); FFT_ENC];
+        // Real FFT emits DC through Nyquist only (257 bins).
+        let mut Aw = [COMP::new(); FFT_ENC / 2 + 1];
 
         let mut model = [MODEL::new(self.internal.c2const.p_max as f32); 2];
 
@@ -960,7 +945,8 @@ impl Codec2 {
         let mut snr = 0.0;
         let mut ak = [[0.0; LPC_ORD + 1]; 2];
         let mut nbit = 0;
-        let mut Aw = [COMP::new(); FFT_ENC];
+        // Real FFT emits DC through Nyquist only (257 bins).
+        let mut Aw = [COMP::new(); FFT_ENC / 2 + 1];
 
         //assert(c2 != NULL);
 
@@ -1157,7 +1143,8 @@ impl Codec2 {
         let mut snr = 0.0;
         let mut ak = [[0.0; LPC_ORD + 1]; 4];
         let mut nbit = 0;
-        let mut Aw = [COMP::new(); FFT_ENC];
+        // Real FFT emits DC through Nyquist only (257 bins).
+        let mut Aw = [COMP::new(); FFT_ENC / 2 + 1];
 
         /* unpack bits from channel ------------------------------------*/
 
@@ -1357,7 +1344,8 @@ impl Codec2 {
         let mut snr = 0.0;
         let mut ak = [[0.0; LPC_ORD + 1]; 4];
         let mut nbit = 0;
-        let mut Aw = [COMP::new(); FFT_ENC];
+        // Real FFT emits DC through Nyquist only (257 bins).
+        let mut Aw = [COMP::new(); FFT_ENC / 2 + 1];
 
         /* unpack bits from channel ------------------------------------*/
 
@@ -1570,7 +1558,8 @@ impl Codec2 {
         let mut snr = 0.0;
         let mut ak = [[0.0; LPC_ORD + 1]; 4];
         let mut nbit = 0;
-        let mut Aw = [COMP::new(); FFT_ENC];
+        // Real FFT emits DC through Nyquist only (257 bins).
+        let mut Aw = [COMP::new(); FFT_ENC / 2 + 1];
 
         /* unpack bits from channel ------------------------------------*/
 
@@ -1801,7 +1790,8 @@ impl Codec2 {
         let mut snr = 0.0;
         let mut ak = [[0.0; LPC_ORD + 1]; 4];
         let mut nbit = 0;
-        let mut Aw = [COMP::new(); FFT_ENC];
+        // Real FFT emits DC through Nyquist only (257 bins).
+        let mut Aw = [COMP::new(); FFT_ENC / 2 + 1];
         // only need to zero these out due to (unused) snr calculation
 
         for i in 0..4 {
@@ -1948,6 +1938,7 @@ impl Codec2 {
         let mut pitch = 0.0;
         nlp::nlp(
             &mut self.internal.nlp,
+            &self.internal.fft_fwd_cfg,
             &self.internal.Sn,
             n_samp,
             &mut pitch,
@@ -1975,13 +1966,10 @@ impl Codec2 {
       Synthesise 80 speech samples (10ms) from model parameters.
 
     \*---------------------------------------------------------------------------*/
-    fn synthesise_one_frame(
-        &mut self,
-        speech: &mut [i16],
-        model: &mut MODEL,
-        Aw: &[COMP],
-        gain: f32,
-    ) {
+    // End phase scratch lifetime before allocating inverse-FFT scratch. This
+    // call boundary is deliberate on MCU stacks, including fat-LTO builds.
+    #[inline(never)]
+    fn synthesise_phase(&mut self, model: &mut MODEL, Aw: &[COMP]) {
         //  LPC based phase synthesis
         let mut H = [COMP::new(); MAX_AMP + 1];
         sample_phase(model, &mut H, Aw);
@@ -1992,6 +1980,16 @@ impl Codec2 {
             &mut H,
             &mut self.internal.random,
         );
+    }
+
+    fn synthesise_one_frame(
+        &mut self,
+        speech: &mut [i16],
+        model: &mut MODEL,
+        Aw: &[COMP],
+        gain: f32,
+    ) {
+        self.synthesise_phase(model, Aw);
 
         postfilter(model, &mut self.internal.bg_est, &mut self.internal.random);
         synthesise(
