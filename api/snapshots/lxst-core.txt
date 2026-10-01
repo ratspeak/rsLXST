@@ -21,6 +21,25 @@ impl lxst_core::Codec2Mode
 pub const fn lxst_core::Codec2Mode::bitrate(self) -> u16
 pub const fn lxst_core::Codec2Mode::from_header(u8) -> core::result::Result<Self, lxst_core::Error>
 pub const fn lxst_core::Codec2Mode::header(self) -> u8
+pub enum lxst_core::Codec2PacketError<E>
+pub lxst_core::Codec2PacketError::Backend(E)
+pub lxst_core::Codec2PacketError::BackendModeMismatch
+pub lxst_core::Codec2PacketError::BackendModeMismatch::actual: lxst_core::Codec2Mode
+pub lxst_core::Codec2PacketError::BackendModeMismatch::expected: lxst_core::Codec2Mode
+pub lxst_core::Codec2PacketError::Failed
+pub lxst_core::Codec2PacketError::ModeHeader
+pub lxst_core::Codec2PacketError::ModeHeader::actual: u8
+pub lxst_core::Codec2PacketError::ModeHeader::expected: u8
+pub lxst_core::Codec2PacketError::NonCodec2Profile(lxst_core::Profile)
+pub lxst_core::Codec2PacketError::OutputCapacity
+pub lxst_core::Codec2PacketError::OutputCapacity::actual: usize
+pub lxst_core::Codec2PacketError::OutputCapacity::required: usize
+pub lxst_core::Codec2PacketError::PayloadLength
+pub lxst_core::Codec2PacketError::PayloadLength::actual: usize
+pub lxst_core::Codec2PacketError::PayloadLength::expected: usize
+pub lxst_core::Codec2PacketError::SampleCount
+pub lxst_core::Codec2PacketError::SampleCount::actual: usize
+pub lxst_core::Codec2PacketError::SampleCount::expected: usize
 #[repr(u8)] pub enum lxst_core::CodecKind
 pub lxst_core::CodecKind::Codec2 = 2
 pub lxst_core::CodecKind::Null = 255
@@ -205,6 +224,15 @@ pub lxst_core::TelephonyAction::StartDialTone
 pub lxst_core::TelephonyAction::SwitchProfile(lxst_core::Profile)
 pub lxst_core::TelephonyAction::TeardownLink
 pub lxst_core::TelephonyAction::Terminate(core::option::Option<lxst_core::SignallingStatus>)
+pub struct lxst_core::Codec2PacketCodec<B>
+impl<B: lxst_core::Codec2Backend> lxst_core::Codec2PacketCodec<B>
+pub fn lxst_core::Codec2PacketCodec<B>::decode_into(&mut self, &[u8], &mut [i16]) -> core::result::Result<usize, lxst_core::Codec2PacketError<<B as lxst_core::Codec2Backend>::Error>>
+pub fn lxst_core::Codec2PacketCodec<B>::encode_into(&mut self, &[i16], &mut [u8]) -> core::result::Result<usize, lxst_core::Codec2PacketError<<B as lxst_core::Codec2Backend>::Error>>
+pub const fn lxst_core::Codec2PacketCodec<B>::mode(&self) -> lxst_core::Codec2Mode
+pub fn lxst_core::Codec2PacketCodec<B>::new(lxst_core::Profile, B) -> core::result::Result<Self, lxst_core::Codec2PacketError<<B as lxst_core::Codec2Backend>::Error>>
+pub const fn lxst_core::Codec2PacketCodec<B>::payload_bytes(&self) -> usize
+pub const fn lxst_core::Codec2PacketCodec<B>::profile(&self) -> lxst_core::Profile
+pub const fn lxst_core::Codec2PacketCodec<B>::sample_frames(&self) -> usize
 pub struct lxst_core::Frame
 pub lxst_core::Frame::codec: lxst_core::CodecKind
 pub lxst_core::Frame::payload: alloc::vec::Vec<u8>
@@ -328,4 +356,9 @@ pub const lxst_core::OPUS_ENCODED_PACKET_MAX_BYTES: usize
 pub const lxst_core::OPUS_MONO_DECODE_SAMPLE_RATE_HZ: u32
 pub const lxst_core::TELEPHONY_DESTINATION_NAME: &str
 pub const lxst_core::TELEPHONY_PRIMITIVE_NAME: &str
+pub trait lxst_core::Codec2Backend
+pub type lxst_core::Codec2Backend::Error
+pub fn lxst_core::Codec2Backend::decode_native(&mut self, &[u8], &mut [i16]) -> core::result::Result<(), Self::Error>
+pub fn lxst_core::Codec2Backend::encode_native(&mut self, &[i16], &mut [u8]) -> core::result::Result<(), Self::Error>
+pub fn lxst_core::Codec2Backend::mode(&self) -> lxst_core::Codec2Mode
 pub fn lxst_core::opus_packet_duration_samples_48k(&[u8]) -> core::result::Result<usize, lxst_core::OpusCodecError>

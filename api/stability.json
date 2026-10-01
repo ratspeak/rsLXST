@@ -19,14 +19,13 @@
     "sourceCommit": "af89a03094605dbdf7264d06fdc546526ec6980b"
   },
   "snapshotSource": {
-    "commit": "68df3223773a9553ea458fc10b4b939915986aad",
-    "capturedOn": "2026-08-17",
+    "commit": "719ec1edb62458149a96222d3249e8dd4c3abedc",
+    "capturedOn": "2026-10-01",
     "review": {
       "areas": [
-        "LXST codecs, profiles, signalling, and streams",
-        "Reticulum Link media transport",
-        "telephony service ownership and lifecycle",
-        "Opus transmit and receive streams"
+        "Bounded fixed-profile Codec2 packet processing and caller-owned PCM/output buffers",
+        "Native Codec2 backend contract and failure-state ownership",
+        "Existing Opus and telephony APIs retained"
       ],
       "canonicalPath": "lxst_telephony::TelephonyService",
       "canonicalConstruction": [
@@ -40,19 +39,20 @@
         "TelephonyService::new",
         "TelephonyService::with_config"
       ],
-      "classification": "existing experimental service boundary",
+      "classification": "additive experimental Codec2 backend boundary; no bundled native backend or telephony activation",
       "publicApiDiff": {
-        "added": 0,
+        "added": 33,
         "removed": 0
       },
-      "semver": "no version consequence; documentation and consumer migration only",
+      "semver": "additive experimental API in the unreleased 0.2 line; no existing signatures removed or changed",
       "deprecations": "none",
-      "wirePersistenceRuntimeImpact": "none",
+      "wirePersistenceRuntimeImpact": "Existing wire IDs, profiles, persistence and live streams unchanged. New opt-in packet adapter validates fixed-profile Codec2 payloads and latches backend failures.",
       "platformEvidence": [
-        "host service tests and compiled example",
+        "68 lxst-core tests including existing Python wire/raw parity",
         "stable and Rust 1.87 strict Clippy",
-        "Android and Apple compile gates",
-        "Python Telephone interoperability"
+        "compiled external Codec2 consumer",
+        "24 actual Rust Codec2 packet-boundary cases against native frames and C reference data; codec quality and allocation qualification remain separate",
+        "separate Rust candidate no_std compile on pinned ESP32-S3 toolchain; no on-device runtime claim"
       ]
     }
   },
@@ -63,8 +63,8 @@
       "tier": "experimental",
       "compatibility": "reviewed-snapshot",
       "snapshot": "api/snapshots/lxst-core.txt",
-      "itemCount": 331,
-      "sha256": "87cc451d6da48cc06cd2bae9b26bae523407a20f66e842f04844ceecb8c5867d"
+      "itemCount": 364,
+      "sha256": "2c272021cc340af7f779d944bebb336ae1804938239a8ead3cbf11a8074022e4"
     },
     {
       "name": "lxst-rns",
