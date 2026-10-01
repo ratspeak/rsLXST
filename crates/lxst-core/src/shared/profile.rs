@@ -1,4 +1,4 @@
-use crate::wire::{Codec2Mode, CodecKind};
+use crate::{Codec2Mode, CodecKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u32)]

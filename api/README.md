@@ -14,7 +14,7 @@ The compiled `lxst-telephony` `service` example exercises this path.
 
 ## Stability
 
-All three packages are experimental:
+All workspace packages are experimental:
 
 - `lxst-core` contains codec, profile, stream, signalling, and wire concepts;
 - `lxst-rns` binds media packets to Reticulum Links; and

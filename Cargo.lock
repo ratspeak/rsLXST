@@ -574,6 +574,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lxst-embedded"
+version = "0.2.0"
+dependencies = [
+ "lxst-codec2",
+ "lxst-core",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "lxst-rns"
 version = "0.2.0"
 dependencies = [

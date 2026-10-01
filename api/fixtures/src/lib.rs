@@ -71,3 +71,15 @@ pub mod bounded_codec2 {
         codec.decode(packet, output)
     }
 }
+
+pub mod embedded {
+    use lxst_embedded::{CallRole, ConfigError, Session, SessionConfig};
+    pub fn construct(role: CallRole, config: SessionConfig) -> Result<Session, ConfigError> {
+        Session::new(role, config, 0)
+    }
+    pub fn parse(
+        bytes: &[u8],
+    ) -> Result<lxst_embedded::wire::Packet<'_>, lxst_embedded::wire::Error> {
+        lxst_embedded::wire::Packet::decode(bytes)
+    }
+}

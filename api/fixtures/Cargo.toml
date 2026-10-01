@@ -7,6 +7,7 @@ publish = false
 [workspace]
 
 [dependencies]
+lxst-embedded = { path = "../../crates/lxst-embedded" }
 lxst-codec2 = { path = "../../crates/lxst-codec2" }
 lxst-core = { path = "../../crates/lxst-core" }
 lxst-telephony = { path = "../../crates/lxst-telephony" }

@@ -23,6 +23,7 @@
     "capturedOn": "2026-10-01",
     "review": {
       "areas": [
+        "Shared host/embedded profiles and transitions, bounded wire/parser/session/media queue",
         "Allocation-free native 1600/3200 Codec2 state initialized in caller storage",
         "Bounded fixed-profile Codec2 packet processing and caller-owned PCM/output buffers",
         "Native Codec2 backend contract and failure-state ownership",
@@ -40,14 +41,14 @@
         "TelephonyService::new",
         "TelephonyService::with_config"
       ],
-      "classification": "additive experimental native Codec2 backend and packet boundary; no automatic telephony activation",
+      "classification": "additive experimental embedded boundary; existing host API retained",
       "publicApiDiff": {
         "added": 50,
         "removed": 0
       },
       "semver": "additive experimental API in the unreleased 0.2 line; no existing signatures removed or changed",
       "deprecations": "none",
-      "wirePersistenceRuntimeImpact": "Existing wire IDs, profiles, persistence and live streams unchanged. New opt-in packet adapter validates fixed-profile Codec2 payloads and latches backend failures.",
+      "wirePersistenceRuntimeImpact": "Wire IDs and packet forms unchanged. Existing host transitions now share an allocation-free core with a bounded embedded facade; the new session facade gates media on authenticated identity, acceptance, audio readiness and a fresh local PTT press. Firmware integration remains separate.",
       "platformEvidence": [
         "68 lxst-core tests including existing Python wire/raw parity",
         "stable and Rust 1.87 strict Clippy",
@@ -55,10 +56,13 @@
         "24 actual Rust Codec2 packet-boundary cases against native frames and C reference data; codec quality and allocation qualification remain separate",
         "separate Rust candidate no_std compile on pinned ESP32-S3 toolchain; no on-device runtime claim",
         "Native zero-allocation contract, independent duplex histories and 20000 arbitrary decoder frames",
-        "12 bounded backend/C reference packet cases, exact locked ESP32-S3 compiler build and stable/MSRV strict Clippy"
+        "12 bounded backend/C reference packet cases, exact locked ESP32-S3 compiler build and stable/MSRV strict Clippy",
+        "Embedded/full Rust canonical packets and shared transition parity; bounded malformed/random input and PTT privacy/lifecycle tests",
+        "Standalone embedded boundary builds no_std with the selected ESP32-S3 compiler"
       ],
       "newPackages": [
-        "lxst-codec2"
+        "lxst-codec2",
+        "lxst-embedded"
       ]
     }
   },
@@ -71,6 +75,15 @@
       "snapshot": "api/snapshots/lxst-codec2.txt",
       "itemCount": 17,
       "sha256": "2f44f014e8789d1a96abed0000abf6f31f43fef34f54fcf59f28aa6a0fc8e5d1"
+    },
+    {
+      "name": "lxst-embedded",
+      "manifestPath": "Cargo.toml",
+      "tier": "experimental",
+      "compatibility": "reviewed-snapshot",
+      "snapshot": "api/snapshots/lxst-embedded.txt",
+      "itemCount": 0,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
     },
     {
       "name": "lxst-core",

@@ -102,6 +102,49 @@
       ]
     },
     {
+      "name": "lxst-embedded",
+      "version": "0.2.0",
+      "rustVersion": "1.87",
+      "edition": "2024",
+      "features": {},
+      "targets": [
+        {
+          "name": "lxst_embedded",
+          "kind": [
+            "lib"
+          ],
+          "crateTypes": [
+            "lib"
+          ],
+          "requiredFeatures": []
+        }
+      ],
+      "dependencies": [
+        {
+          "name": "lxst-codec2",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^0.2.0",
+          "optional": false,
+          "defaultFeatures": true,
+          "features": [],
+          "sourceKind": "path"
+        },
+        {
+          "name": "thiserror",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "^2",
+          "optional": false,
+          "defaultFeatures": false,
+          "features": [],
+          "sourceKind": "registry"
+        }
+      ]
+    },
+    {
       "name": "lxst-rns",
       "version": "0.2.0",
       "rustVersion": "1.87",

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Embedded sessions
+
+- Add a no_std LXST boundary with fixed parser/queue limits and authenticated,
+  accepted, audio-ready PTT gating. Share profile IDs, codec aggregation and
+  call transitions with the host API. Bound profile fallback and answer retries;
+  fence audio reconfiguration completions and require release after a Talk timeout.
+
 ### Codec foundations
 
 - Add an opt-in, allocation-free `no_std` native Rust Codec2 crate for 1600/3200

@@ -60,7 +60,7 @@ Opus telephony release.
 processing over an application-supplied `Codec2Backend`. It uses caller-owned
 PCM16/output buffers, validates complete packets before calling the backend,
 and requires replacement after a backend error. This is a codec integration
-boundary; a qualified Codec2 implementation and telephony stream integration
+boundary; device qualification and telephony stream integration
 are still required. Its mode header belongs to LXST, not LXMF audio fields.
 
 ## Build It
@@ -256,6 +256,14 @@ Applications still own platform integration:
 - mobile foreground/background behavior
 
 Ratspeak uses this boundary for its native voice-call feature.
+
+## Embedded protocol boundary
+
+[`lxst-embedded`](crates/lxst-embedded/README.md) shares the trusted host profile
+and transition sources, with bounded borrowed MessagePack parsing, fixed media
+queues and explicit authenticated-session/PTT gates. It is a no_std embedding
+boundary; board drivers, transport ownership and product integration remain
+application responsibilities.
 
 ## Embedded Codec2 backend
 

@@ -1,0 +1,15 @@
+[package]
+name = "lxst-embedded"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Bounded no_std LXST framing and authenticated PTT session policy"
+
+[dependencies]
+thiserror = { version = "2", default-features = false }
+lxst-codec2 = { path = "../lxst-codec2", version = "0.2.0" }
+
+[dev-dependencies]
+lxst-core = { path = "../lxst-core", version = "0.2.0" }

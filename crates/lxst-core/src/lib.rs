@@ -4,14 +4,21 @@
 //! avoids audio and Reticulum runtime dependencies so packet/profile parity can
 //! be tested in isolation.
 
+#[path = "shared/actions.rs"]
+mod actions;
+#[path = "shared/telephony.rs"]
+mod call_state;
 mod codec2;
 mod opus;
+#[path = "shared/profile.rs"]
 mod profile;
 mod raw;
 mod stream;
 mod synthetic;
 mod telephony;
 mod wire;
+#[path = "shared/wire_types.rs"]
+mod wire_types;
 
 pub use codec2::{Codec2Backend, Codec2PacketCodec, Codec2PacketError};
 pub use opus::{
