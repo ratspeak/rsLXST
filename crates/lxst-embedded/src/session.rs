@@ -274,6 +274,25 @@ impl Session {
         events.transitions(self.call.receive_signal(signal));
         events
     }
+    /// Matching authenticated media confirms adoption of a suggested profile.
+    /// Some standard peers change codec without echoing PreferredProfile. The
+    /// embedder must validate codec, mode and complete native packet size first.
+    /// This does not open audio, answer a call, or start the microphone.
+    pub fn receive_profile_media(&mut self, profile: Profile, now_ms: u64) -> Events {
+        if self.ended.is_none()
+            && self.linked
+            && self.verified
+            && self.call.status() == SignallingStatus::Established
+            && self.call.profile() == Some(profile)
+            && self.config.allowed.contains(profile)
+            && self
+                .profile_deadline
+                .is_some_and(|deadline| now_ms < deadline)
+        {
+            self.profile_deadline = None;
+        }
+        Events::new()
+    }
     /// A successfully configured device/codec is necessary but never starts capture.
     pub fn audio_ready(&mut self, generation: u32, success: bool) -> Events {
         if self.ended.is_some() || generation != self.audio_generation {

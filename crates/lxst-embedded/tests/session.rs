@@ -213,3 +213,31 @@ fn adversarial_event_sequences_remain_bounded() {
         }
     }
 }
+
+#[test]
+fn authenticated_matching_media_confirms_standard_profile_fallback_without_echo() {
+    let mut session = connect(CallRole::Outgoing);
+    session.receive_signal(Profile::QualityMedium.into(), 100);
+    assert!(!session.media_ready());
+    session.receive_profile_media(Profile::BandwidthLow, 200);
+    assert!(!session.media_ready());
+    session.receive_profile_media(Profile::BandwidthVeryLow, 201);
+    assert!(session.media_ready());
+    assert!(!session.transmitting());
+    session.tick(6000);
+    assert_eq!(session.ended(), None);
+
+    let mut late = connect(CallRole::Outgoing);
+    late.receive_signal(Profile::QualityMedium.into(), 100);
+    late.receive_profile_media(Profile::BandwidthVeryLow, 5100);
+    late.tick(5100);
+    assert_eq!(late.ended(), Some(EndReason::ProfileUnsupported));
+
+    let mut ringing = Session::new(CallRole::Incoming, config(), 0).unwrap();
+    ringing.link_established();
+    ringing.peer_verified(1);
+    ringing.receive_signal(Profile::QualityMedium.into(), 100);
+    ringing.receive_profile_media(Profile::BandwidthVeryLow, 200);
+    ringing.tick(5100);
+    assert_eq!(ringing.ended(), Some(EndReason::ProfileUnsupported));
+}
