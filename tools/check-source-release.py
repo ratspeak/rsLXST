@@ -11,7 +11,7 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_PACKAGES = {"lxst-core", "lxst-rns", "lxst-telephony"}
+EXPECTED_PACKAGES = {"lxst-core", "lxst-codec2", "lxst-rns", "lxst-telephony"}
 EXPECTED_MSRV = "1.87"
 EXPECTED_RETICULUM_VERSION = "1.3.0"
 EXPECTED_RETICULUM_COMMIT = "d4183434fcb969799c208ddcf140bae7550c14fe"

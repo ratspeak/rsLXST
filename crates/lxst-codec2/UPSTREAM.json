@@ -1,0 +1,19 @@
+{
+  "upstream_crate": "codec2",
+  "version": "0.3.1",
+  "repository": "https://github.com/scriptjunkie/codec2",
+  "commit": "24ec3b7c5b9892c268e180802ee3a5ce7737f214",
+  "crate_sha256": "3c3c8ba70382a99c0b5ebadf6ad50e7d98fb6eb9bcc4c0e30d422f6321798d99",
+  "declared_license": "LGPL-2.1-only AND MIT",
+  "additional_embedded_notice": "BSD-3-Clause KISS FFT notice preserved in src/native/kiss_fft.rs",
+  "original_source_sha256": {
+    "kiss_fft.rs": "33f9a3f1c2caddaa8e7536d655fd0c20f85d9dd78224f5e117a2c5bec1ca5671",
+    "codebookd.rs": "5527f6217500f303a551a6e6f2425cf7ea1abe95e43093f73eea467a45c7ba08",
+    "codebook.rs": "8de6ea51a391982d26a724c3b7e8ef2e6fefed066f295e7f4a745a6aceb0a6d2",
+    "lib.rs": "5a468ed1b26854be5f1992a215959151e7d3435fe154d212b2c468e4f10744bb",
+    "codebookge.rs": "0d36228e468f74eb65bbcbbadb9cb66a599466f347f1b7ee436abdb29d4c4378",
+    "quantise.rs": "f1e831fddee5a657e4139ac0808339cede5f5a8b6e9784eda600f3a714bb81bb",
+    "codebookjvm.rs": "6a5aba7b9be606b2d7b16054e897d8862f3bd4ec24fa3f78ff5659b361bd7266",
+    "nlp.rs": "d86f14abc7ce709d1a36a5b4dce3a2bab30ed5999a04548b61548c433897a0c6"
+  }
+}

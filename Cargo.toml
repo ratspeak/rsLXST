@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/lxst-core",
+    "crates/lxst-codec2",
     "crates/lxst-rns",
     "crates/lxst-telephony",
 ]

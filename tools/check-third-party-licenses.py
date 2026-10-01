@@ -129,12 +129,28 @@ def build_inventory() -> dict:
     if copying_hash != UPSTREAM_OPUS_COPYING_SHA256:
         fail(f"preserved opus-rs COPYING changed (found {copying_hash})")
 
+    adapted = ROOT / "crates/lxst-codec2"
+    provenance = json.loads((adapted / "UPSTREAM.json").read_text())
+    if (provenance["version"], provenance["commit"], provenance["crate_sha256"]) != (
+        "0.3.1", "24ec3b7c5b9892c268e180802ee3a5ce7737f214",
+        "3c3c8ba70382a99c0b5ebadf6ad50e7d98fb6eb9bcc4c0e30d422f6321798d99",
+    ):
+        fail("adapted Codec2 immutable upstream provenance changed")
+    entries.append({
+        "name": "codec2 (adapted as lxst-codec2)", "version": provenance["version"],
+        "license": "LGPL-2.1-only AND MIT AND BSD-3-Clause",
+        "repository": provenance["repository"], "source": "local-adaptation",
+        "upstreamCommit": provenance["commit"], "crateChecksum": provenance["crate_sha256"],
+        "provenance": "crates/lxst-codec2/UPSTREAM.json",
+        "notices": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
+                    for p in [adapted / "NOTICE", *sorted((adapted / "licenses").iterdir())]},
+    })
     entries.sort(key=lambda entry: (entry["name"], entry["version"], entry["source"]))
     lockfile_hash = hashlib.sha256((ROOT / "Cargo.lock").read_bytes()).hexdigest()
     return {
         "schemaVersion": 1,
         "scope": (
-            "All registry third-party normal/build dependencies "
+            "Adapted Codec2 and all registry third-party normal/build dependencies "
             "reachable from rsLXST workspace members across declared targets; "
             "dev-only and first-party path packages are excluded."
         ),

@@ -23,6 +23,7 @@
     "capturedOn": "2026-10-01",
     "review": {
       "areas": [
+        "Allocation-free native 1600/3200 Codec2 state initialized in caller storage",
         "Bounded fixed-profile Codec2 packet processing and caller-owned PCM/output buffers",
         "Native Codec2 backend contract and failure-state ownership",
         "Existing Opus and telephony APIs retained"
@@ -39,7 +40,7 @@
         "TelephonyService::new",
         "TelephonyService::with_config"
       ],
-      "classification": "additive experimental Codec2 backend boundary; no bundled native backend or telephony activation",
+      "classification": "additive experimental native Codec2 backend and packet boundary; no automatic telephony activation",
       "publicApiDiff": {
         "added": 33,
         "removed": 0
@@ -52,11 +53,25 @@
         "stable and Rust 1.87 strict Clippy",
         "compiled external Codec2 consumer",
         "24 actual Rust Codec2 packet-boundary cases against native frames and C reference data; codec quality and allocation qualification remain separate",
-        "separate Rust candidate no_std compile on pinned ESP32-S3 toolchain; no on-device runtime claim"
+        "separate Rust candidate no_std compile on pinned ESP32-S3 toolchain; no on-device runtime claim",
+        "Native zero-allocation contract, independent duplex histories and 20000 arbitrary decoder frames",
+        "12 bounded backend/C reference packet cases, exact locked ESP32-S3 compiler build and stable/MSRV strict Clippy"
+      ],
+      "newPackages": [
+        "lxst-codec2"
       ]
     }
   },
   "packages": [
+    {
+      "name": "lxst-codec2",
+      "manifestPath": "Cargo.toml",
+      "tier": "experimental",
+      "compatibility": "reviewed-snapshot",
+      "snapshot": "api/snapshots/lxst-codec2.txt",
+      "itemCount": 0,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
     {
       "name": "lxst-core",
       "manifestPath": "Cargo.toml",

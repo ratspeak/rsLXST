@@ -3,6 +3,38 @@
   "scope": "library Cargo manifests, public features, targets, and non-dev dependencies",
   "packages": [
     {
+      "name": "lxst-codec2",
+      "version": "0.2.0",
+      "rustVersion": "1.87",
+      "edition": "2024",
+      "features": {},
+      "targets": [
+        {
+          "name": "lxst_codec2",
+          "kind": [
+            "lib"
+          ],
+          "crateTypes": [
+            "lib"
+          ],
+          "requiredFeatures": []
+        }
+      ],
+      "dependencies": [
+        {
+          "name": "libm",
+          "rename": null,
+          "kind": null,
+          "target": null,
+          "requirement": "=0.2.16",
+          "optional": false,
+          "defaultFeatures": false,
+          "features": [],
+          "sourceKind": "registry"
+        }
+      ]
+    },
+    {
       "name": "lxst-core",
       "version": "0.2.0",
       "rustVersion": "1.87",

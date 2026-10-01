@@ -5,7 +5,7 @@ Third-party components retain their own licenses; the rsLXST license does not
 replace those terms or notices.
 
 [`THIRD_PARTY_LICENSES.json`](THIRD_PARTY_LICENSES.json) is the complete,
-CI-checked inventory of registry third-party normal/build
+CI-checked inventory of adapted Codec2 and registry third-party normal/build
 dependencies reachable from the locked workspace across declared targets. It
 excludes dev-only packages and first-party path packages. The inventory is
 generated from Cargo metadata and `Cargo.lock` with:
@@ -31,3 +31,12 @@ heap-backed codec state. The preserved license and Opus patent notice are in
 This inventory records source and license evidence; it is not legal advice and
 does not by itself replace any third-party notice required for a distributed
 binary or source bundle.
+
+## Adapted Codec2 implementation
+
+`crates/lxst-codec2` retains the pure-Rust codec2 0.3.1 implementation's
+LGPL-2.1-only AND MIT declaration and embedded KISS FFT BSD-3-Clause notice.
+Its [NOTICE](crates/lxst-codec2/NOTICE) and
+[immutable provenance](crates/lxst-codec2/UPSTREAM.json) describe the bounded
+storage, math and state-ownership modifications. This path dependency is
+explicitly inventoried; it is not treated as original first-party DSP.

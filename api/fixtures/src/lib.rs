@@ -53,3 +53,21 @@ pub mod codec2 {
         codec.decode_into(packet, output)
     }
 }
+
+pub mod bounded_codec2 {
+    use lxst_codec2::{Codec, Error, Mode};
+    use std::mem::MaybeUninit;
+
+    pub fn initialise(storage: &mut MaybeUninit<Codec>, mode: Mode) -> &mut Codec {
+        Codec::initialise(storage, mode)
+    }
+    pub fn roundtrip(
+        codec: &mut Codec,
+        pcm: &[i16],
+        packet: &mut [u8],
+        output: &mut [i16],
+    ) -> Result<(), Error> {
+        codec.encode(pcm, packet)?;
+        codec.decode(packet, output)
+    }
+}

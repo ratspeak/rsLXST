@@ -257,6 +257,14 @@ Applications still own platform integration:
 
 Ratspeak uses this boundary for its native voice-call feature.
 
+## Embedded Codec2 backend
+
+[`lxst-codec2`](crates/lxst-codec2/README.md) supplies bounded native Rust
+1600/3200 bit/s encode/decode with in-place initialization and no allocator.
+It is separate from the live telephony runtime and requires device timing,
+stack and audio qualification before use on hardware. It does not implement
+700C or compatible Opus voice memo containers.
+
 ## Contributing
 
 If the issue or contribution belongs upstream as well, start there. Python LXST

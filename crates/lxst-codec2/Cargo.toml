@@ -1,0 +1,16 @@
+[package]
+name = "lxst-codec2"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license = "LGPL-2.1-only AND MIT AND BSD-3-Clause"
+description = "Bounded no_std Codec2 speech backend for LXST"
+
+[dependencies]
+libm = { version = "=0.2.16", default-features = false }
+
+[[test]]
+name = "contract"
+harness = false
+

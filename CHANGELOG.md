@@ -4,6 +4,12 @@
 
 ### Codec foundations
 
+- Add an opt-in, allocation-free `no_std` native Rust Codec2 crate for 1600/3200
+  bit/s. Initialize in caller-owned storage; isolate decoder randomness; use the
+  same Rust math on host and MCU; reject wrong native frame sizes. Correct the
+  inherited real-FFT input-copy truncation. Preserve upstream source/license
+  provenance. Target audio, CPU/stack and live integration remain separate gates.
+
 - Add a fixed-profile Codec2 packet adapter over caller-owned PCM16/output
   buffers and an application-supplied native backend. Reject malformed lengths,
   unexpected modes and insufficient capacity before codec processing; stop

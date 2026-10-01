@@ -59,14 +59,19 @@ def main() -> None:
     floor_snapshots = {
         package["name"]: package["snapshot"] for package in floor_ledger["packages"]
     }
+    current_names = {package["name"] for package in ledger["packages"]}
+    removed_packages = set(floor_snapshots) - current_names
+    if removed_packages:
+        fail(f"compatibility-floor packages removed: {sorted(removed_packages)}")
+    new_packages = sorted(current_names - set(floor_snapshots))
+    if ledger["snapshotSource"]["review"].get("newPackages", []) != new_packages:
+        fail("new packages require an exact explicit snapshot review")
     total_added = 0
     total_removed = 0
     for package in ledger["packages"]:
         path = package["snapshot"]
         floor_path = floor_snapshots.get(package["name"])
-        if not isinstance(floor_path, str):
-            fail(f"{package['name']} is absent from the compatibility floor")
-        before = set(git_show(floor, floor_path).splitlines())
+        before = set(git_show(floor, floor_path).splitlines()) if floor_path else set()
         after = set((ROOT / path).read_text(encoding="utf-8").splitlines())
         added = sorted(after - before)
         removed = sorted(before - after)
