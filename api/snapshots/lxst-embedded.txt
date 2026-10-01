@@ -276,6 +276,7 @@ pub fn lxst_embedded::Session::new(lxst_embedded::CallRole, lxst_embedded::Sessi
 pub fn lxst_embedded::Session::peer_verified(&mut self, u64) -> lxst_embedded::Events
 pub fn lxst_embedded::Session::playback_allowed(&self) -> bool
 pub const fn lxst_embedded::Session::profile(&self) -> core::option::Option<lxst_embedded::Profile>
+pub fn lxst_embedded::Session::receive_profile_media(&mut self, lxst_embedded::Profile, u64) -> lxst_embedded::Events
 pub fn lxst_embedded::Session::receive_signal(&mut self, lxst_embedded::wire::Signal, u64) -> lxst_embedded::Events
 pub fn lxst_embedded::Session::set_transmitting(&mut self, bool, u64) -> lxst_embedded::Events
 pub const fn lxst_embedded::Session::status(&self) -> lxst_embedded::SignallingStatus

@@ -19,7 +19,7 @@
     "sourceCommit": "af89a03094605dbdf7264d06fdc546526ec6980b"
   },
   "snapshotSource": {
-    "commit": "7d3e17c71dc08145d0d8d41e2a1a2a992d61fd15",
+    "commit": "ba573034d4ed30ca2ae36349b2396bfd00c89193",
     "capturedOn": "2026-10-01",
     "review": {
       "areas": [
@@ -82,8 +82,8 @@
       "tier": "experimental",
       "compatibility": "reviewed-snapshot",
       "snapshot": "api/snapshots/lxst-embedded.txt",
-      "itemCount": 298,
-      "sha256": "1959007f1d6beb9f6286935994777216320f8ad292cad973d962f8ecdcc5e384"
+      "itemCount": 299,
+      "sha256": "7cfa734581040e35c4b817422376e4e99c9f7d447181d9e3a9e1dac0912b9295"
     },
     {
       "name": "lxst-core",
