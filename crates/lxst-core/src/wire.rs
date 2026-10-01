@@ -3,9 +3,6 @@ use rmpv::decode::read_value;
 use rmpv::encode::write_value;
 use thiserror::Error;
 
-#[cfg(test)]
-use crate::profile::Profile;
-
 pub const FIELD_SIGNALLING: u8 = 0x00;
 pub const FIELD_FRAMES: u8 = 0x01;
 
@@ -45,7 +42,7 @@ pub enum Error {
     UnknownCodec2Mode(u8),
 }
 
-pub use crate::wire_types::{Codec2Mode, CodecKind, Signal};
+include!("shared/wire_types.rs");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Frame {

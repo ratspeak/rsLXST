@@ -1,6 +1,5 @@
 use crate::call_state::CallState;
-pub use crate::call_state::{CallRole, TelephonyAction};
-use crate::{Profile, Signal, SignallingStatus};
+include!("shared/call_types.rs");
 
 /// Allocating host facade over the same bounded transition core used on MCUs.
 #[derive(Debug, Clone, PartialEq, Eq)]

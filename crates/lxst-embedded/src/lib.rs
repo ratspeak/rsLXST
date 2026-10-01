@@ -11,13 +11,14 @@ mod call_state;
 #[path = "../../lxst-core/src/shared/profile.rs"]
 mod profile;
 pub mod wire;
-#[path = "../../lxst-core/src/shared/wire_types.rs"]
-mod wire_types;
 
 pub use actions::Actions;
-pub use call_state::{CallRole, CallState, TelephonyAction};
+pub use call_state::CallState;
+#[path = "../../lxst-core/src/shared/call_types.rs"]
+mod call_types;
+pub use call_types::{CallRole, TelephonyAction};
 pub use profile::{AudioCodec, OpusApplication, OpusProfile, Profile, SignallingStatus};
-pub use wire_types::{Codec2Mode, CodecKind, Signal};
+pub use wire::{Codec2Mode, CodecKind, Signal};
 
 #[path = "../../lxst-core/src/shared/codec2.rs"]
 mod codec2;

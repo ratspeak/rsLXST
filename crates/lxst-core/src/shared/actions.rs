@@ -1,5 +1,5 @@
 use crate::Signal;
-use crate::call_state::TelephonyAction;
+use crate::TelephonyAction;
 
 /// Every current transition emits at most four ordered actions.
 #[derive(Debug, Clone, PartialEq, Eq)]

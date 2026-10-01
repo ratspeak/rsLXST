@@ -1,31 +1,8 @@
 use crate::actions::Actions;
-use crate::{Profile, Signal, SignallingStatus};
+use crate::{CallRole, Profile, Signal, SignallingStatus, TelephonyAction};
 
 macro_rules! actions {
     ($($value:expr),* $(,)?) => { Actions::from_array([$($value),*]) };
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum CallRole {
-    Incoming,
-    Outgoing,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TelephonyAction {
-    SendSignal(Signal),
-    IdentifyLocalIdentity,
-    SelectProfile(Profile),
-    PrepareDialingPipelines,
-    ResetDialingPipelines,
-    OpenAudioPipelines,
-    StartAudioPipelines,
-    StartDialTone,
-    Terminate(Option<SignallingStatus>),
-    TeardownLink,
-    RingIncomingCall,
-    SwitchProfile(Profile),
-    IgnoreSignal(Signal),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

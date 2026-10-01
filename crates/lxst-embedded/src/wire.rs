@@ -1,5 +1,5 @@
 //! Borrowed, bounded MessagePack adaptation of lxst-core::wire.
-use crate::{CodecKind, Signal};
+include!("../../lxst-core/src/shared/wire_types.rs");
 
 pub const MAX_PACKET_BYTES: usize = 512;
 pub const MAX_FRAME_BYTES: usize = 256;

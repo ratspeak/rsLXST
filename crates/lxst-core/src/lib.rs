@@ -17,8 +17,6 @@ mod stream;
 mod synthetic;
 mod telephony;
 mod wire;
-#[path = "shared/wire_types.rs"]
-mod wire_types;
 
 pub use codec2::{Codec2Backend, Codec2PacketCodec, Codec2PacketError};
 pub use opus::{

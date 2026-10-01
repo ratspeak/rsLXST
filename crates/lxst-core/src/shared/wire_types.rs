@@ -1,7 +1,6 @@
 // Shared directly with lxst-embedded. The enclosing wire module supplies its
 // own error type; wire identifiers and conversions have one implementation.
 use crate::profile::{Profile, SignallingStatus};
-use crate::wire::Error;
 const PREFERRED_PROFILE_BASE: u32 = 0xFF;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
