@@ -1,0 +1,298 @@
+pub mod lxst_embedded
+pub mod lxst_embedded::wire
+#[repr(u8)] pub enum lxst_embedded::wire::Codec2Mode
+pub lxst_embedded::wire::Codec2Mode::Mode1200 = 1
+pub lxst_embedded::wire::Codec2Mode::Mode1300 = 2
+pub lxst_embedded::wire::Codec2Mode::Mode1400 = 3
+pub lxst_embedded::wire::Codec2Mode::Mode1600 = 4
+pub lxst_embedded::wire::Codec2Mode::Mode2400 = 5
+pub lxst_embedded::wire::Codec2Mode::Mode3200 = 6
+pub lxst_embedded::wire::Codec2Mode::Mode700C = 0
+impl lxst_embedded::wire::Codec2Mode
+pub const fn lxst_embedded::wire::Codec2Mode::bitrate(self) -> u16
+pub const fn lxst_embedded::wire::Codec2Mode::from_header(u8) -> core::result::Result<Self, lxst_embedded::wire::Error>
+pub const fn lxst_embedded::wire::Codec2Mode::header(self) -> u8
+#[repr(u8)] pub enum lxst_embedded::wire::CodecKind
+pub lxst_embedded::wire::CodecKind::Codec2 = 2
+pub lxst_embedded::wire::CodecKind::Null = 255
+pub lxst_embedded::wire::CodecKind::Opus = 1
+pub lxst_embedded::wire::CodecKind::Raw = 0
+impl lxst_embedded::wire::CodecKind
+pub const fn lxst_embedded::wire::CodecKind::from_wire(u8) -> core::result::Result<Self, lxst_embedded::wire::Error>
+pub const fn lxst_embedded::wire::CodecKind::is_transmittable(self) -> bool
+pub const fn lxst_embedded::wire::CodecKind::wire_id(self) -> u8
+pub enum lxst_embedded::wire::Error
+pub lxst_embedded::wire::Error::DuplicateField
+pub lxst_embedded::wire::Error::EmptyFrame
+pub lxst_embedded::wire::Error::Limit
+pub lxst_embedded::wire::Error::NonTransmittableCodec(lxst_embedded::wire::CodecKind)
+pub lxst_embedded::wire::Error::OutputCapacity
+pub lxst_embedded::wire::Error::Shape
+pub lxst_embedded::wire::Error::TrailingData
+pub lxst_embedded::wire::Error::Truncated
+pub lxst_embedded::wire::Error::UnknownCodec(u8)
+pub lxst_embedded::wire::Error::UnknownCodec2Mode(u8)
+pub enum lxst_embedded::wire::Signal
+pub lxst_embedded::wire::Signal::PreferredProfile(lxst_embedded::Profile)
+pub lxst_embedded::wire::Signal::Raw(u32)
+pub lxst_embedded::wire::Signal::Status(lxst_embedded::SignallingStatus)
+impl lxst_embedded::wire::Signal
+pub const fn lxst_embedded::wire::Signal::from_wire(u32) -> Self
+pub const fn lxst_embedded::wire::Signal::wire_value(self) -> u32
+impl core::convert::From<lxst_embedded::Profile> for lxst_embedded::wire::Signal
+pub fn lxst_embedded::wire::Signal::from(lxst_embedded::Profile) -> Self
+impl core::convert::From<lxst_embedded::SignallingStatus> for lxst_embedded::wire::Signal
+pub fn lxst_embedded::wire::Signal::from(lxst_embedded::SignallingStatus) -> Self
+pub struct lxst_embedded::wire::Frame<'a>
+pub lxst_embedded::wire::Frame::codec: lxst_embedded::wire::CodecKind
+pub lxst_embedded::wire::Frame::payload: &'a [u8]
+pub struct lxst_embedded::wire::Packet<'a>
+impl<'a> lxst_embedded::wire::Packet<'a>
+pub fn lxst_embedded::wire::Packet<'a>::decode(&'a [u8]) -> core::result::Result<Self, lxst_embedded::wire::Error>
+pub fn lxst_embedded::wire::Packet<'a>::frames(&self) -> &[lxst_embedded::wire::Frame<'a>]
+pub fn lxst_embedded::wire::Packet<'a>::signals(&self) -> &[lxst_embedded::wire::Signal]
+pub const lxst_embedded::wire::MAX_FRAMES: usize
+pub const lxst_embedded::wire::MAX_FRAME_BYTES: usize
+pub const lxst_embedded::wire::MAX_PACKET_BYTES: usize
+pub const lxst_embedded::wire::MAX_SIGNALS: usize
+pub fn lxst_embedded::wire::encode(&[lxst_embedded::wire::Signal], &[lxst_embedded::wire::Frame<'_>], &mut [u8]) -> core::result::Result<usize, lxst_embedded::wire::Error>
+pub enum lxst_embedded::AudioCodec
+pub lxst_embedded::AudioCodec::Codec2(lxst_embedded::wire::Codec2Mode)
+pub lxst_embedded::AudioCodec::Opus(lxst_embedded::OpusProfile)
+impl lxst_embedded::AudioCodec
+pub const fn lxst_embedded::AudioCodec::channels(self) -> u8
+pub const fn lxst_embedded::AudioCodec::codec_kind(self) -> lxst_embedded::wire::CodecKind
+pub const fn lxst_embedded::AudioCodec::sample_rate_hz(self) -> u32
+pub enum lxst_embedded::CallRole
+pub lxst_embedded::CallRole::Incoming
+pub lxst_embedded::CallRole::Outgoing
+#[repr(u8)] pub enum lxst_embedded::Codec2Mode
+pub lxst_embedded::Codec2Mode::Mode1200 = 1
+pub lxst_embedded::Codec2Mode::Mode1300 = 2
+pub lxst_embedded::Codec2Mode::Mode1400 = 3
+pub lxst_embedded::Codec2Mode::Mode1600 = 4
+pub lxst_embedded::Codec2Mode::Mode2400 = 5
+pub lxst_embedded::Codec2Mode::Mode3200 = 6
+pub lxst_embedded::Codec2Mode::Mode700C = 0
+impl lxst_embedded::wire::Codec2Mode
+pub const fn lxst_embedded::wire::Codec2Mode::bitrate(self) -> u16
+pub const fn lxst_embedded::wire::Codec2Mode::from_header(u8) -> core::result::Result<Self, lxst_embedded::wire::Error>
+pub const fn lxst_embedded::wire::Codec2Mode::header(self) -> u8
+pub enum lxst_embedded::Codec2PacketError<E>
+pub lxst_embedded::Codec2PacketError::Backend(E)
+pub lxst_embedded::Codec2PacketError::BackendModeMismatch
+pub lxst_embedded::Codec2PacketError::BackendModeMismatch::actual: lxst_embedded::wire::Codec2Mode
+pub lxst_embedded::Codec2PacketError::BackendModeMismatch::expected: lxst_embedded::wire::Codec2Mode
+pub lxst_embedded::Codec2PacketError::Failed
+pub lxst_embedded::Codec2PacketError::ModeHeader
+pub lxst_embedded::Codec2PacketError::ModeHeader::actual: u8
+pub lxst_embedded::Codec2PacketError::ModeHeader::expected: u8
+pub lxst_embedded::Codec2PacketError::NonCodec2Profile(lxst_embedded::Profile)
+pub lxst_embedded::Codec2PacketError::OutputCapacity
+pub lxst_embedded::Codec2PacketError::OutputCapacity::actual: usize
+pub lxst_embedded::Codec2PacketError::OutputCapacity::required: usize
+pub lxst_embedded::Codec2PacketError::PayloadLength
+pub lxst_embedded::Codec2PacketError::PayloadLength::actual: usize
+pub lxst_embedded::Codec2PacketError::PayloadLength::expected: usize
+pub lxst_embedded::Codec2PacketError::SampleCount
+pub lxst_embedded::Codec2PacketError::SampleCount::actual: usize
+pub lxst_embedded::Codec2PacketError::SampleCount::expected: usize
+#[repr(u8)] pub enum lxst_embedded::CodecKind
+pub lxst_embedded::CodecKind::Codec2 = 2
+pub lxst_embedded::CodecKind::Null = 255
+pub lxst_embedded::CodecKind::Opus = 1
+pub lxst_embedded::CodecKind::Raw = 0
+impl lxst_embedded::wire::CodecKind
+pub const fn lxst_embedded::wire::CodecKind::from_wire(u8) -> core::result::Result<Self, lxst_embedded::wire::Error>
+pub const fn lxst_embedded::wire::CodecKind::is_transmittable(self) -> bool
+pub const fn lxst_embedded::wire::CodecKind::wire_id(self) -> u8
+pub enum lxst_embedded::ConfigError
+pub lxst_embedded::ConfigError::NoAudioDirection
+pub lxst_embedded::ConfigError::UnsupportedPreferredProfile
+pub enum lxst_embedded::EndReason
+pub lxst_embedded::EndReason::AudioUnavailable
+pub lxst_embedded::EndReason::Busy
+pub lxst_embedded::EndReason::Local
+pub lxst_embedded::EndReason::ProfileUnsupported
+pub lxst_embedded::EndReason::Rejected
+pub lxst_embedded::EndReason::Remote
+pub lxst_embedded::EndReason::RouteLost
+pub lxst_embedded::EndReason::Timeout
+pub enum lxst_embedded::Event
+pub lxst_embedded::Event::Capture(bool)
+pub lxst_embedded::Event::Ended(lxst_embedded::EndReason)
+pub lxst_embedded::Event::FlushMedia
+pub lxst_embedded::Event::Transition(lxst_embedded::TelephonyAction)
+pub enum lxst_embedded::OpusApplication
+pub lxst_embedded::OpusApplication::Audio
+pub lxst_embedded::OpusApplication::Voip
+#[repr(u8)] pub enum lxst_embedded::OpusProfile
+pub lxst_embedded::OpusProfile::AudioHigh = 7
+pub lxst_embedded::OpusProfile::AudioLow = 5
+pub lxst_embedded::OpusProfile::AudioMax = 8
+pub lxst_embedded::OpusProfile::AudioMedium = 6
+pub lxst_embedded::OpusProfile::AudioMin = 4
+pub lxst_embedded::OpusProfile::VoiceHigh = 2
+pub lxst_embedded::OpusProfile::VoiceLow = 0
+pub lxst_embedded::OpusProfile::VoiceMax = 3
+pub lxst_embedded::OpusProfile::VoiceMedium = 1
+impl lxst_embedded::OpusProfile
+pub const lxst_embedded::OpusProfile::FRAME_MAX_MS: f32
+pub const lxst_embedded::OpusProfile::FRAME_QUANTA_MS: f32
+pub const lxst_embedded::OpusProfile::VALID_FRAME_MS: [f32; 6]
+pub const fn lxst_embedded::OpusProfile::application(self) -> lxst_embedded::OpusApplication
+pub const fn lxst_embedded::OpusProfile::bitrate_ceiling(self) -> u32
+pub const fn lxst_embedded::OpusProfile::channels(self) -> u8
+pub const fn lxst_embedded::OpusProfile::max_bytes_per_frame_ms(self, u16) -> usize
+pub const fn lxst_embedded::OpusProfile::sample_rate(self) -> u32
+#[repr(u32)] pub enum lxst_embedded::Profile
+pub lxst_embedded::Profile::BandwidthLow = 48
+pub lxst_embedded::Profile::BandwidthUltraLow = 16
+pub lxst_embedded::Profile::BandwidthVeryLow = 32
+pub lxst_embedded::Profile::LatencyLow = 128
+pub lxst_embedded::Profile::LatencyUltraLow = 112
+pub lxst_embedded::Profile::QualityHigh = 80
+pub lxst_embedded::Profile::QualityMax = 96
+pub lxst_embedded::Profile::QualityMedium = 64
+impl lxst_embedded::Profile
+pub const lxst_embedded::Profile::DEFAULT: Self
+pub const lxst_embedded::Profile::ORDER: [Self; 8]
+pub const fn lxst_embedded::Profile::abbreviation(self) -> &'static str
+pub const fn lxst_embedded::Profile::audio_codec(self) -> lxst_embedded::AudioCodec
+pub const fn lxst_embedded::Profile::channels(self) -> u8
+pub const fn lxst_embedded::Profile::frame_time_ms(self) -> u16
+pub const fn lxst_embedded::Profile::from_wire(u32) -> core::option::Option<Self>
+pub const fn lxst_embedded::Profile::name(self) -> &'static str
+pub fn lxst_embedded::Profile::next(self) -> Self
+pub const fn lxst_embedded::Profile::opus_payload_ceiling_bytes(self) -> core::option::Option<usize>
+pub const fn lxst_embedded::Profile::sample_frames_per_packet(self) -> usize
+pub const fn lxst_embedded::Profile::sample_rate_hz(self) -> u32
+pub const fn lxst_embedded::Profile::wire_value(self) -> u32
+impl core::convert::From<lxst_embedded::Profile> for lxst_embedded::wire::Signal
+pub fn lxst_embedded::wire::Signal::from(lxst_embedded::Profile) -> Self
+pub enum lxst_embedded::QueueError
+pub lxst_embedded::QueueError::EmptyPayload
+pub lxst_embedded::QueueError::Expired
+pub lxst_embedded::QueueError::OutputCapacity
+pub lxst_embedded::QueueError::PayloadTooLarge
+pub enum lxst_embedded::Signal
+pub lxst_embedded::Signal::PreferredProfile(lxst_embedded::Profile)
+pub lxst_embedded::Signal::Raw(u32)
+pub lxst_embedded::Signal::Status(lxst_embedded::SignallingStatus)
+impl lxst_embedded::wire::Signal
+pub const fn lxst_embedded::wire::Signal::from_wire(u32) -> Self
+pub const fn lxst_embedded::wire::Signal::wire_value(self) -> u32
+impl core::convert::From<lxst_embedded::Profile> for lxst_embedded::wire::Signal
+pub fn lxst_embedded::wire::Signal::from(lxst_embedded::Profile) -> Self
+impl core::convert::From<lxst_embedded::SignallingStatus> for lxst_embedded::wire::Signal
+pub fn lxst_embedded::wire::Signal::from(lxst_embedded::SignallingStatus) -> Self
+#[repr(u32)] pub enum lxst_embedded::SignallingStatus
+pub lxst_embedded::SignallingStatus::Available = 3
+pub lxst_embedded::SignallingStatus::Busy = 0
+pub lxst_embedded::SignallingStatus::Calling = 2
+pub lxst_embedded::SignallingStatus::Connecting = 5
+pub lxst_embedded::SignallingStatus::Established = 6
+pub lxst_embedded::SignallingStatus::Rejected = 1
+pub lxst_embedded::SignallingStatus::Ringing = 4
+impl lxst_embedded::SignallingStatus
+pub const lxst_embedded::SignallingStatus::AUTO_STATUS_CODES: [Self; 5]
+pub const fn lxst_embedded::SignallingStatus::from_wire(u32) -> core::option::Option<Self>
+pub fn lxst_embedded::SignallingStatus::is_auto_status(self) -> bool
+pub const fn lxst_embedded::SignallingStatus::wire_value(self) -> u32
+impl core::convert::From<lxst_embedded::SignallingStatus> for lxst_embedded::wire::Signal
+pub fn lxst_embedded::wire::Signal::from(lxst_embedded::SignallingStatus) -> Self
+pub enum lxst_embedded::TelephonyAction
+pub lxst_embedded::TelephonyAction::IdentifyLocalIdentity
+pub lxst_embedded::TelephonyAction::IgnoreSignal(lxst_embedded::wire::Signal)
+pub lxst_embedded::TelephonyAction::OpenAudioPipelines
+pub lxst_embedded::TelephonyAction::PrepareDialingPipelines
+pub lxst_embedded::TelephonyAction::ResetDialingPipelines
+pub lxst_embedded::TelephonyAction::RingIncomingCall
+pub lxst_embedded::TelephonyAction::SelectProfile(lxst_embedded::Profile)
+pub lxst_embedded::TelephonyAction::SendSignal(lxst_embedded::wire::Signal)
+pub lxst_embedded::TelephonyAction::StartAudioPipelines
+pub lxst_embedded::TelephonyAction::StartDialTone
+pub lxst_embedded::TelephonyAction::SwitchProfile(lxst_embedded::Profile)
+pub lxst_embedded::TelephonyAction::TeardownLink
+pub lxst_embedded::TelephonyAction::Terminate(core::option::Option<lxst_embedded::SignallingStatus>)
+pub struct lxst_embedded::Actions
+impl lxst_embedded::Actions
+pub fn lxst_embedded::Actions::as_slice(&self) -> &[lxst_embedded::TelephonyAction]
+pub struct lxst_embedded::CallState
+impl lxst_embedded::CallState
+pub fn lxst_embedded::CallState::answer(&mut self) -> lxst_embedded::Actions
+pub const fn lxst_embedded::CallState::answered(&self) -> bool
+pub fn lxst_embedded::CallState::caller_identified(&mut self, bool, bool) -> lxst_embedded::Actions
+pub fn lxst_embedded::CallState::hangup(&mut self, bool) -> lxst_embedded::Actions
+pub fn lxst_embedded::CallState::incoming() -> Self
+pub fn lxst_embedded::CallState::incoming_link_established(bool) -> lxst_embedded::Actions
+pub fn lxst_embedded::CallState::outgoing(core::option::Option<lxst_embedded::Profile>) -> Self
+pub const fn lxst_embedded::CallState::profile(&self) -> core::option::Option<lxst_embedded::Profile>
+pub fn lxst_embedded::CallState::receive_signal(&mut self, lxst_embedded::wire::Signal) -> lxst_embedded::Actions
+pub fn lxst_embedded::CallState::retry_answer(&self) -> lxst_embedded::Actions
+pub const fn lxst_embedded::CallState::role(&self) -> lxst_embedded::CallRole
+pub const fn lxst_embedded::CallState::status(&self) -> lxst_embedded::SignallingStatus
+pub fn lxst_embedded::CallState::switch_profile(&mut self, lxst_embedded::Profile) -> lxst_embedded::Actions
+pub struct lxst_embedded::Codec2PacketCodec<B>
+impl<B: lxst_embedded::Codec2Backend> lxst_embedded::Codec2PacketCodec<B>
+pub fn lxst_embedded::Codec2PacketCodec<B>::decode_into(&mut self, &[u8], &mut [i16]) -> core::result::Result<usize, lxst_embedded::Codec2PacketError<<B as lxst_embedded::Codec2Backend>::Error>>
+pub fn lxst_embedded::Codec2PacketCodec<B>::encode_into(&mut self, &[i16], &mut [u8]) -> core::result::Result<usize, lxst_embedded::Codec2PacketError<<B as lxst_embedded::Codec2Backend>::Error>>
+pub const fn lxst_embedded::Codec2PacketCodec<B>::mode(&self) -> lxst_embedded::wire::Codec2Mode
+pub fn lxst_embedded::Codec2PacketCodec<B>::new(lxst_embedded::Profile, B) -> core::result::Result<Self, lxst_embedded::Codec2PacketError<<B as lxst_embedded::Codec2Backend>::Error>>
+pub const fn lxst_embedded::Codec2PacketCodec<B>::payload_bytes(&self) -> usize
+pub const fn lxst_embedded::Codec2PacketCodec<B>::profile(&self) -> lxst_embedded::Profile
+pub const fn lxst_embedded::Codec2PacketCodec<B>::sample_frames(&self) -> usize
+pub struct lxst_embedded::Events
+impl lxst_embedded::Events
+pub fn lxst_embedded::Events::as_slice(&self) -> &[lxst_embedded::Event]
+pub struct lxst_embedded::MediaQueue
+impl lxst_embedded::MediaQueue
+pub fn lxst_embedded::MediaQueue::clear(&mut self)
+pub const fn lxst_embedded::MediaQueue::dropped(&self) -> u64
+pub const fn lxst_embedded::MediaQueue::is_empty(&self) -> bool
+pub const fn lxst_embedded::MediaQueue::len(&self) -> usize
+pub const fn lxst_embedded::MediaQueue::new() -> Self
+pub fn lxst_embedded::MediaQueue::pop(&mut self, u64, u32, &mut [u8]) -> core::result::Result<core::option::Option<usize>, lxst_embedded::QueueError>
+pub fn lxst_embedded::MediaQueue::push(&mut self, &[u8], u32, u64, u64) -> core::result::Result<(), lxst_embedded::QueueError>
+impl core::default::Default for lxst_embedded::MediaQueue
+pub fn lxst_embedded::MediaQueue::default() -> Self
+pub struct lxst_embedded::ProfileSet(_)
+impl lxst_embedded::ProfileSet
+pub const lxst_embedded::ProfileSet::CODEC2: Self
+pub const lxst_embedded::ProfileSet::OPUS_MEDIUM: Self
+pub const fn lxst_embedded::ProfileSet::contains(self, lxst_embedded::Profile) -> bool
+pub const fn lxst_embedded::ProfileSet::only(lxst_embedded::Profile) -> Self
+pub const fn lxst_embedded::ProfileSet::union(self, Self) -> Self
+pub struct lxst_embedded::Session
+impl lxst_embedded::Session
+pub fn lxst_embedded::Session::answer(&mut self, u64) -> lxst_embedded::Events
+pub const fn lxst_embedded::Session::audio_generation(&self) -> u32
+pub fn lxst_embedded::Session::audio_ready(&mut self, u32, bool) -> lxst_embedded::Events
+pub fn lxst_embedded::Session::end(&mut self, lxst_embedded::EndReason) -> lxst_embedded::Events
+pub const fn lxst_embedded::Session::ended(&self) -> core::option::Option<lxst_embedded::EndReason>
+pub fn lxst_embedded::Session::link_established(&mut self) -> lxst_embedded::Events
+pub fn lxst_embedded::Session::media_ready(&self) -> bool
+pub fn lxst_embedded::Session::new(lxst_embedded::CallRole, lxst_embedded::SessionConfig, u64) -> core::result::Result<Self, lxst_embedded::ConfigError>
+pub fn lxst_embedded::Session::peer_verified(&mut self, u64) -> lxst_embedded::Events
+pub fn lxst_embedded::Session::playback_allowed(&self) -> bool
+pub const fn lxst_embedded::Session::profile(&self) -> core::option::Option<lxst_embedded::Profile>
+pub fn lxst_embedded::Session::receive_signal(&mut self, lxst_embedded::wire::Signal, u64) -> lxst_embedded::Events
+pub fn lxst_embedded::Session::set_transmitting(&mut self, bool, u64) -> lxst_embedded::Events
+pub const fn lxst_embedded::Session::status(&self) -> lxst_embedded::SignallingStatus
+pub fn lxst_embedded::Session::tick(&mut self, u64) -> lxst_embedded::Events
+pub const fn lxst_embedded::Session::transmitting(&self) -> bool
+pub struct lxst_embedded::SessionConfig
+pub lxst_embedded::SessionConfig::allowed: lxst_embedded::ProfileSet
+pub lxst_embedded::SessionConfig::capture: bool
+pub lxst_embedded::SessionConfig::playback: bool
+pub lxst_embedded::SessionConfig::preferred: lxst_embedded::Profile
+pub trait lxst_embedded::Codec2Backend
+pub type lxst_embedded::Codec2Backend::Error
+pub fn lxst_embedded::Codec2Backend::decode_native(&mut self, &[u8], &mut [i16]) -> core::result::Result<(), Self::Error>
+pub fn lxst_embedded::Codec2Backend::encode_native(&mut self, &[i16], &mut [u8]) -> core::result::Result<(), Self::Error>
+pub fn lxst_embedded::Codec2Backend::mode(&self) -> lxst_embedded::wire::Codec2Mode
+impl lxst_embedded::Codec2Backend for &mut lxst_codec2::Codec
+pub type &mut lxst_codec2::Codec::Error = lxst_codec2::Error
+pub fn &mut lxst_codec2::Codec::decode_native(&mut self, &[u8], &mut [i16]) -> core::result::Result<(), Self::Error>
+pub fn &mut lxst_codec2::Codec::encode_native(&mut self, &[i16], &mut [u8]) -> core::result::Result<(), Self::Error>
+pub fn &mut lxst_codec2::Codec::mode(&self) -> lxst_embedded::wire::Codec2Mode

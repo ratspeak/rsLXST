@@ -19,7 +19,7 @@
     "sourceCommit": "af89a03094605dbdf7264d06fdc546526ec6980b"
   },
   "snapshotSource": {
-    "commit": "d65e26bf57d6cfda6c20ff8d5379e8d313979b4c",
+    "commit": "7d3e17c71dc08145d0d8d41e2a1a2a992d61fd15",
     "capturedOn": "2026-10-01",
     "review": {
       "areas": [
@@ -43,7 +43,7 @@
       ],
       "classification": "additive experimental embedded boundary; existing host API retained",
       "publicApiDiff": {
-        "added": 50,
+        "added": 329,
         "removed": 0
       },
       "semver": "additive experimental API in the unreleased 0.2 line; no existing signatures removed or changed",
@@ -82,8 +82,8 @@
       "tier": "experimental",
       "compatibility": "reviewed-snapshot",
       "snapshot": "api/snapshots/lxst-embedded.txt",
-      "itemCount": 0,
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      "itemCount": 298,
+      "sha256": "1959007f1d6beb9f6286935994777216320f8ad292cad973d962f8ecdcc5e384"
     },
     {
       "name": "lxst-core",
