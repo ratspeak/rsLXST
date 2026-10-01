@@ -44,7 +44,7 @@
       ],
       "classification": "additive experimental live audio and embedded boundary; existing host API retained",
       "publicApiDiff": {
-        "added": 329,
+        "added": 373,
         "removed": 0
       },
       "semver": "additive experimental API in the unreleased 0.2 line; no existing signatures removed or changed",
