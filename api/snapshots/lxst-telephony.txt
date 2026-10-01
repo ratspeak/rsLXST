@@ -4,6 +4,7 @@ pub lxst_telephony::CallerAllowPolicy::All
 pub lxst_telephony::CallerAllowPolicy::List(alloc::vec::Vec<lxst_telephony::IdentityHash>)
 pub lxst_telephony::CallerAllowPolicy::None
 pub enum lxst_telephony::Error
+pub lxst_telephony::Error::Audio(alloc::string::String)
 pub lxst_telephony::Error::CallNotAnswerable
 pub lxst_telephony::Error::CallNotEstablished
 pub lxst_telephony::Error::Destination(rns_identity::destination::DestinationError)
@@ -102,6 +103,9 @@ pub lxst_telephony::TelephonyControl::Call::profile: core::option::Option<lxst_c
 pub lxst_telephony::TelephonyControl::Call::remote_identity: lxst_telephony::IdentityHash
 pub lxst_telephony::TelephonyControl::Hangup
 pub lxst_telephony::TelephonyControl::Hangup::ring_timeout: bool
+pub lxst_telephony::TelephonyControl::SendAudioFrames
+pub lxst_telephony::TelephonyControl::SendAudioFrames::frames: alloc::vec::Vec<lxst_core::raw::RawAudioFrame>
+pub lxst_telephony::TelephonyControl::SendAudioFrames::profile: lxst_core::profile::Profile
 pub lxst_telephony::TelephonyControl::SendOpusFrames
 pub lxst_telephony::TelephonyControl::SendOpusFrames::frames: alloc::vec::Vec<lxst_core::raw::RawAudioFrame>
 pub lxst_telephony::TelephonyControl::SendOpusFrames::profile: lxst_core::profile::Profile
@@ -111,11 +115,20 @@ pub lxst_telephony::TelephonyControl::SendRawFrames::frames: alloc::vec::Vec<lxs
 pub lxst_telephony::TelephonyControl::SetAccessPolicy(lxst_telephony::CallerAccessPolicy)
 pub lxst_telephony::TelephonyControl::SetExternalBusy(bool)
 pub lxst_telephony::TelephonyControl::Shutdown
+pub lxst_telephony::TelephonyControl::StartAudioReceiveStream
+pub lxst_telephony::TelephonyControl::StartAudioReceiveStream::frames: tokio::sync::mpsc::bounded::Sender<lxst_core::raw::RawAudioFrame>
+pub lxst_telephony::TelephonyControl::StartAudioStream
+pub lxst_telephony::TelephonyControl::StartAudioStream::frames: tokio::sync::mpsc::bounded::Receiver<lxst_core::raw::RawAudioFrame>
+pub lxst_telephony::TelephonyControl::StartAudioStream::gate: core::option::Option<alloc::sync::Arc<lxst_telephony::AudioTransmitGate>>
+pub lxst_telephony::TelephonyControl::StartAudioStream::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyControl::StartAudioStream::profile: lxst_core::profile::Profile
 pub lxst_telephony::TelephonyControl::StartOpusReceiveStream
 pub lxst_telephony::TelephonyControl::StartOpusReceiveStream::frames: tokio::sync::mpsc::bounded::Sender<lxst_core::raw::RawAudioFrame>
 pub lxst_telephony::TelephonyControl::StartOpusStream
 pub lxst_telephony::TelephonyControl::StartOpusStream::frames: tokio::sync::mpsc::bounded::Receiver<lxst_core::raw::RawAudioFrame>
 pub lxst_telephony::TelephonyControl::StartOpusStream::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyControl::StopAudioReceiveStream
+pub lxst_telephony::TelephonyControl::StopAudioStream
 pub lxst_telephony::TelephonyControl::StopOpusReceiveStream
 pub lxst_telephony::TelephonyControl::StopOpusStream
 pub lxst_telephony::TelephonyControl::SwitchProfile
@@ -136,6 +149,29 @@ pub lxst_telephony::TelephonyLinkEvent::RemoteIdentified
 pub lxst_telephony::TelephonyLinkEvent::RemoteIdentified::link_id: lxst_telephony::LinkId
 pub lxst_telephony::TelephonyLinkEvent::RemoteIdentified::remote_identity: lxst_telephony::IdentityHash
 pub enum lxst_telephony::TelephonyServiceEvent
+pub lxst_telephony::TelephonyServiceEvent::AudioFramesReceived
+pub lxst_telephony::TelephonyServiceEvent::AudioFramesReceived::frames: alloc::vec::Vec<lxst_core::raw::RawAudioFrame>
+pub lxst_telephony::TelephonyServiceEvent::AudioFramesReceived::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::AudioFramesReceived::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyServiceEvent::AudioReceiveStreamFrames
+pub lxst_telephony::TelephonyServiceEvent::AudioReceiveStreamFrames::dropped: usize
+pub lxst_telephony::TelephonyServiceEvent::AudioReceiveStreamFrames::frames: usize
+pub lxst_telephony::TelephonyServiceEvent::AudioReceiveStreamFrames::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::AudioReceiveStreamFrames::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyServiceEvent::AudioReceiveStreamStarted
+pub lxst_telephony::TelephonyServiceEvent::AudioReceiveStreamStarted::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::AudioReceiveStreamStarted::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyServiceEvent::AudioReceiveStreamStopped
+pub lxst_telephony::TelephonyServiceEvent::AudioReceiveStreamStopped::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::AudioReceiveStreamStopped::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyServiceEvent::AudioReceiveStreamStopped::reason: lxst_telephony::OpusReceiveStreamStopReason
+pub lxst_telephony::TelephonyServiceEvent::AudioTransmitStreamStarted
+pub lxst_telephony::TelephonyServiceEvent::AudioTransmitStreamStarted::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::AudioTransmitStreamStarted::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyServiceEvent::AudioTransmitStreamStopped
+pub lxst_telephony::TelephonyServiceEvent::AudioTransmitStreamStopped::link_id: lxst_telephony::LinkId
+pub lxst_telephony::TelephonyServiceEvent::AudioTransmitStreamStopped::profile: lxst_core::profile::Profile
+pub lxst_telephony::TelephonyServiceEvent::AudioTransmitStreamStopped::reason: lxst_telephony::OpusTransmitStreamStopReason
 pub lxst_telephony::TelephonyServiceEvent::CallTerminated
 pub lxst_telephony::TelephonyServiceEvent::CallTerminated::link_id: lxst_telephony::LinkId
 pub lxst_telephony::TelephonyServiceEvent::CallTerminated::reason: core::option::Option<lxst_core::profile::SignallingStatus>
@@ -196,6 +232,13 @@ pub lxst_telephony::ActiveCallSnapshot::profile: core::option::Option<lxst_core:
 pub lxst_telephony::ActiveCallSnapshot::remote_identity: lxst_telephony::IdentityHash
 pub lxst_telephony::ActiveCallSnapshot::role: lxst_core::telephony::CallRole
 pub lxst_telephony::ActiveCallSnapshot::status: lxst_core::profile::SignallingStatus
+pub struct lxst_telephony::AudioTransmitGate
+impl lxst_telephony::AudioTransmitGate
+pub fn lxst_telephony::AudioTransmitGate::allows(&self) -> bool
+pub fn lxst_telephony::AudioTransmitGate::close(&self)
+pub fn lxst_telephony::AudioTransmitGate::new() -> Self
+pub fn lxst_telephony::AudioTransmitGate::serial(&self) -> u64
+pub fn lxst_telephony::AudioTransmitGate::update(&self, u64, bool) -> bool
 pub struct lxst_telephony::CallerAccessPolicy
 pub lxst_telephony::CallerAccessPolicy::allowed: lxst_telephony::CallerAllowPolicy
 pub lxst_telephony::CallerAccessPolicy::blocked: alloc::vec::Vec<lxst_telephony::IdentityHash>

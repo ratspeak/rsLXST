@@ -19,7 +19,7 @@
     "sourceCommit": "af89a03094605dbdf7264d06fdc546526ec6980b"
   },
   "snapshotSource": {
-    "commit": "ba573034d4ed30ca2ae36349b2396bfd00c89193",
+    "commit": "e8c1a8d85a8792c3be21ba910db1d236f3ed1c4d",
     "capturedOn": "2026-10-01",
     "review": {
       "areas": [
@@ -27,7 +27,8 @@
         "Allocation-free native 1600/3200 Codec2 state initialized in caller storage",
         "Bounded fixed-profile Codec2 packet processing and caller-owned PCM/output buffers",
         "Native Codec2 backend contract and failure-state ownership",
-        "Existing Opus and telephony APIs retained"
+        "Existing Opus and telephony APIs retained",
+        "Host native Codec2 live streams and exact-Link revocable PTT lease; generic audio controls/events preserve existing Opus API"
       ],
       "canonicalPath": "lxst_telephony::TelephonyService",
       "canonicalConstruction": [
@@ -41,14 +42,14 @@
         "TelephonyService::new",
         "TelephonyService::with_config"
       ],
-      "classification": "additive experimental embedded boundary; existing host API retained",
+      "classification": "additive experimental live audio and embedded boundary; existing host API retained",
       "publicApiDiff": {
         "added": 329,
         "removed": 0
       },
       "semver": "additive experimental API in the unreleased 0.2 line; no existing signatures removed or changed",
       "deprecations": "none",
-      "wirePersistenceRuntimeImpact": "Wire IDs and packet forms unchanged. Existing host transitions now share an allocation-free core with a bounded embedded facade; the new session facade gates media on authenticated identity, acceptance, audio readiness and a fresh local PTT press. Firmware integration remains separate.",
+      "wirePersistenceRuntimeImpact": "Existing Opus and native Codec2 wire identifiers and payloads remain unchanged. Generic host stream controls support native 1600/3200; optional local input leases gate queue admission, clear stale PCM, expire on UI stalls and limit bursts. No remote floor or LXMF memo extension.",
       "platformEvidence": [
         "68 lxst-core tests including existing Python wire/raw parity",
         "stable and Rust 1.87 strict Clippy",
@@ -58,7 +59,8 @@
         "Native zero-allocation contract, independent duplex histories and 20000 arbitrary decoder frames",
         "12 bounded backend/C reference packet cases, exact locked ESP32-S3 compiler build and stable/MSRV strict Clippy",
         "Embedded/full Rust canonical packets and shared transition parity; bounded malformed/random input and PTT privacy/lifecycle tests",
-        "Standalone embedded boundary builds no_std with the selected ESP32-S3 compiler"
+        "Standalone embedded boundary builds no_std with the selected ESP32-S3 compiler",
+        "73 host telephony tests including encrypted native Codec2 duplex and revocable input lease; stable/MSRV Clippy and external consumer"
       ],
       "newPackages": [
         "lxst-codec2",
@@ -109,8 +111,8 @@
       "tier": "experimental",
       "compatibility": "reviewed-snapshot",
       "snapshot": "api/snapshots/lxst-telephony.txt",
-      "itemCount": 317,
-      "sha256": "e13c7c17ee723a08ce94651aa8f001f335b5abb5d17aefce5f4db695fb7c8128"
+      "itemCount": 360,
+      "sha256": "c9b9784a9b09bb41a9beffb29b62085b21f2b22cb8b7d18ef53ea9f673d77698"
     }
   ]
 }
