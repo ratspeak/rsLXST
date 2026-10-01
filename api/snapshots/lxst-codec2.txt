@@ -1,0 +1,17 @@
+pub mod lxst_codec2
+pub enum lxst_codec2::Error
+pub lxst_codec2::Error::EncodedLength
+pub lxst_codec2::Error::PcmLength
+pub enum lxst_codec2::Mode
+pub lxst_codec2::Mode::Rate1600
+pub lxst_codec2::Mode::Rate3200
+impl lxst_codec2::Mode
+pub const fn lxst_codec2::Mode::bytes(self) -> usize
+pub const fn lxst_codec2::Mode::samples(self) -> usize
+pub struct lxst_codec2::Codec
+impl lxst_codec2::Codec
+pub fn lxst_codec2::Codec::decode(&mut self, &[u8], &mut [i16]) -> core::result::Result<(), lxst_codec2::Error>
+pub fn lxst_codec2::Codec::encode(&mut self, &[i16], &mut [u8]) -> core::result::Result<(), lxst_codec2::Error>
+pub fn lxst_codec2::Codec::initialise(&mut core::mem::maybe_uninit::MaybeUninit<Self>, lxst_codec2::Mode) -> &mut Self
+pub fn lxst_codec2::Codec::mode(&self) -> lxst_codec2::Mode
+pub fn lxst_codec2::Codec::reset(&mut self, lxst_codec2::Mode)

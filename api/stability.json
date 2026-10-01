@@ -19,7 +19,7 @@
     "sourceCommit": "af89a03094605dbdf7264d06fdc546526ec6980b"
   },
   "snapshotSource": {
-    "commit": "719ec1edb62458149a96222d3249e8dd4c3abedc",
+    "commit": "d65e26bf57d6cfda6c20ff8d5379e8d313979b4c",
     "capturedOn": "2026-10-01",
     "review": {
       "areas": [
@@ -42,7 +42,7 @@
       ],
       "classification": "additive experimental native Codec2 backend and packet boundary; no automatic telephony activation",
       "publicApiDiff": {
-        "added": 33,
+        "added": 50,
         "removed": 0
       },
       "semver": "additive experimental API in the unreleased 0.2 line; no existing signatures removed or changed",
@@ -69,8 +69,8 @@
       "tier": "experimental",
       "compatibility": "reviewed-snapshot",
       "snapshot": "api/snapshots/lxst-codec2.txt",
-      "itemCount": 0,
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+      "itemCount": 17,
+      "sha256": "2f44f014e8789d1a96abed0000abf6f31f43fef34f54fcf59f28aa6a0fc8e5d1"
     },
     {
       "name": "lxst-core",
