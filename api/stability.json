@@ -19,29 +19,30 @@
     "sourceCommit": "af89a03094605dbdf7264d06fdc546526ec6980b"
   },
   "snapshotSource": {
-    "commit": "d9d62f3c7f1a3eb5625c69321757d2a540abae53",
+    "commit": "87dd25958f5958493b628ba6a1272ab32e538e27",
     "capturedOn": "2026-10-01",
     "review": {
       "areas": [
-        "Native Codec2 700C mode, frame shapes and explicit mode identity",
-        "Host ULBW codec construction and native backend mode mapping",
-        "Shared DSP arithmetic and background/pitch correctness"
+        "Standard ULBW advertisement in embedded ProfileSet::CODEC2",
+        "Three-profile native framing, crossed negotiation and encrypted duplex tests"
       ],
-      "canonicalPath": "lxst_codec2::Mode::Rate700C",
-      "classification": "one experimental enum variant added; existing method signatures retained",
+      "canonicalPath": "lxst_embedded::ProfileSet::CODEC2",
+      "classification": "unchanged public signatures; CODEC2 capability includes implemented ULBW; compatibility diff is cumulative from the retained floor",
       "publicApiDiff": {
-        "added": 1,
+        "added": 374,
         "removed": 0
       },
-      "semver": "Unreleased experimental 0.2 API. Adding a variant to the exhaustive Mode enum requires downstream exhaustive matches to handle Rate700C; both workspace adapters are updated. Codec storage size grows and must be queried rather than hard-coded.",
+      "semver": "Unreleased experimental 0.2 API. Prior Rate700C exhaustive-enum impact remains; this checkpoint adds no signature changes.",
       "deprecations": "none",
-      "wirePersistenceRuntimeImpact": "700C uses existing four-byte 28-bit native frames and standard ULBW framing. Host codec construction accepts ULBW; embedded advertised ProfileSet and production firmware remain unchanged at this foundation checkpoint. Shared arithmetic corrections can change old-mode encoded choices or decoded PCM without changing wire formats. No persisted state or memo extension.",
+      "wirePersistenceRuntimeImpact": "Embedded CODEC2 advertises standard ULBW alongside VLBW/LBW. No new wire IDs or persistence format. 700C uses ten four-byte frames per 400 ms packet.",
       "platformEvidence": [
-        "36 short/16-second native and packet cases with source hashes; all 2640 700C frames byte-identical to pinned C with -ffp-contract=off; decoder maximum difference 3 PCM counts",
-        "Zero-allocation initialization/reset and 3000 stream pairs plus 30000 arbitrary decode frames across three modes",
-        "96 scoped native/embedded/telephony tests plus standalone allocation contract; 21 opt-in live Python tests remain unrun for this foundation",
-        "Stable and Rust 1.87 strict Clippy; format, codebook generation, license and source-release checks",
-        "Selected ESP32-S3 compiler codegen: largest individual frame 8608 bytes; total stack, on-device CPU and live 700C interoperability remain unqualified"
+        "Embedded and telephony scoped tests and strict Clippy pass.",
+        "SMALL/MICRO handhelds exchange all three profiles with default-C Python LXST and real Rust TelephonyService/Ratspeak PTT in both call roles.",
+        "Actual audio worker passes three-profile ASan/UBSan checks; target owner/frame checks pass. Physical audio, total stack, heap, CPU and RF remain unqualified."
+      ],
+      "newPackages": [
+        "lxst-codec2",
+        "lxst-embedded"
       ]
     }
   },
