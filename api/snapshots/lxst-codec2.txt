@@ -5,6 +5,7 @@ pub lxst_codec2::Error::PcmLength
 pub enum lxst_codec2::Mode
 pub lxst_codec2::Mode::Rate1600
 pub lxst_codec2::Mode::Rate3200
+pub lxst_codec2::Mode::Rate700C
 impl lxst_codec2::Mode
 pub const fn lxst_codec2::Mode::bytes(self) -> usize
 pub const fn lxst_codec2::Mode::samples(self) -> usize

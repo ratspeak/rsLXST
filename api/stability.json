@@ -19,52 +19,29 @@
     "sourceCommit": "af89a03094605dbdf7264d06fdc546526ec6980b"
   },
   "snapshotSource": {
-    "commit": "e8c1a8d85a8792c3be21ba910db1d236f3ed1c4d",
+    "commit": "d9d62f3c7f1a3eb5625c69321757d2a540abae53",
     "capturedOn": "2026-10-01",
     "review": {
       "areas": [
-        "Shared host/embedded profiles and transitions, bounded wire/parser/session/media queue",
-        "Allocation-free native 1600/3200 Codec2 state initialized in caller storage",
-        "Bounded fixed-profile Codec2 packet processing and caller-owned PCM/output buffers",
-        "Native Codec2 backend contract and failure-state ownership",
-        "Existing Opus and telephony APIs retained",
-        "Host native Codec2 live streams and exact-Link revocable PTT lease; generic audio controls/events preserve existing Opus API"
+        "Native Codec2 700C mode, frame shapes and explicit mode identity",
+        "Host ULBW codec construction and native backend mode mapping",
+        "Shared DSP arithmetic and background/pitch correctness"
       ],
-      "canonicalPath": "lxst_telephony::TelephonyService",
-      "canonicalConstruction": [
-        "TelephonyService::registered",
-        "TelephonyService::registered_with_config",
-        "TelephonyServiceParts"
-      ],
-      "retainedImplementationPaths": [
-        "TelephonyRuntimeCore",
-        "TelephonyRnsEndpoint",
-        "TelephonyService::new",
-        "TelephonyService::with_config"
-      ],
-      "classification": "additive experimental live audio and embedded boundary; existing host API retained",
+      "canonicalPath": "lxst_codec2::Mode::Rate700C",
+      "classification": "one experimental enum variant added; existing method signatures retained",
       "publicApiDiff": {
-        "added": 373,
+        "added": 1,
         "removed": 0
       },
-      "semver": "additive experimental API in the unreleased 0.2 line; no existing signatures removed or changed",
+      "semver": "Unreleased experimental 0.2 API. Adding a variant to the exhaustive Mode enum requires downstream exhaustive matches to handle Rate700C; both workspace adapters are updated. Codec storage size grows and must be queried rather than hard-coded.",
       "deprecations": "none",
-      "wirePersistenceRuntimeImpact": "Existing Opus and native Codec2 wire identifiers and payloads remain unchanged. Generic host stream controls support native 1600/3200; optional local input leases gate queue admission, clear stale PCM, expire on UI stalls and limit bursts. No remote floor or LXMF memo extension.",
+      "wirePersistenceRuntimeImpact": "700C uses existing four-byte 28-bit native frames and standard ULBW framing. Host codec construction accepts ULBW; embedded advertised ProfileSet and production firmware remain unchanged at this foundation checkpoint. Shared arithmetic corrections can change old-mode encoded choices or decoded PCM without changing wire formats. No persisted state or memo extension.",
       "platformEvidence": [
-        "68 lxst-core tests including existing Python wire/raw parity",
-        "stable and Rust 1.87 strict Clippy",
-        "compiled external Codec2 consumer",
-        "24 actual Rust Codec2 packet-boundary cases against native frames and C reference data; codec quality and allocation qualification remain separate",
-        "separate Rust candidate no_std compile on pinned ESP32-S3 toolchain; no on-device runtime claim",
-        "Native zero-allocation contract, independent duplex histories and 20000 arbitrary decoder frames",
-        "12 bounded backend/C reference packet cases, exact locked ESP32-S3 compiler build and stable/MSRV strict Clippy",
-        "Embedded/full Rust canonical packets and shared transition parity; bounded malformed/random input and PTT privacy/lifecycle tests",
-        "Standalone embedded boundary builds no_std with the selected ESP32-S3 compiler",
-        "73 host telephony tests including encrypted native Codec2 duplex and revocable input lease; stable/MSRV Clippy and external consumer"
-      ],
-      "newPackages": [
-        "lxst-codec2",
-        "lxst-embedded"
+        "36 short/16-second native and packet cases with source hashes; all 2640 700C frames byte-identical to pinned C with -ffp-contract=off; decoder maximum difference 3 PCM counts",
+        "Zero-allocation initialization/reset and 3000 stream pairs plus 30000 arbitrary decode frames across three modes",
+        "96 scoped native/embedded/telephony tests plus standalone allocation contract; 21 opt-in live Python tests remain unrun for this foundation",
+        "Stable and Rust 1.87 strict Clippy; format, codebook generation, license and source-release checks",
+        "Selected ESP32-S3 compiler codegen: largest individual frame 8608 bytes; total stack, on-device CPU and live 700C interoperability remain unqualified"
       ]
     }
   },
@@ -75,8 +52,8 @@
       "tier": "experimental",
       "compatibility": "reviewed-snapshot",
       "snapshot": "api/snapshots/lxst-codec2.txt",
-      "itemCount": 17,
-      "sha256": "2f44f014e8789d1a96abed0000abf6f31f43fef34f54fcf59f28aa6a0fc8e5d1"
+      "itemCount": 18,
+      "sha256": "634ee1223c894a72833b25e0f56b4c54b8bddbd382a84665723dfcca8d8e289f"
     },
     {
       "name": "lxst-embedded",
