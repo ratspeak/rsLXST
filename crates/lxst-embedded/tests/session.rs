@@ -7,6 +7,9 @@ use lxst_embedded::{
 fn crossed_profile_offers_converge_before_media_without_an_echo_loop() {
     for (preferred, offered) in [
         (Profile::BandwidthLow, Profile::BandwidthVeryLow),
+        (Profile::BandwidthLow, Profile::BandwidthUltraLow),
+        (Profile::BandwidthUltraLow, Profile::BandwidthVeryLow),
+        (Profile::BandwidthVeryLow, Profile::BandwidthUltraLow),
         (Profile::BandwidthVeryLow, Profile::BandwidthLow),
     ] {
         let mut cfg = config();

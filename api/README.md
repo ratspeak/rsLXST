@@ -61,9 +61,9 @@ version consequences must be reviewed before accepting new evidence.
 ## Live audio and constrained peers
 
 `SendAudioFrames`, `StartAudioStream` and the corresponding receive/stop controls
-accept negotiated Opus and native Codec2 1600/3200 profiles. Original Opus
+accept negotiated Opus and native Codec2 700C/1600/3200 profiles. Original Opus
 controls remain available. Codec2 media emits `Audio*` service events; the
-existing Opus event stream is unchanged. 700C is not implemented.
+existing Opus event stream is unchanged. Standard ULBW uses ten four-byte 700C frames per 400 ms packet.
 
 `StartAudioStream` binds the exact active Link and optionally shares an
 `AudioTransmitGate` with the local input owner. Renew one press serial while

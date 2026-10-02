@@ -30,6 +30,12 @@ fn stalled_media_drops_old_frames_and_never_crosses_generations() {
 fn borrowed_native_backend_runs_shared_packet_adapter_without_state_moves() {
     for (mode, profile, bytes, samples) in [
         (
+            lxst_codec2::Mode::Rate700C,
+            Profile::BandwidthUltraLow,
+            41,
+            3200,
+        ),
+        (
             lxst_codec2::Mode::Rate1600,
             Profile::BandwidthVeryLow,
             65,
@@ -41,12 +47,12 @@ fn borrowed_native_backend_runs_shared_packet_adapter_without_state_moves() {
         let native = lxst_codec2::Codec::initialise(&mut storage, mode);
         let mut codec = Codec2PacketCodec::new(profile, native).unwrap();
         let mut output = [0xa5; 90];
-        let pcm = [0; 2560];
+        let pcm = [0; 3200];
         assert_eq!(
             codec.encode_into(&pcm[..samples], &mut output).unwrap(),
             bytes
         );
-        let mut decoded = [123; 2568];
+        let mut decoded = [123; 3208];
         assert_eq!(
             codec.decode_into(&output[..bytes], &mut decoded).unwrap(),
             samples

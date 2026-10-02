@@ -3945,7 +3945,11 @@ fn outgoing_teardown_is_atomic_final_endpoint_send() {
 #[tokio::test]
 async fn native_codec2_duplex_and_input_lease_use_the_real_link() {
     use std::sync::Arc;
-    for profile in [Profile::BandwidthVeryLow, Profile::BandwidthLow] {
+    for profile in [
+        Profile::BandwidthUltraLow,
+        Profile::BandwidthVeryLow,
+        Profile::BandwidthLow,
+    ] {
         let (mut service, remote, link_id, incoming, mut events, mut transport) =
             established_outgoing_service_with_transport(profile, 0x95, 32);
         let gate = Arc::new(AudioTransmitGate::new());
@@ -3990,7 +3994,9 @@ async fn native_codec2_duplex_and_input_lease_use_the_real_link() {
         assert_eq!(packet.frames[0].codec, CodecKind::Codec2);
         assert_eq!(
             packet.frames[0].payload.len(),
-            if profile == Profile::BandwidthVeryLow {
+            if profile == Profile::BandwidthUltraLow {
+                41
+            } else if profile == Profile::BandwidthVeryLow {
                 65
             } else {
                 81

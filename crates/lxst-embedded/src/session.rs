@@ -11,7 +11,7 @@ pub const TALK_LIMIT_MS: u64 = 30_000;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProfileSet(u8);
 impl ProfileSet {
-    pub const CODEC2: Self = Self(0b0000_0110);
+    pub const CODEC2: Self = Self(0b0000_0111);
     pub const OPUS_MEDIUM: Self = Self(0b0000_1000);
     pub const fn contains(self, profile: Profile) -> bool {
         self.0 & (1 << (profile.wire_value() / 16 - 1)) != 0
