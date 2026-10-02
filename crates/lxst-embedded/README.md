@@ -34,6 +34,7 @@ queue uses local expiry times; it cannot infer a sender timestamp, recover packe
 order, claim delivery or route speech through LXMF propagation.
 
 The native `Codec2Backend` implementation borrows a codec initialized in final
-storage. It never moves a large codec state onto the task stack. Only 1600/3200
-are implemented; profile metadata for 700C is not a 700C backend. Opus must be
-separately qualified before including it in a device's admitted profile set.
+storage. It never moves a large codec state onto the task stack. Native
+700C/1600/3200 implement standard ULBW/VLBW/LBW; `ProfileSet::CODEC2` includes
+all three. Embedders must restrict this set to the actual route and device
+budget. Opus requires a separate backend and device qualification.

@@ -4,6 +4,10 @@
 
 ### Embedded sessions
 
+- Implement bounded native Codec2 700C and advertise standard ULBW alongside
+  VLBW/LBW, with C-oracle fixtures and bidirectional Python/Rust interoperability.
+  Device CPU, stack, acoustic quality and RF usability still require qualification.
+
 - Add a no_std LXST boundary with fixed parser/queue limits and authenticated,
   accepted, audio-ready PTT gating. Share profile IDs, codec aggregation and
   call transitions with the host API. Bound profile fallback and answer retries;
