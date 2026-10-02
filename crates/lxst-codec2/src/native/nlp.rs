@@ -102,7 +102,7 @@ const nlp_fir: [f32; 48] = [
 ];
 
 //const PMAX_M: i32 = 320; /* maximum NLP analysis window size     */
-const COEFF: f32 = 0.95; /* notch filter parameter               */
+const COEFF: f64 = 0.95; /* notch filter parameter               */
 const PE_FFT_SIZE: i32 = 512; /* DFT size for pitch estimation        */
 const DEC: i32 = 5; /* decimation factor                    */
 const SAMPLE_RATE: i32 = 8000;
@@ -148,7 +148,7 @@ fn post_process_sub_multiples(
     let mut mult = 2;
     let min_bin = PE_FFT_SIZE * DEC / pmax;
     let mut cmax_bin = gmax_bin;
-    let prev_f0_bin = (*prev_f0) * ((PE_FFT_SIZE * DEC) as f32) / (SAMPLE_RATE as f32);
+    let prev_f0_bin = ((*prev_f0) * ((PE_FFT_SIZE * DEC) as f32) / (SAMPLE_RATE as f32)) as i32;
 
     while gmax_bin / mult >= min_bin {
         let b = gmax_bin / mult; /* determine search interval */
@@ -160,14 +160,14 @@ fn post_process_sub_multiples(
         /* lower threshold to favour previous frames pitch estimate,
         this is a form of pitch tracking */
 
-        let thresh = if (prev_f0_bin > bmin as f32) && (prev_f0_bin < bmax as f32) {
+        let thresh = if (prev_f0_bin > bmin as i32) && (prev_f0_bin < bmax as i32) {
             CNLP * 0.5 * gmax
         } else {
             CNLP * gmax
         };
         let mut lmax = 0.0;
         let mut lmax_bin = bmin;
-        for b in bmin..bmax {
+        for b in bmin..=bmax {
             /* look for maximum in interval */
             if Fw[b].r > lmax {
                 lmax = Fw[b].r;
@@ -184,6 +184,34 @@ fn post_process_sub_multiples(
     }
 
     cmax_bin as f32 * SAMPLE_RATE as f32 / (PE_FFT_SIZE as f32 * DEC as f32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn submultiple_search_includes_upper_interval_endpoint() {
+        let mut spectrum = [COMP::new(); PE_FFT_SIZE as usize];
+        spectrum[80].r = 100.0;
+        spectrum[48].r = 50.0; // Upper endpoint of the 80/2 search interval.
+        assert_eq!(
+            post_process_sub_multiples(&spectrum, 20, 160, 100.0, 80, &50.0),
+            150.0
+        );
+    }
+
+    #[test]
+    fn pitch_history_uses_an_integer_bin_before_threshold_comparison() {
+        let mut spectrum = [COMP::new(); PE_FFT_SIZE as usize];
+        spectrum[80].r = 100.0;
+        spectrum[40].r = 20.0; // Above tracking threshold, below normal threshold.
+        let previous = 32.5 * SAMPLE_RATE as f32 / (PE_FFT_SIZE * DEC) as f32;
+        assert_eq!(
+            post_process_sub_multiples(&spectrum, 20, 160, 100.0, 80, &previous),
+            250.0
+        );
+    }
 }
 
 /*---------------------------------------------------------------------------*\
@@ -287,7 +315,7 @@ pub fn nlp(
     for i in m - n..m {
         /* notch filter at DC */
         let mut notch = nlp.sq[i] - nlp.mem_x;
-        notch += COEFF * nlp.mem_y;
+        notch = (f64::from(notch) + COEFF * f64::from(nlp.mem_y)) as f32;
         nlp.mem_x = nlp.sq[i];
         nlp.mem_y = notch;
         nlp.sq[i] = notch + 1.0; /* With 0 input vectors to codec,

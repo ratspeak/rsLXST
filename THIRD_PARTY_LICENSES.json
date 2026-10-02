@@ -110,8 +110,40 @@
       "upstreamCommit": "24ec3b7c5b9892c268e180802ee3a5ce7737f214",
       "crateChecksum": "3c3c8ba70382a99c0b5ebadf6ad50e7d98fb6eb9bcc4c0e30d422f6321798d99",
       "provenance": "crates/lxst-codec2/UPSTREAM.json",
+      "additionalSources": [
+        {
+          "repository": "https://github.com/drowe67/codec2",
+          "commit": "310777b1c6f1af0bc7c72f5b32f80f6fd9136962",
+          "license": "LGPL-2.1-only",
+          "source_sha256": {
+            "src/codec2.c": "57dcb29bd9376bb32f9ea5d6f16e36a4b635ddf976683f0c0c46fd4989550bf5",
+            "src/newamp1.c": "8df144b2ef72abdf2fc3ff66ec5c682694bdb4e940a668d1c13b3f4335168c93",
+            "src/newamp1.h": "457f8357a8ca2f064f77cb68abebfe1acf4fb6be82802b43244d7c926d356423",
+            "src/mbest.c": "91e0126fc7a001d9a019cea49545263ed0c58dc4418eea871549505bc5b935fc",
+            "src/phase.c": "751d3123d070c42fcb235affe154219f3326fb0e8a13335f4b9e1389ab295eb2",
+            "src/quantise.c": "a9b6dbadfee5c79b5ba346e606152c735d1096c2f3552a3da3b39c024469732f",
+            "src/codebook/train_120_1.txt": "a3aa8da88db8b4a9168023c2269a4f4f9555aec20ed81a44752cce86c9d1d6f4",
+            "src/codebook/train_120_2.txt": "2e57e1f514d9e1ff165f3a6dd1f689af2565de6195300ce0d468af9b7f2120b3",
+            "src/codebook/newamp1_energy_q.txt": "ae75dc2e0fbd38bd2341795f00162a677251ec66deff6015015e19168d7bfee2",
+            "src/sine.c": "9d286a353734f6968e6fd6502d089a95d46a226757a16346fa9b27169b958252",
+            "src/nlp.c": "5c35a44bc3093bd74fe7411e48214ed38afd59b0b84206d73b1751343f27c3ba",
+            "src/postfilter.c": "52fd7d3131e947b71644851224d09351fd53974c6f4abb2c25a1d0f8d12a0d07",
+            "src/kiss_fft.c": "f16ca65e00a766c8c17bbd8c068168e9615c9b9e493fda2acf2822d743cc40c8",
+            "src/kiss_fftr.c": "fcd5fb59beae112c91a53832e4ff24242ef3192fa57f0845dd8dcbf11e46c16d",
+            "src/_kiss_fft_guts.h": "25fbd1b559e52dd255bc0129806c84c863f21bbafe652c83e169438cff517a9e",
+            "src/defines.h": "2b0c3f83f38a8bb7f49b3fad6634e4acbb946216b2bba634264d3cb4440243f0"
+          },
+          "adaptation_notes": [
+            "Fixed-storage newamp1 and 128-point phase FFTs; default postfilter on, front EQ off",
+            "One 10 ms synthesis model at a time; per-instance random and predictor histories",
+            "Shared analysis preserves C scalar precision and pitch-refinement accumulation order",
+            "Corrected inherited background-estimator voicing condition and pitch-search inclusive endpoint/integer history bin",
+            "Reference scalar promotions retained for windows, twiddles, notch filter and phase synthesis; numerical oracle disables compiler FMA contraction to match Rust scalar operations"
+          ]
+        }
+      ],
       "notices": {
-        "crates/lxst-codec2/NOTICE": "33cc10cd398e8e724030091025d885ec10ee16b9d95d707ad5df7fe812c17f84",
+        "crates/lxst-codec2/NOTICE": "ff1ada84455bc83cd13a4313624a47661f367758784447842604f7c4b595a53c",
         "crates/lxst-codec2/licenses/KISS-FFT-BSD-3-Clause.txt": "49eea0111dfb7038dc18f74034cc517690395ebac8f7768f999133b16e4bf064",
         "crates/lxst-codec2/licenses/LGPL-2.1.txt": "9ebb6f82b7380a62ac74c5f0322c88e6744dedf2ebe1f54d6f088282b39844bf",
         "crates/lxst-codec2/licenses/upstream-Cargo.toml": "939e2818dcb2945f52eceb71b37b512bf1796da53a05e0a69276d5a2e55f9eed",

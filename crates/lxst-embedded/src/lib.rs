@@ -32,6 +32,7 @@ impl Codec2Backend for &mut lxst_codec2::Codec {
         match lxst_codec2::Codec::mode(self) {
             lxst_codec2::Mode::Rate1600 => Codec2Mode::Mode1600,
             lxst_codec2::Mode::Rate3200 => Codec2Mode::Mode3200,
+            lxst_codec2::Mode::Rate700C => Codec2Mode::Mode700C,
         }
     }
     fn encode_native(&mut self, pcm: &[i16], encoded: &mut [u8]) -> Result<(), Self::Error> {

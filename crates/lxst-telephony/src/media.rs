@@ -14,6 +14,7 @@ impl Codec2Backend for Native {
         match self.0.mode() {
             Mode::Rate1600 => Codec2Mode::Mode1600,
             Mode::Rate3200 => Codec2Mode::Mode3200,
+            Mode::Rate700C => Codec2Mode::Mode700C,
         }
     }
     fn encode_native(&mut self, pcm: &[i16], bytes: &mut [u8]) -> Result<(), Self::Error> {
@@ -34,6 +35,7 @@ pub(crate) struct Codec2Audio {
 impl Codec2Audio {
     fn new(profile: Profile) -> Result<Self, Error> {
         let mode = match profile {
+            Profile::BandwidthUltraLow => Mode::Rate700C,
             Profile::BandwidthVeryLow => Mode::Rate1600,
             Profile::BandwidthLow => Mode::Rate3200,
             _ => return Err(Error::Audio("unsupported native Codec2 profile".into())),

@@ -142,6 +142,7 @@ def build_inventory() -> dict:
         "repository": provenance["repository"], "source": "local-adaptation",
         "upstreamCommit": provenance["commit"], "crateChecksum": provenance["crate_sha256"],
         "provenance": "crates/lxst-codec2/UPSTREAM.json",
+        "additionalSources": [provenance["codec2_700c"]],
         "notices": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                     for p in [adapted / "NOTICE", *sorted((adapted / "licenses").iterdir())]},
     })

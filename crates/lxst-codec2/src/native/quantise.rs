@@ -950,7 +950,8 @@ pub fn phase_synth_zero_order(
     */
 
     *ex_phase += (model.Wo) * n_samp as f32;
-    *ex_phase -= TWO_PI * (*ex_phase / TWO_PI + 0.5).dsp_floor();
+    let turns = ((f64::from(*ex_phase) / 6.283185307_f64 + 0.5) as f32).dsp_floor();
+    *ex_phase = (f64::from(*ex_phase) - 6.283185307_f64 * f64::from(turns)) as f32;
 
     for m in 1..model.L + 1 {
         //  generate excitation
@@ -963,7 +964,8 @@ pub fn phase_synth_zero_order(
             //   phase is not needed in the unvoiced case, but no harm in
             //   keeping it.
 
-            let phi = TWO_PI * codec2_rand(random) / CODEC2_RAND_MAX;
+            let phi = (6.283185307_f64 * f64::from(codec2_rand(random))
+                / f64::from(CODEC2_RAND_MAX)) as f32;
             Ex[m].r = phi.dsp_cos();
             Ex[m].i = phi.dsp_sin();
         }
@@ -975,7 +977,7 @@ pub fn phase_synth_zero_order(
 
         //  modify sinusoidal phase
 
-        let new_phi = A_[m].i.dsp_atan2(A_[m].r + 1E-12);
+        let new_phi = A_[m].i.dsp_atan2((f64::from(A_[m].r) + 1E-12) as f32);
         model.phi[m] = new_phi;
     }
 }
@@ -1328,7 +1330,9 @@ pub fn synthesise(
 
     //  Now set up frequency domain synthesised speech
     for l in 1..model.L + 1 {
-        let mut b = (l as f32 * model.Wo * FFT_DEC as f32 / TWO_PI + 0.5) as usize;
+        // Preserve the reference C promotion at the bin boundary.
+        let mut b =
+            (f64::from(l as f32 * model.Wo * FFT_DEC as f32) / 6.283185307_f64 + 0.5) as usize;
         if b > ((FFT_DEC / 2) - 1) {
             b = (FFT_DEC / 2) - 1;
         }
@@ -1367,7 +1371,7 @@ pub fn synthesise(
 }
 
 const BG_THRESH: f32 = 40.0; //  only consider low levels signals for bg_est
-const BG_BETA: f32 = 0.1; //  averaging filter constant
+const BG_BETA: f64 = 0.1; //  reference scalar precision for the averaging filter
 const BG_MARGIN: f32 = 6.0; //  harmonics this far above BG noise are
 //   randomised.  Helped make bg noise less
 //   spikey (impulsive) for mmt1, but speech was
@@ -1432,18 +1436,22 @@ pub fn postfilter(model: &mut MODEL, bg_est: &mut f32, random: &mut u32) {
     // of the threshold is to prevent updating during high level
     // speech.
 
-    if e < BG_THRESH && model.voiced != 0 {
-        *bg_est = *bg_est * (1.0 - BG_BETA) + e * BG_BETA;
+    if e < BG_THRESH && model.voiced == 0 {
+        *bg_est = (f64::from(*bg_est) * (1.0 - BG_BETA) + f64::from(e) * BG_BETA) as f32;
     }
     //  now mess with phases during voiced frames to make any harmonics
     //  less then our background estimate unvoiced.
 
     //  let mut uv = 0;
-    let thresh = 10.0_f32.dsp_powf((*bg_est + BG_MARGIN) / 20.0);
+    let thresh = libm::expf(
+        (f64::from(2.302585092994046_f32) * ((f64::from(*bg_est) + f64::from(BG_MARGIN)) / 20.0))
+            as f32,
+    );
     if model.voiced != 0 {
         for m in 1..model.L + 1 {
             if model.A[m] < thresh {
-                model.phi[m] = (TWO_PI / CODEC2_RAND_MAX) * codec2_rand(random);
+                model.phi[m] = ((6.283185307_f64 / f64::from(CODEC2_RAND_MAX))
+                    * f64::from(codec2_rand(random))) as f32;
                 //uv++;
             }
         }

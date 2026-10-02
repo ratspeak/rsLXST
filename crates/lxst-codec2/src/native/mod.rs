@@ -13,6 +13,9 @@ mod codebookge;
 use self::codebookge::*;
 mod codebookjvm;
 use self::codebookjvm::*;
+#[rustfmt::skip]
+mod codebook700c;
+mod newamp1;
 
 const WO_BITS: i32 = 7;
 const WO_E_BITS: u32 = 8;
@@ -148,16 +151,16 @@ mod inner {
     }
     impl<const N: usize> kiss_fft_state<N> {
         pub fn initialise(&mut self, nfft: usize, inverse_fft: i32) {
-            assert!((nfft == 256 || nfft == 512) && nfft <= N);
+            assert!((nfft == 128 || nfft == 256 || nfft == 512) && nfft <= N);
             self.nfft = nfft;
             self.inverse = inverse_fft;
             self.twiddles.initialise(nfft, kiss_fft_cpx::new());
             for i in 0..nfft {
-                let mut phase = -2.0 * PI * i as f32 / nfft as f32;
+                let mut phase = -2.0 * core::f64::consts::PI * i as f64 / nfft as f64;
                 if inverse_fft != 0 {
                     phase *= -1.0;
                 }
-                self.twiddles[i] = kiss_fft_cpx::kf_cexp(phase);
+                self.twiddles[i] = kiss_fft_cpx::kf_cexp(phase as f32);
             }
             let mut n = nfft;
             let mut p = 4;
@@ -200,8 +203,9 @@ mod inner {
             self.super_twiddles
                 .initialise(nfft / 2, kiss_fft_cpx::new());
             for i in 0..nfft / 2 {
-                let mut phase =
-                    -3.14159265358979323846264338327 * ((i as f32 + 1.0) / nfft as f32 + 0.5);
+                let mut phase = (-core::f64::consts::PI
+                    * (f64::from((i + 1) as f32 / nfft as f32) + 0.5))
+                    as f32;
                 if inverse_fft != 0 {
                     phase *= -1.0;
                 }
@@ -227,8 +231,12 @@ mod inner {
             self.Fs = c2const.Fs;
             self.m = c2const.m_pitch;
             for i in 0..self.m / DEC {
-                self.w[i] = 0.5
-                    - 0.5 * (2.0 * PI * i as f32 / (self.m as f32 / DEC as f32 - 1.0)).dsp_cos();
+                self.w[i] = (0.5
+                    - 0.5
+                        * f64::from(
+                            ((2.0 * 3.141592654_f64 * i as f64 / (self.m / DEC - 1) as f64) as f32)
+                                .dsp_cos(),
+                        )) as f32;
             }
         }
     }
@@ -338,6 +346,7 @@ struct Codec2Internal {
     se: f32,        //  running sum of squared error
     nse: u32,       //  number of terms in sum
     post_filter_en: i32,
+    newamp: newamp1::State,
 }
 
 /*---------------------------------------------------------------------------*\
@@ -402,7 +411,9 @@ fn make_analysis_window(
     }
     let mut j = 0;
     for i in m_pitch / 2 - nw / 2..m_pitch / 2 + nw / 2 {
-        w[i] = 0.5 - 0.5 * (TWO_PI * (j as f32) / ((nw as f32) - 1.0)).dsp_cos();
+        w[i] = (0.5
+            - 0.5 * f64::from(((6.283185307_f64 * j as f64 / (nw - 1) as f64) as f32).dsp_cos()))
+            as f32;
         m += w[i] * w[i];
         j += 1;
     }
@@ -601,7 +612,7 @@ pub enum Codec2Mode {
     MODE_3200,
 
     MODE_1600,
-    //MODE_700C,
+    MODE_700C,
     //MODE_450,
     //MODE_450PWB,
 }
@@ -614,6 +625,10 @@ pub struct Codec2 {
 }
 
 impl Codec2 {
+    pub fn mode(&self) -> Codec2Mode {
+        self.internal.mode
+    }
+
     /// Creates a new Codec2 object suitable for encoding or decoding audio
     pub fn initialise(&mut self, mode: Codec2Mode) {
         let c2 = self;
@@ -643,6 +658,9 @@ impl Codec2 {
         c2.internal.gamma = LPCPF_GAMMA;
         c2.internal.post_filter_en = 1;
         c2.internal.random = 1;
+        if matches!(mode, MODE_700C) {
+            c2.internal.newamp.initialise();
+        }
         for i in 0..LPC_ORD {
             c2.internal.prev_lsps_dec[i] = i as f32 * PI / (LPC_ORD as f32 + 1.0);
         }
@@ -661,7 +679,7 @@ impl Codec2 {
             MODE_3200 => 64,
 
             MODE_1600 => 64,
-            // MODE_700C => 28,
+            MODE_700C => 28,
             // MODE_450 => 18,
             // MODE_450PWB => 18,
         }
@@ -672,6 +690,7 @@ impl Codec2 {
         match self.internal.mode {
             MODE_3200 => 160,
             MODE_1600 => 320,
+            MODE_700C => 320,
             //MODE_450PWB => 640,
         }
     }
@@ -683,6 +702,7 @@ impl Codec2 {
             MODE_3200 => self.codec2_encode_3200(bits, speech),
 
             MODE_1600 => self.codec2_encode_1600(bits, speech),
+            MODE_700C => self.codec2_encode_700c(bits, speech),
         }
     }
 
@@ -693,6 +713,7 @@ impl Codec2 {
             MODE_3200 => self.codec2_decode_3200(speech, bits),
 
             MODE_1600 => self.codec2_decode_1600(speech, bits),
+            MODE_700C => self.codec2_decode_700c(speech, bits),
         }
     }
 
@@ -1946,7 +1967,7 @@ impl Codec2 {
             &self.internal.W,
             &mut self.internal.prev_f0_enc,
         );
-        model.Wo = TWO_PI / pitch;
+        model.Wo = (6.283185307_f64 / f64::from(pitch)) as f32;
         model.L = (PI / model.Wo) as usize;
 
         //  estimate model parameters
@@ -1970,6 +1991,16 @@ impl Codec2 {
     // call boundary is deliberate on MCU stacks, including fat-LTO builds.
     #[inline(never)]
     fn synthesise_phase(&mut self, model: &mut MODEL, Aw: &[COMP]) {
+        if matches!(self.internal.mode, MODE_700C) {
+            phase_synth_zero_order(
+                self.internal.n_samp,
+                model,
+                &mut self.internal.ex_phase,
+                Aw,
+                &mut self.internal.random,
+            );
+            return;
+        }
         //  LPC based phase synthesis
         let mut H = [COMP::new(); MAX_AMP + 1];
         sample_phase(model, &mut H, Aw);
@@ -2218,33 +2249,35 @@ fn estimate_amplitudes(model: &mut MODEL, Sw: &[COMP], _W: &[f32], est_phase: i3
 
 \*---------------------------------------------------------------------------*/
 fn two_stage_pitch_refinement(c2const: &C2const, model: &mut MODEL, Sw: &[COMP]) {
+    // Preserve the C reference's scalar precision before f32 storage. Changing
+    // these operations to f32 changes candidate/bin selection near boundaries.
     //  Coarse refinement
     //  pitch refinment minimum, maximum and step
-    let mut pmax = TWO_PI / model.Wo + 5.0;
-    let mut pmin = TWO_PI / model.Wo - 5.0;
+    let mut pmax = (6.283185307_f64 / f64::from(model.Wo) + 5.0) as f32;
+    let mut pmin = (6.283185307_f64 / f64::from(model.Wo) - 5.0) as f32;
     let mut pstep = 1.0;
     hs_pitch_refinement(model, Sw, pmin, pmax, pstep);
 
     //  Fine refinement
 
-    pmax = TWO_PI / model.Wo + 1.0;
-    pmin = TWO_PI / model.Wo - 1.0;
+    pmax = (6.283185307_f64 / f64::from(model.Wo) + 1.0) as f32;
+    pmin = (6.283185307_f64 / f64::from(model.Wo) - 1.0) as f32;
     pstep = 0.25;
     hs_pitch_refinement(model, Sw, pmin, pmax, pstep);
 
     //  Limit range
 
-    if model.Wo < TWO_PI / (c2const.p_max as f32) {
-        model.Wo = TWO_PI / (c2const.p_max as f32);
+    if model.Wo < (6.283185307_f64 / c2const.p_max as f64) as f32 {
+        model.Wo = (6.283185307_f64 / c2const.p_max as f64) as f32;
     }
-    if model.Wo > TWO_PI / (c2const.p_min as f32) {
-        model.Wo = TWO_PI / (c2const.p_min as f32);
+    if model.Wo > (6.283185307_f64 / c2const.p_min as f64) as f32 {
+        model.Wo = (6.283185307_f64 / c2const.p_min as f64) as f32;
     }
 
-    model.L = (PI / model.Wo).dsp_floor() as usize;
+    model.L = ((3.141592654_f64 / f64::from(model.Wo)) as f32).dsp_floor() as usize;
 
     //  trap occasional round off issues with floorf()
-    if model.Wo * model.L as f32 >= 0.95 * PI {
+    if f64::from(model.Wo * model.L as f32) >= 0.95 * 3.141592654_f64 {
         model.L -= 1;
     }
     //  assert(model.Wo*model.L < PI);
@@ -2269,7 +2302,7 @@ fn two_stage_pitch_refinement(c2const: &C2const, model: &mut MODEL, Sw: &[COMP])
 fn hs_pitch_refinement(model: &mut MODEL, Sw: &[COMP], pmin: f32, pmax: f32, pstep: f32) {
     //  Initialisation
 
-    model.L = (PI / model.Wo) as usize; //  use initial pitch est. for L
+    model.L = (3.141592654_f64 / f64::from(model.Wo)) as usize; //  use initial pitch est. for L
     let mut Wom = model.Wo; // Wo that maximises E
     let mut Em = 0.0; // mamimum energy
     let r = TWO_PI / FFT_ENC as f32; // number of rads/bin
@@ -2279,13 +2312,16 @@ fn hs_pitch_refinement(model: &mut MODEL, Sw: &[COMP], pmin: f32, pmax: f32, pst
     let mut p = pmin; // current pitch
     while p <= pmax {
         let mut E = 0.0; //energy for current pitch
-        let Wo = TWO_PI / p; // current "test" fundamental freq.
+        let Wo = (6.283185307_f64 / f64::from(p)) as f32; // current "test" fundamental freq.
 
+        let bin_step = Wo * one_on_r;
+        let mut bin = bin_step;
         //  Sum harmonic magnitudes
-        for m in 1..model.L + 1 {
+        for _ in 1..model.L + 1 {
             // bin for current harmonic centre
-            let b = (m as f32 * Wo * one_on_r + 0.5) as usize;
+            let b = (f64::from(bin) + 0.5) as usize;
             E += Sw[b].r * Sw[b].r + Sw[b].i * Sw[b].i;
+            bin += bin_step;
         }
         //  Compare to see if this is a maximum
 
@@ -2303,6 +2339,32 @@ fn hs_pitch_refinement(model: &mut MODEL, Sw: &[COMP], pmin: f32, pmax: f32, pst
 mod tests {
     extern crate std;
     use super::*;
+
+    #[test]
+    fn background_estimate_tracks_quiet_unvoiced_speech_only() {
+        let mut model = MODEL::new(160.0);
+        model.L = 10;
+        model.A[1..=10].fill(10.0); // 20 dB, below the background threshold.
+        let mut random = 1;
+        let mut estimate = 0.0;
+        model.voiced = 0;
+        postfilter(&mut model, &mut estimate, &mut random);
+        assert!(estimate > 0.0);
+        let previous = estimate;
+        model.voiced = 1;
+        postfilter(&mut model, &mut estimate, &mut random);
+        assert_eq!(
+            estimate, previous,
+            "voiced speech must not raise background noise"
+        );
+        model.voiced = 0;
+        model.A[1..=10].fill(1000.0);
+        postfilter(&mut model, &mut estimate, &mut random);
+        assert_eq!(
+            estimate, previous,
+            "loud unvoiced speech must not train background noise"
+        );
+    }
 
     #[test]
     fn real_fft_preserves_second_half_input() {

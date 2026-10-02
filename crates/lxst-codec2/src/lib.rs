@@ -27,18 +27,22 @@ use core::mem::MaybeUninit;
 pub enum Mode {
     Rate1600,
     Rate3200,
+    Rate700C,
 }
 
 impl Mode {
     pub const fn samples(self) -> usize {
         match self {
-            Self::Rate1600 => 320,
+            Self::Rate1600 | Self::Rate700C => 320,
             Self::Rate3200 => 160,
         }
     }
 
     pub const fn bytes(self) -> usize {
-        8
+        match self {
+            Self::Rate700C => 4,
+            Self::Rate1600 | Self::Rate3200 => 8,
+        }
     }
 }
 
@@ -78,6 +82,7 @@ impl Codec {
         self.native.initialise(match mode {
             Mode::Rate1600 => native::Codec2Mode::MODE_1600,
             Mode::Rate3200 => native::Codec2Mode::MODE_3200,
+            Mode::Rate700C => native::Codec2Mode::MODE_700C,
         });
     }
 
@@ -89,9 +94,10 @@ impl Codec {
     }
 
     pub fn mode(&self) -> Mode {
-        match self.native.samples_per_frame() {
-            320 => Mode::Rate1600,
-            _ => Mode::Rate3200,
+        match self.native.mode() {
+            native::Codec2Mode::MODE_1600 => Mode::Rate1600,
+            native::Codec2Mode::MODE_3200 => Mode::Rate3200,
+            native::Codec2Mode::MODE_700C => Mode::Rate700C,
         }
     }
 

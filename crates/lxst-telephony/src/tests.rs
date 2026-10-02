@@ -4051,7 +4051,11 @@ async fn native_codec2_duplex_and_input_lease_use_the_real_link() {
 
 #[test]
 fn native_codec2_rejects_bad_shapes_and_mode_without_poisoning_valid_media() {
-    for profile in [Profile::BandwidthVeryLow, Profile::BandwidthLow] {
+    for profile in [
+        Profile::BandwidthUltraLow,
+        Profile::BandwidthVeryLow,
+        Profile::BandwidthLow,
+    ] {
         let mut encoder = media::AudioEncoder::new(profile).unwrap();
         let mut invalid = synthetic_frame_for_profile(profile);
         invalid.samples[0] = f32::NAN;
@@ -4066,5 +4070,4 @@ fn native_codec2_rejects_bad_shapes_and_mode_without_poisoning_valid_media() {
         packet.payload[0] = mode;
         assert!(decoder.decode_frame(&packet).is_ok());
     }
-    assert!(media::AudioEncoder::new(Profile::BandwidthUltraLow).is_err());
 }

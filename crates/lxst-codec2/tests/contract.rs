@@ -19,7 +19,7 @@ static ALLOCATOR: Meter = Meter;
 // One process/thread: unrelated parallel test allocations cannot contaminate
 // the count. Large states are allocated before measurement and initialised in place.
 fn main() {
-    for mode in [Mode::Rate1600, Mode::Rate3200] {
+    for mode in [Mode::Rate1600, Mode::Rate3200, Mode::Rate700C] {
         let mut duplex_storage = Box::<Codec>::new_uninit();
         let mut encoder_storage = Box::<Codec>::new_uninit();
         let mut decoder_storage = Box::<Codec>::new_uninit();
@@ -28,6 +28,7 @@ fn main() {
         let encoder = Codec::initialise(&mut encoder_storage, mode);
         let decoder = Codec::initialise(&mut decoder_storage, mode);
         let samples = mode.samples();
+        let bytes = mode.bytes();
         let mut input = [0_i16; 320];
         let mut expected = [0_i16; 320];
         let mut actual = [0_i16; 320];
@@ -58,24 +59,40 @@ fn main() {
             );
             assert_eq!(same, [0xA5; 8]);
             assert_eq!(
-                duplex.encode(&input[..samples], &mut same[..7]),
+                duplex.encode(&input[..samples], &mut same[..bytes - 1]),
                 Err(Error::EncodedLength)
             );
             actual.fill(123);
             assert_eq!(
-                duplex.decode(&encoded[..7], &mut actual[..samples]),
+                duplex.decode(&encoded[..bytes - 1], &mut actual[..samples]),
                 Err(Error::EncodedLength)
             );
             assert_eq!(
-                duplex.decode(&encoded, &mut actual[..samples - 1]),
+                duplex.decode(&encoded[..bytes], &mut actual[..samples - 1]),
                 Err(Error::PcmLength)
             );
             assert!(actual.iter().all(|v| *v == 123));
-            encoder.encode(&input[..samples], &mut encoded).unwrap();
-            duplex.encode(&input[..samples], &mut same).unwrap();
-            assert_eq!(encoded, same, "receive activity changed encoder history");
-            decoder.decode(&encoded, &mut expected[..samples]).unwrap();
-            duplex.decode(&encoded, &mut actual[..samples]).unwrap();
+            encoder
+                .encode(&input[..samples], &mut encoded[..bytes])
+                .unwrap();
+            duplex
+                .encode(&input[..samples], &mut same[..bytes])
+                .unwrap();
+            assert_eq!(
+                encoded[..bytes],
+                same[..bytes],
+                "receive activity changed encoder history"
+            );
+            assert!(same[bytes..].iter().all(|byte| *byte == 0xA5));
+            if mode == Mode::Rate700C {
+                assert_eq!(encoded[3] & 0x0f, 0, "700C native padding");
+            }
+            decoder
+                .decode(&encoded[..bytes], &mut expected[..samples])
+                .unwrap();
+            duplex
+                .decode(&encoded[..bytes], &mut actual[..samples])
+                .unwrap();
             assert_eq!(
                 expected[..samples],
                 actual[..samples],
@@ -87,7 +104,7 @@ fn main() {
                 decoder.reset(mode);
             }
         }
-        // Every 64-bit payload is valid codec data. Exercise decoder indices on
+        // Every correctly-sized payload is valid codec data. Exercise decoder indices on
         // hostile but correctly-sized frames, including both extrema.
         for frame in 0..10000 {
             for byte in &mut encoded {
@@ -98,7 +115,9 @@ fn main() {
                     _ => (rng >> 24) as u8,
                 };
             }
-            duplex.decode(&encoded, &mut actual[..samples]).unwrap();
+            duplex
+                .decode(&encoded[..bytes], &mut actual[..samples])
+                .unwrap();
         }
         assert_eq!(
             ALLOCATIONS.load(Relaxed),
@@ -107,7 +126,8 @@ fn main() {
         );
         let other = match mode {
             Mode::Rate1600 => Mode::Rate3200,
-            Mode::Rate3200 => Mode::Rate1600,
+            Mode::Rate3200 => Mode::Rate700C,
+            Mode::Rate700C => Mode::Rate1600,
         };
         duplex.reset(other);
         assert_eq!(duplex.mode(), other);
