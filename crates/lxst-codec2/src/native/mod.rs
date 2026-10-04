@@ -1,6 +1,8 @@
 use super::{Buffer, FloatMath};
 use core::f32::consts::PI;
 
+mod fft_coefficients;
+mod fft_tables;
 mod kiss_fft;
 mod nlp;
 mod quantise;
@@ -147,21 +149,14 @@ mod inner {
         pub nfft: usize,
         pub inverse: i32,
         pub factors: [usize; 2 * MAXFACTORS],
-        pub twiddles: Buffer<kiss_fft_cpx, N>,
+        pub twiddles: fft_tables::ComplexTable,
     }
     impl<const N: usize> kiss_fft_state<N> {
         pub fn initialise(&mut self, nfft: usize, inverse_fft: i32) {
             assert!((nfft == 128 || nfft == 256 || nfft == 512) && nfft <= N);
             self.nfft = nfft;
             self.inverse = inverse_fft;
-            self.twiddles.initialise(nfft, kiss_fft_cpx::new());
-            for i in 0..nfft {
-                let mut phase = -2.0 * core::f64::consts::PI * i as f64 / nfft as f64;
-                if inverse_fft != 0 {
-                    phase *= -1.0;
-                }
-                self.twiddles[i] = kiss_fft_cpx::kf_cexp(phase as f32);
-            }
+            self.twiddles.initialise(nfft, inverse_fft != 0);
             let mut n = nfft;
             let mut p = 4;
             let floor_sqrt = (n as f32).dsp_sqrt().dsp_floor() as usize;
@@ -193,24 +188,14 @@ mod inner {
     pub struct kiss_fftr_state {
         pub substate: kiss_fft_state<256>,
         pub tmpbuf: Buffer<kiss_fft_cpx, 256>,
-        pub super_twiddles: Buffer<kiss_fft_cpx, 128>,
+        pub super_twiddles: fft_tables::RealTable,
     }
     impl kiss_fftr_state {
         pub fn initialise(&mut self, nfft: usize, inverse_fft: i32) {
             let nfft = nfft / 2;
             self.substate.initialise(nfft, inverse_fft);
             self.tmpbuf.initialise(nfft, kiss_fft_cpx::new());
-            self.super_twiddles
-                .initialise(nfft / 2, kiss_fft_cpx::new());
-            for i in 0..nfft / 2 {
-                let mut phase = (-core::f64::consts::PI
-                    * (f64::from((i + 1) as f32 / nfft as f32) + 0.5))
-                    as f32;
-                if inverse_fft != 0 {
-                    phase *= -1.0;
-                }
-                self.super_twiddles[i] = kiss_fft_cpx::kf_cexp(phase);
-            }
+            self.super_twiddles.initialise(nfft, inverse_fft != 0);
         }
     }
 

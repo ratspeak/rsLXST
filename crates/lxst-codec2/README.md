@@ -33,3 +33,14 @@ are distinct qualification gates.
 
 See [NOTICE](NOTICE), [UPSTREAM.json](UPSTREAM.json) and [licenses](licenses/)
 for source provenance, modifications and original license notices.
+
+FFT coefficient tables are shared read-only data, generated using the pinned
+`libm` and the original native initialisation formulas. Per-stream state keeps
+only integer selectors; encoder/decoder histories and mutable FFT scratch remain
+independent. A bit-for-bit table test covers every supported size and direction.
+Regenerate the checked-in coefficients with:
+
+```sh
+cargo run -p lxst-codec2 --example generate_fft_tables --locked --offline > crates/lxst-codec2/src/native/fft_coefficients.rs
+cargo fmt -p lxst-codec2
+```

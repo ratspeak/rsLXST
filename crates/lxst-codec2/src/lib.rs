@@ -3,6 +3,8 @@
 //! Adapted from the pinned pure-Rust Codec2 port recorded in `UPSTREAM.json`.
 //! Initialise directly in caller-owned storage; the state is too large to create
 //! as a temporary on an MCU task stack. Encoding/decoding and reset never allocate.
+//! Immutable FFT coefficients are shared in read-only storage; stream histories
+//! and mutable transform scratch remain independently owned.
 #![no_std]
 
 mod buffer;
@@ -65,7 +67,7 @@ pub struct Codec {
 impl Codec {
     /// Initialise in final, aligned caller storage without a whole-state copy.
     pub fn initialise(storage: &mut MaybeUninit<Self>, mode: Mode) -> &mut Self {
-        // SAFETY: all native fields are integers, floats, arrays, fixed buffers
+        // SAFETY: all native fields are integers, floats, booleans, arrays, fixed buffers
         // (zero length is valid), or Codec2Mode (repr(u8), first variant is 0).
         // There are no references, pointers, heap owners or Drop implementations.
         // Thus zero bytes form a valid value. We finish logical initialisation
