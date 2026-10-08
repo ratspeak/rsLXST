@@ -11,7 +11,9 @@ permissions:
 
 env:
   RSLXST_RSRETICULUM_VERSION: 1.3.0
-  RSLXST_RSRETICULUM_COMMIT: d4183434fcb969799c208ddcf140bae7550c14fe
+  RSLXST_RSRETICULUM_COMMIT: 5edb8f22f5d8e6b2bd7392dc06e255ead96576fb
+  RSLXST_PYTHON_LXST_COMMIT: 1194c9011fe6402edc7aebe7ffe9650ea3b1afee
+  RSLXST_PYTHON_RNS_COMMIT: b48b96e61676504e0a4e527b33b9a0b4495c6872
 
 jobs:
   api-compat:
@@ -68,10 +70,12 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: markqvist/LXST
+          ref: ${{ env.RSLXST_PYTHON_LXST_COMMIT }}
           path: upstream/LXST
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: markqvist/Reticulum
+          ref: ${{ env.RSLXST_PYTHON_RNS_COMMIT }}
           path: upstream/Reticulum
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
@@ -118,10 +122,12 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: markqvist/LXST
+          ref: ${{ env.RSLXST_PYTHON_LXST_COMMIT }}
           path: upstream/LXST
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: markqvist/Reticulum
+          ref: ${{ env.RSLXST_PYTHON_RNS_COMMIT }}
           path: upstream/Reticulum
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
@@ -160,10 +166,12 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: markqvist/LXST
+          ref: ${{ env.RSLXST_PYTHON_LXST_COMMIT }}
           path: upstream/LXST
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: markqvist/Reticulum
+          ref: ${{ env.RSLXST_PYTHON_RNS_COMMIT }}
           path: upstream/Reticulum
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:

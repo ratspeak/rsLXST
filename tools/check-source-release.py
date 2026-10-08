@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_PACKAGES = {"lxst-core", "lxst-codec2", "lxst-embedded", "lxst-rns", "lxst-telephony"}
 EXPECTED_MSRV = "1.87"
 EXPECTED_RETICULUM_VERSION = "1.3.0"
-EXPECTED_RETICULUM_COMMIT = "d4183434fcb969799c208ddcf140bae7550c14fe"
+EXPECTED_RETICULUM_COMMIT = "5edb8f22f5d8e6b2bd7392dc06e255ead96576fb"
 EXPECTED_OPUS_DEPENDENCY = (
     'opus-rs = { version = "=0.1.29", default-features = false, '
     'features = ["heap"] }'
@@ -109,6 +109,7 @@ for action in action_uses:
         fail(f"CI action is not pinned to a full commit: {action}")
 
 reticulum_checkouts = []
+python_checkouts: dict[str, list[str]] = {"LXST": [], "Reticulum": []}
 lines = workflow.splitlines()
 for index, line in enumerate(lines):
     match = re.match(r"^(\s*)-\s+uses:\s+([^\s#]+)", line)
@@ -123,6 +124,9 @@ for index, line in enumerate(lines):
     text = "\n".join(block)
     if "repository: ${{ github.repository_owner }}/rsReticulum" in text:
         reticulum_checkouts.append(text)
+    for name in python_checkouts:
+        if f"repository: markqvist/{name}\n" in text:
+            python_checkouts[name].append(text)
 
 if not reticulum_checkouts:
     fail("CI workflow contains no rsReticulum checkout")
@@ -130,6 +134,24 @@ expected_ref = "ref: ${{ env.RSLXST_RSRETICULUM_COMMIT }}"
 for checkout in reticulum_checkouts:
     if expected_ref not in checkout:
         fail("every CI rsReticulum checkout must use the qualified commit")
+
+# The Python trees are fixed parity oracles, never moving implementation inputs.
+python_pins = {
+    "LXST": (
+        "RSLXST_PYTHON_LXST_COMMIT",
+        json.loads((ROOT / "tools/reference/lxst_reference_lock.json").read_text())["commit"],
+    ),
+    "Reticulum": ("RSLXST_PYTHON_RNS_COMMIT", "b48b96e61676504e0a4e527b33b9a0b4495c6872"),
+}
+for name, (variable, revision) in python_pins.items():
+    pin = re.search(rf"^  {variable}: ([0-9a-f]{{40}})$", workflow, re.MULTILINE)
+    if not pin or pin.group(1) != revision:
+        fail(f"CI Python {name} must select its reviewed reference commit")
+    if not python_checkouts[name]:
+        fail(f"CI is missing its Python {name} reference checkout")
+    for checkout in python_checkouts[name]:
+        if f"ref: ${{{{ env.{variable} }}}}" not in checkout:
+            fail(f"every CI Python {name} checkout must use its reviewed commit")
 
 for target in (
     "aarch64-linux-android",
