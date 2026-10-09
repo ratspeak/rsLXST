@@ -37,7 +37,7 @@
     {
       "name": "lxst-core",
       "version": "0.2.0",
-      "rustVersion": "1.87",
+      "rustVersion": "1.89",
       "edition": "2024",
       "features": {},
       "targets": [
@@ -147,7 +147,7 @@
     {
       "name": "lxst-rns",
       "version": "0.2.0",
-      "rustVersion": "1.87",
+      "rustVersion": "1.89",
       "edition": "2024",
       "features": {},
       "targets": [
@@ -250,7 +250,7 @@
     {
       "name": "lxst-telephony",
       "version": "0.2.0",
-      "rustVersion": "1.87",
+      "rustVersion": "1.89",
       "edition": "2024",
       "features": {},
       "targets": [

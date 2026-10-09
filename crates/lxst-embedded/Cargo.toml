@@ -3,7 +3,7 @@ name = "lxst-embedded"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-rust-version.workspace = true
+rust-version = "1.87"
 publish.workspace = true
 description = "Bounded no_std LXST framing and authenticated PTT session policy"
 

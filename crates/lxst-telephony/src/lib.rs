@@ -1093,35 +1093,33 @@ impl TelephonyServiceMedia {
         }
         if self.opus_transmit_stream.as_ref().is_some_and(|stream| {
             stream.link_id != active.link_id || Some(stream.profile) != active.profile
-        }) {
-            if let Some(stream) = self.opus_transmit_stream.take() {
-                let reason = if stream.link_id == active.link_id {
-                    OpusTransmitStreamStopReason::ProfileChanged
-                } else {
-                    OpusTransmitStreamStopReason::CallEnded
-                };
-                events.push(TelephonyServiceEvent::OpusTransmitStreamStopped {
-                    link_id: stream.link_id,
-                    profile: stream.profile,
-                    reason,
-                });
-            }
+        }) && let Some(stream) = self.opus_transmit_stream.take()
+        {
+            let reason = if stream.link_id == active.link_id {
+                OpusTransmitStreamStopReason::ProfileChanged
+            } else {
+                OpusTransmitStreamStopReason::CallEnded
+            };
+            events.push(TelephonyServiceEvent::OpusTransmitStreamStopped {
+                link_id: stream.link_id,
+                profile: stream.profile,
+                reason,
+            });
         }
         if self.opus_receive_stream.as_ref().is_some_and(|stream| {
             stream.link_id != active.link_id || Some(stream.profile) != active.profile
-        }) {
-            if let Some(stream) = self.opus_receive_stream.take() {
-                let reason = if stream.link_id == active.link_id {
-                    OpusReceiveStreamStopReason::ProfileChanged
-                } else {
-                    OpusReceiveStreamStopReason::CallEnded
-                };
-                events.push(TelephonyServiceEvent::OpusReceiveStreamStopped {
-                    link_id: stream.link_id,
-                    profile: stream.profile,
-                    reason,
-                });
-            }
+        }) && let Some(stream) = self.opus_receive_stream.take()
+        {
+            let reason = if stream.link_id == active.link_id {
+                OpusReceiveStreamStopReason::ProfileChanged
+            } else {
+                OpusReceiveStreamStopReason::CallEnded
+            };
+            events.push(TelephonyServiceEvent::OpusReceiveStreamStopped {
+                link_id: stream.link_id,
+                profile: stream.profile,
+                reason,
+            });
         }
         events
     }
@@ -1751,11 +1749,11 @@ impl TelephonyService {
             return true;
         };
 
-        if !frames.is_empty() {
-            if let Err(err) = self.send_opus_frames(profile, frames).await {
-                self.media.opus_transmit_stream = None;
-                return emit_service_error(self.event_tx.clone(), err).await;
-            }
+        if !frames.is_empty()
+            && let Err(err) = self.send_opus_frames(profile, frames).await
+        {
+            self.media.opus_transmit_stream = None;
+            return emit_service_error(self.event_tx.clone(), err).await;
         }
 
         if source_closed {
@@ -2011,10 +2009,10 @@ impl TelephonyService {
                             return false;
                         }
                     }
-                    if let Some(event) = media_received {
-                        if !emit_service_event(self.event_tx.clone(), event).await {
-                            return false;
-                        }
+                    if let Some(event) = media_received
+                        && !emit_service_event(self.event_tx.clone(), event).await
+                    {
+                        return false;
                     }
                     for event in opus_received_events {
                         if !emit_service_event(self.event_tx.clone(), event).await {
@@ -2132,14 +2130,12 @@ impl TelephonyService {
                 dropped,
             });
         }
-        if sink_closed {
-            if let Some(stream) = self.media.opus_receive_stream.take() {
-                events.push(TelephonyServiceEvent::OpusReceiveStreamStopped {
-                    link_id: stream.link_id,
-                    profile: stream.profile,
-                    reason: OpusReceiveStreamStopReason::SinkClosed,
-                });
-            }
+        if sink_closed && let Some(stream) = self.media.opus_receive_stream.take() {
+            events.push(TelephonyServiceEvent::OpusReceiveStreamStopped {
+                link_id: stream.link_id,
+                profile: stream.profile,
+                reason: OpusReceiveStreamStopReason::SinkClosed,
+            });
         }
         events
     }
@@ -2245,8 +2241,8 @@ impl TelephonyService {
                 .map(|interval| now + interval);
         }
 
-        if let Some(effects) = effects {
-            if !emit_service_event(
+        if let Some(effects) = effects
+            && !emit_service_event(
                 self.event_tx.clone(),
                 TelephonyServiceEvent::Drive(TelephonyDriveStep {
                     step: TelephonyStep::commands(commands),
@@ -2254,9 +2250,8 @@ impl TelephonyService {
                 }),
             )
             .await
-            {
-                return false;
-            }
+        {
+            return false;
         }
         true
     }
@@ -2892,10 +2887,10 @@ impl TelephonyRnsEndpoint {
                     );
                     let queued =
                         self.queue_prepared_control(link_id, LinkEndpointRole::Initiator, prepared);
-                    if queued.is_ok() {
-                        if let Some(state) = self.outgoing_links.get_mut(&link_id) {
-                            state.link.record_tx_keepalive(1);
-                        }
+                    if queued.is_ok()
+                        && let Some(state) = self.outgoing_links.get_mut(&link_id)
+                    {
+                        state.link.record_tx_keepalive(1);
                     }
                     if queued.is_err() {
                         let _ = self.close_outgoing_link_locally(link_id);

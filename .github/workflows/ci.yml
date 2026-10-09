@@ -11,7 +11,7 @@ permissions:
 
 env:
   RSLXST_RSRETICULUM_VERSION: 1.3.0
-  RSLXST_RSRETICULUM_COMMIT: 5edb8f22f5d8e6b2bd7392dc06e255ead96576fb
+  RSLXST_RSRETICULUM_COMMIT: cac8151fd8207ada9775310fe2b3c9c7340a7ecd
   RSLXST_PYTHON_LXST_COMMIT: 1194c9011fe6402edc7aebe7ffe9650ea3b1afee
   RSLXST_PYTHON_RNS_COMMIT: b48b96e61676504e0a4e527b33b9a0b4495c6872
 
@@ -150,8 +150,28 @@ jobs:
       - run: cargo test --workspace --locked
         working-directory: rsLXST
 
+  embedded-msrv:
+    name: Embedded Rust 1.87 MSRV
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          path: rsLXST
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: ${{ github.repository_owner }}/rsReticulum
+          ref: ${{ env.RSLXST_RSRETICULUM_COMMIT }}
+          path: rsReticulum
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: 1.87.0
+      - name: Check no_std MCU libraries at their independent compiler floor
+        working-directory: rsLXST
+        run: cargo check -p lxst-codec2 -p lxst-embedded --lib --locked
+
   msrv:
-    name: Rust 1.87 MSRV
+    name: Rust 1.89 MSRV
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -175,7 +195,7 @@ jobs:
           path: upstream/Reticulum
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
-          toolchain: 1.87.0
+          toolchain: 1.89.0
           components: clippy
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
@@ -209,16 +229,16 @@ jobs:
             toolchain: stable
           - os: ubuntu-latest
             target: aarch64-linux-android
-            toolchain: 1.87.0
+            toolchain: 1.89.0
           - os: ubuntu-latest
             target: armv7-linux-androideabi
-            toolchain: 1.87.0
+            toolchain: 1.89.0
           - os: ubuntu-latest
             target: x86_64-linux-android
-            toolchain: 1.87.0
+            toolchain: 1.89.0
           - os: macos-latest
             target: aarch64-apple-ios
-            toolchain: 1.87.0
+            toolchain: 1.89.0
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:

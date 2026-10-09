@@ -12,9 +12,10 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_PACKAGES = {"lxst-core", "lxst-codec2", "lxst-embedded", "lxst-rns", "lxst-telephony"}
-EXPECTED_MSRV = "1.87"
+EXPECTED_MSRV = "1.89"
+EMBEDDED_MSRV = {"lxst-codec2": "1.87", "lxst-embedded": "1.87"}
 EXPECTED_RETICULUM_VERSION = "1.3.0"
-EXPECTED_RETICULUM_COMMIT = "5edb8f22f5d8e6b2bd7392dc06e255ead96576fb"
+EXPECTED_RETICULUM_COMMIT = "cac8151fd8207ada9775310fe2b3c9c7340a7ecd"
 EXPECTED_OPUS_DEPENDENCY = (
     'opus-rs = { version = "=0.1.29", default-features = false, '
     'features = ["heap"] }'
@@ -48,9 +49,10 @@ reticulum_requirements: set[str] = set()
 for name, package in sorted(packages.items()):
     if package["publish"] != []:
         fail(f"{name} must declare publish = false")
-    if package["rust_version"] != EXPECTED_MSRV:
+    expected_msrv = EMBEDDED_MSRV.get(name, EXPECTED_MSRV)
+    if package["rust_version"] != expected_msrv:
         fail(
-            f"{name} must declare Rust {EXPECTED_MSRV} "
+            f"{name} must declare Rust {expected_msrv} "
             f"(found {package['rust_version']!r})"
         )
     for dependency in package["dependencies"]:

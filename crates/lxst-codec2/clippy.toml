@@ -1,0 +1,2 @@
+# Keep lint suggestions compatible with the standalone MCU compiler floor.
+msrv = "1.87"

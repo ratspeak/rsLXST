@@ -561,10 +561,10 @@ async fn drive_until_active_status(
             .try_drive_ready(core)
             .expect("drive Rust Telephone endpoint");
 
-        if let Some(call) = core.snapshot().active_call {
-            if call.status == status {
-                return call;
-            }
+        if let Some(call) = core.snapshot().active_call
+            && call.status == status
+        {
+            return call;
         }
 
         assert!(

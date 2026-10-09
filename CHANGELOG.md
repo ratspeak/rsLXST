@@ -29,6 +29,9 @@
 
 ### Build and compatibility
 
+- Raised the host source-build minimum to Rust 1.89 and qualified the corresponding protocol dependency update.
+- Kept the standalone `lxst-codec2` and `lxst-embedded` minimum at Rust 1.87, with an independent MCU library check.
+
 - Restricted rsReticulum compatibility to the 1.3 patch line and updated the pinned source. Codec dependencies and telephony APIs are unchanged.
 
 
