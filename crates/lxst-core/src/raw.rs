@@ -74,24 +74,24 @@ fn decode_samples(bytes: &[u8], bit_depth: RawBitDepth) -> Result<Vec<f32>, Erro
     let mut samples = Vec::with_capacity(bytes.len() / bytes_per_sample);
     match bit_depth {
         RawBitDepth::Float16 => {
-            for chunk in bytes.chunks_exact(2) {
+            for chunk in bytes.as_chunks::<2>().0 {
                 samples.push(f16::from_le_bytes([chunk[0], chunk[1]]).to_f32());
             }
         }
         RawBitDepth::Float32 => {
-            for chunk in bytes.chunks_exact(4) {
+            for chunk in bytes.as_chunks::<4>().0 {
                 samples.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
             }
         }
         RawBitDepth::Float64 => {
-            for chunk in bytes.chunks_exact(8) {
+            for chunk in bytes.as_chunks::<8>().0 {
                 samples.push(f64::from_le_bytes([
                     chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5], chunk[6], chunk[7],
                 ]) as f32);
             }
         }
         RawBitDepth::Float128 => {
-            for chunk in bytes.chunks_exact(16) {
+            for chunk in bytes.as_chunks::<16>().0 {
                 samples.push(decode_float128_lossy(chunk));
             }
         }
