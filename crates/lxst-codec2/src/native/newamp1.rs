@@ -96,14 +96,28 @@ fn rate_k(model: &MODEL, frequencies: &[f32; K]) -> [f32; K] {
 
 // Fixed five-candidate M-best search. Strict < preserves the first codebook
 // entry on ties, including ties crossing the two-stage search order.
-fn quantize(target: &[f32; K]) -> (usize, usize) {
-    let mut best = [(1e32_f32, 0_usize); 5];
-    for (index, vector) in VQ1.chunks_exact(K).enumerate() {
-        let mut error = 0.0;
-        for k in 0..K {
+#[inline]
+fn squared_error(vector: &[f32], target: &[f32; K], limit: f32) -> f32 {
+    let mut error = 0.0;
+    // Squared distances only increase. Reject a candidate once it cannot beat
+    // the current cutoff, preserving both scalar addition order and ties.
+    // Check in groups to avoid a branch for every DSP multiply/add.
+    for start in (0..K).step_by(4) {
+        for k in start..start + 4 {
             let difference = vector[k] - target[k];
             error += difference * difference;
         }
+        if error >= limit {
+            break;
+        }
+    }
+    error
+}
+
+fn quantize(target: &[f32; K]) -> (usize, usize) {
+    let mut best = [(1e32_f32, 0_usize); 5];
+    for (index, vector) in VQ1.chunks_exact(K).enumerate() {
+        let error = squared_error(vector, target, best[best.len() - 1].0);
         if let Some(position) = best.iter().position(|entry| error < entry.0) {
             for n in (position + 1..best.len()).rev() {
                 best[n] = best[n - 1];
@@ -111,23 +125,28 @@ fn quantize(target: &[f32; K]) -> (usize, usize) {
             best[position] = (error, index);
         }
     }
-    // Only the winning second-stage entry is consumed by the reference codec;
-    // retaining its best 1 gives the same strict ordering as the full list.
-    let mut result = (1e32_f32, 0, 0);
-    for (_, first) in best {
-        let mut residual = [0.0; K];
+    // Visit the flash-resident second codebook once, using each vector for all
+    // five candidates while it is cached. Keep one winner per candidate, then
+    // select in the original candidate order to preserve strict tie behavior.
+    let mut residuals = [[0.0; K]; 5];
+    let mut winners = [(1e32_f32, 0_usize); 5];
+    for (rank, (_, first)) in best.iter().copied().enumerate() {
         for k in 0..K {
-            residual[k] = target[k] - VQ1[first * K + k];
+            residuals[rank][k] = target[k] - VQ1[first * K + k];
         }
-        for (second, vector) in VQ2.chunks_exact(K).enumerate() {
-            let mut error = 0.0;
-            for k in 0..K {
-                let difference = vector[k] - residual[k];
-                error += difference * difference;
+    }
+    for (second, vector) in VQ2.chunks_exact(K).enumerate() {
+        for (residual, winner) in residuals.iter().zip(&mut winners) {
+            let error = squared_error(vector, residual, winner.0);
+            if error < winner.0 {
+                *winner = (error, second);
             }
-            if error < result.0 {
-                result = (error, first, second);
-            }
+        }
+    }
+    let mut result = (1e32_f32, 0, 0);
+    for ((_, first), (error, second)) in best.into_iter().zip(winners) {
+        if error < result.0 {
+            result = (error, first, second);
         }
     }
     (result.1, result.2)
@@ -339,5 +358,76 @@ impl Codec2 {
         self.internal.newamp.previous = right;
         self.internal.newamp.wo_left = wo_right;
         self.internal.newamp.voiced_left = voiced_right;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Exhaustive pre-optimization search is an independent ordering oracle.
+    fn exhaustive(target: &[f32; K]) -> (usize, usize) {
+        let mut best = [(1e32_f32, 0_usize); 5];
+        for (index, vector) in VQ1.chunks_exact(K).enumerate() {
+            let error = vector.iter().zip(target).fold(0.0, |sum, (a, b)| {
+                let d = a - b;
+                sum + d * d
+            });
+            if let Some(position) = best.iter().position(|entry| error < entry.0) {
+                for n in (position + 1..best.len()).rev() {
+                    best[n] = best[n - 1];
+                }
+                best[position] = (error, index);
+            }
+        }
+        let mut result = (1e32_f32, 0, 0);
+        for (_, first) in best {
+            let mut residual = [0.0; K];
+            for k in 0..K {
+                residual[k] = target[k] - VQ1[first * K + k];
+            }
+            for (second, vector) in VQ2.chunks_exact(K).enumerate() {
+                let error = vector.iter().zip(residual).fold(0.0, |sum, (a, b)| {
+                    let d = a - b;
+                    sum + d * d
+                });
+                if error < result.0 {
+                    result = (error, first, second);
+                }
+            }
+        }
+        (result.1, result.2)
+    }
+
+    #[test]
+    fn bounded_search_preserves_exhaustive_winners() {
+        let mut random = 71_u32;
+        for case in 0..4096 {
+            let mut target = [0.0; K];
+            for (k, value) in target.iter_mut().enumerate() {
+                random = random.wrapping_mul(1664525).wrapping_add(1013904223);
+                *value = match case % 8 {
+                    0 => 0.0,
+                    1 => VQ1[(case / 8 % 512) * K + k],
+                    2 => VQ2[(case / 8 % 512) * K + k],
+                    3 => VQ1[(case / 8 % 512) * K + k] + VQ2[((case / 8 * 17) % 512) * K + k],
+                    _ => ((random >> 16) as i16) as f32 / (1 << (case % 12)) as f32,
+                };
+            }
+            assert_eq!(quantize(&target), exhaustive(&target), "case {case}");
+        }
+    }
+
+    #[test]
+    fn bounded_distance_preserves_winning_arithmetic_and_ties() {
+        let target = [0.0; K];
+        let vector = [1.0; K];
+        assert_eq!(
+            squared_error(&vector, &target, 21.0).to_bits(),
+            20.0_f32.to_bits()
+        );
+        assert_eq!(squared_error(&vector, &target, 20.0), 20.0);
+        assert_eq!(squared_error(&vector, &target, 4.0), 4.0);
+        assert_eq!(squared_error(&vector, &target, 5.0), 8.0);
     }
 }

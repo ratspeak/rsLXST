@@ -4,6 +4,8 @@
 
 ### Embedded sessions
 
+- Reduce 700C encoding work on constrained devices while preserving bit-exact output.
+
 - Implement bounded native Codec2 700C and advertise standard ULBW alongside
   VLBW/LBW, with C-oracle fixtures and bidirectional Python/Rust interoperability.
   Device CPU, stack, acoustic quality and RF usability still require qualification.
