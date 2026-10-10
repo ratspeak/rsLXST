@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tool": {
     "name": "cargo-public-api",
     "version": "0.52.0",
@@ -11,40 +11,11 @@
     ]
   },
   "baseline": {
-    "commit": "af89a03094605dbdf7264d06fdc546526ec6980b",
-    "capturedOn": "2026-08-17"
+    "commit": "af89a03094605dbdf7264d06fdc546526ec6980b"
   },
   "compatibilityFloor": {
     "evidenceCommit": "21a54b778472343b70fd71d34ae96c61c44187c3",
     "sourceCommit": "af89a03094605dbdf7264d06fdc546526ec6980b"
-  },
-  "snapshotSource": {
-    "commit": "87dd25958f5958493b628ba6a1272ab32e538e27",
-    "capturedOn": "2026-10-01",
-    "review": {
-      "areas": [
-        "Standard ULBW advertisement in embedded ProfileSet::CODEC2",
-        "Three-profile native framing, crossed negotiation and encrypted duplex tests"
-      ],
-      "canonicalPath": "lxst_embedded::ProfileSet::CODEC2",
-      "classification": "unchanged public signatures; CODEC2 capability includes implemented ULBW; compatibility diff is cumulative from the retained floor",
-      "publicApiDiff": {
-        "added": 374,
-        "removed": 0
-      },
-      "semver": "Unreleased experimental 0.2 API. Prior Rate700C exhaustive-enum impact remains; this checkpoint adds no signature changes.",
-      "deprecations": "none",
-      "wirePersistenceRuntimeImpact": "Embedded CODEC2 advertises standard ULBW alongside VLBW/LBW. No new wire IDs or persistence format. 700C uses ten four-byte frames per 400 ms packet.",
-      "platformEvidence": [
-        "Embedded and telephony scoped tests and strict Clippy pass.",
-        "SMALL/MICRO handhelds exchange all three profiles with default-C Python LXST and real Rust TelephonyService/Ratspeak PTT in both call roles.",
-        "Actual audio worker passes three-profile ASan/UBSan checks; target owner/frame checks pass. Physical audio, total stack, heap, CPU and RF remain unqualified."
-      ],
-      "newPackages": [
-        "lxst-codec2",
-        "lxst-embedded"
-      ]
-    }
   },
   "packages": [
     {
@@ -92,5 +63,9 @@
       "itemCount": 360,
       "sha256": "c9b9784a9b09bb41a9beffb29b62085b21f2b22cb8b7d18ef53ea9f673d77698"
     }
+  ],
+  "newPackages": [
+    "lxst-codec2",
+    "lxst-embedded"
   ]
 }
