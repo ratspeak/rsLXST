@@ -34,7 +34,7 @@
 - Raised the host source-build minimum to Rust 1.89 and qualified the corresponding protocol dependency update.
 - Kept the standalone `lxst-codec2` and `lxst-embedded` minimum at Rust 1.87, with an independent MCU library check.
 
-- Migrated rsReticulum compatibility to the explicit `~1.4.0` line for nullable
+- Migrated rsReticulum compatibility to the explicit `~1.3.0` line for nullable
   interface discovery and bounded RNode announce admission. Codec dependencies,
   telephony APIs and the standalone embedded compiler minimum are unchanged.
 
