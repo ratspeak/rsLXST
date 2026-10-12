@@ -399,14 +399,14 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "lxst-codec2"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "libm",
 ]
 
 [[package]]
 name = "lxst-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "half",
  "opus-rs",
@@ -416,7 +416,7 @@ dependencies = [
 
 [[package]]
 name = "lxst-embedded"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "lxst-codec2",
  "thiserror 2.0.20",
@@ -424,7 +424,7 @@ dependencies = [
 
 [[package]]
 name = "lxst-rns"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bytes",
  "lxst-core",
@@ -437,7 +437,7 @@ dependencies = [
 
 [[package]]
 name = "lxst-telephony"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bytes",
  "lxst-codec2",

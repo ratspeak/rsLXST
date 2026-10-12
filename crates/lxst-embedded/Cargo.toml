@@ -9,7 +9,7 @@ description = "Bounded no_std LXST framing and authenticated PTT session policy"
 
 [dependencies]
 thiserror = { version = "2", default-features = false }
-lxst-codec2 = { path = "../lxst-codec2", version = "0.2.0" }
+lxst-codec2 = { path = "../lxst-codec2", version = "0.3.0" }
 
 [dev-dependencies]
-lxst-core = { path = "../lxst-core", version = "0.2.0" }
+lxst-core = { path = "../lxst-core", version = "0.3.0" }

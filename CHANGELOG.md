@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-10-12
+
+### Added
+
+- Added native Codec2 telephony streams and revocable push-to-talk input leases, with explicit audio reconfiguration and completion events.
+
 ### Embedded sessions
 
 - Reduce 700C encoding work on constrained devices while preserving bit-exact output.
@@ -33,6 +39,7 @@
 
 - Raised the host source-build minimum to Rust 1.89 and qualified the corresponding protocol dependency update.
 - Kept the standalone `lxst-codec2` and `lxst-embedded` minimum at Rust 1.87, with an independent MCU library check.
+- Added variants to the experimental telephony event, control, and error enums; downstream exhaustive matches must handle the new cases.
 
 - Migrated rsReticulum compatibility to the explicit `~1.3.0` line for nullable
   interface discovery and bounded RNode announce admission. Codec dependencies,
