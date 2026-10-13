@@ -211,6 +211,7 @@ fn queue_inbound_opus_frame(
     let encrypted = receiver.encrypt(&plaintext).unwrap();
     link_event_tx
         .try_send(DestinationEvent::InboundPacket {
+            interface_owner: None,
             raw: Bytes::from(link_data_packet(
                 link_id,
                 rns_wire::context::PacketContext::None,
@@ -229,6 +230,10 @@ fn take_outbound(
         let message = rx.try_recv().unwrap();
         match message {
             TransportMessage::Outbound(outbound) => break outbound,
+            TransportMessage::SendLinkRequest { request, result_tx } => {
+                result_tx.send(Ok(())).unwrap();
+                break request;
+            }
             TransportMessage::SendLinkEndpoint {
                 request: outbound,
                 result_tx,
@@ -1103,7 +1108,7 @@ fn rns_endpoint_try_step_feeds_established_and_packet_events() {
     );
 
     let (packet_tx, packet_rx) = mpsc::unbounded_channel();
-    endpoint.manager.set_link_packet_channel(packet_tx.clone());
+    endpoint.manager.set_link_packet_channel(packet_tx.clone()).unwrap();
     endpoint.link_packet_rx = packet_rx;
     let remote = identity(0xD2);
     core.caller_identified(link_id, remote).unwrap();
@@ -1153,7 +1158,7 @@ fn rns_endpoint_try_drive_once_executes_step_commands() {
         .unwrap();
 
     let (packet_tx, packet_rx) = mpsc::unbounded_channel();
-    endpoint.manager.set_link_packet_channel(packet_tx.clone());
+    endpoint.manager.set_link_packet_channel(packet_tx.clone()).unwrap();
     endpoint.link_packet_rx = packet_rx;
     packet_tx
         .send((
@@ -1194,6 +1199,7 @@ fn rns_endpoint_try_drive_ready_pumps_reticulum_handshake_events() {
     let link_id = initiator.link_id;
     destination_tx
         .try_send(DestinationEvent::LinkRequest {
+            interface_owner: None,
             raw: build_link_request_packet(endpoint.destination_hash, &request_data),
             interface_id: 7,
             metrics: PacketMetrics::default(),
@@ -1262,6 +1268,7 @@ fn rns_endpoint_try_drive_ready_pumps_reticulum_handshake_events() {
 
     destination_tx
         .try_send(DestinationEvent::InboundPacket {
+            interface_owner: None,
             raw: Bytes::from(link_data_packet(
                 link_id,
                 rns_wire::context::PacketContext::Lrrtt,
@@ -2441,6 +2448,7 @@ async fn telephony_service_decodes_inbound_opus_frames_with_call_profile() {
         let encrypted = receiver.encrypt(&plaintext).unwrap();
         link_event_tx
             .try_send(DestinationEvent::InboundPacket {
+                interface_owner: None,
                 raw: Bytes::from(link_data_packet(
                     link_id,
                     rns_wire::context::PacketContext::None,
@@ -2816,6 +2824,7 @@ async fn telephony_service_stops_media_streams_on_established_profile_switch() {
     let encrypted = receiver.encrypt(&plaintext).unwrap();
     link_event_tx
         .try_send(DestinationEvent::InboundPacket {
+            interface_owner: None,
             raw: Bytes::from(link_data_packet(
                 link_id,
                 rns_wire::context::PacketContext::None,
@@ -3013,6 +3022,7 @@ fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
     *invalid_proof_data.last_mut().unwrap() ^= 0x01;
     link_event_tx
         .try_send(DestinationEvent::InboundPacket {
+            interface_owner: None,
             raw: Bytes::from(link_proof_packet(link_id, &invalid_proof_data)),
             interface_id: 7,
             metrics: PacketMetrics {
@@ -3034,6 +3044,7 @@ fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
 
     link_event_tx
         .try_send(DestinationEvent::InboundPacket {
+            interface_owner: None,
             raw: Bytes::from(link_proof_packet(link_id, &proof_data)),
             interface_id: 1,
             metrics: PacketMetrics::default(),
@@ -3067,6 +3078,7 @@ fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
 
     link_event_tx
         .try_send(DestinationEvent::InboundPacket {
+            interface_owner: None,
             raw: Bytes::from(link_data_packet(
                 link_id,
                 rns_wire::context::PacketContext::Keepalive,
@@ -3084,6 +3096,7 @@ fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
     let encrypted_available = responder.encrypt(&available).unwrap();
     link_event_tx
         .try_send(DestinationEvent::InboundPacket {
+            interface_owner: None,
             raw: Bytes::from(link_data_packet(
                 link_id,
                 rns_wire::context::PacketContext::None,
@@ -3120,6 +3133,7 @@ fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
     let close_data = responder.teardown(CloseReason::DestinationClosed).unwrap();
     link_event_tx
         .try_send(DestinationEvent::InboundPacket {
+            interface_owner: None,
             raw: Bytes::from(link_data_packet(
                 link_id,
                 rns_wire::context::PacketContext::LinkClose,
@@ -3285,6 +3299,7 @@ fn outgoing_link_ignores_unauthenticated_remote_close() {
 
     event_tx
         .try_send(DestinationEvent::InboundPacket {
+            interface_owner: None,
             raw: Bytes::from(link_data_packet(
                 link_id,
                 rns_wire::context::PacketContext::LinkClose,
@@ -3325,6 +3340,7 @@ fn outgoing_link_closes_on_authenticated_remote_close() {
 
     event_tx
         .try_send(DestinationEvent::InboundPacket {
+            interface_owner: None,
             raw: Bytes::from(link_data_packet(
                 link_id,
                 rns_wire::context::PacketContext::LinkClose,
@@ -3386,6 +3402,7 @@ fn outgoing_attempt_transport_close_deregisters_link_destination() {
     endpoint.outgoing_attempts.insert(
         link_id,
         OutgoingLinkAttempt {
+            dispatch_result: None,
             link,
             remote_public_key: remote_identity.get_public_key(),
             event_rx,
@@ -3417,6 +3434,7 @@ fn outgoing_attempt_ignores_shared_instance_announce_request() {
     endpoint.outgoing_attempts.insert(
         link_id,
         OutgoingLinkAttempt {
+            dispatch_result: None,
             link,
             remote_public_key: remote_identity.get_public_key(),
             event_rx,
@@ -3486,6 +3504,7 @@ fn outgoing_active_ignores_inbound_link_request_event() {
 
     event_tx
         .try_send(DestinationEvent::LinkRequest {
+            interface_owner: None,
             raw: Bytes::from_static(&[0x01, 0x02, 0x03]),
             interface_id: 1,
             metrics: PacketMetrics::default(),
@@ -3517,6 +3536,7 @@ fn outgoing_active_ignores_packet_for_other_destination() {
 
     event_tx
         .try_send(DestinationEvent::InboundPacket {
+            interface_owner: None,
             raw: Bytes::from(link_data_packet(
                 link(0xE7),
                 rns_wire::context::PacketContext::None,
@@ -3584,6 +3604,7 @@ fn endpoint_teardown_of_outgoing_attempt_deregisters_link_destination() {
     endpoint.outgoing_attempts.insert(
         link_id,
         OutgoingLinkAttempt {
+            dispatch_result: None,
             link,
             remote_public_key: remote_identity.get_public_key(),
             event_rx,
@@ -3665,6 +3686,7 @@ fn pinned_outgoing_link_rejects_wrong_interface_before_crypto_or_accounting() {
             link: sender,
             event_rx,
             endpoint: Some(OutgoingEndpointState {
+                interface_owner: None,
                 attached_interface: 7,
                 bind_result_rx: Some(bind_result_rx),
                 lifecycle_rx,
@@ -3683,6 +3705,7 @@ fn pinned_outgoing_link_rejects_wrong_interface_before_crypto_or_accounting() {
     ));
     event_tx
         .try_send(DestinationEvent::InboundPacket {
+            interface_owner: None,
             raw: raw.clone(),
             interface_id: 8,
             metrics: PacketMetrics {
@@ -3700,6 +3723,7 @@ fn pinned_outgoing_link_rejects_wrong_interface_before_crypto_or_accounting() {
 
     event_tx
         .try_send(DestinationEvent::InboundPacket {
+            interface_owner: None,
             raw,
             interface_id: 7,
             metrics: PacketMetrics::default(),
@@ -3733,6 +3757,7 @@ fn initiator_interface_loss_closes_exact_call_once() {
             link: sender,
             event_rx,
             endpoint: Some(OutgoingEndpointState {
+                interface_owner: None,
                 attached_interface: 7,
                 bind_result_rx: Some(bind_result_rx),
                 lifecycle_rx,
@@ -3742,6 +3767,7 @@ fn initiator_interface_loss_closes_exact_call_once() {
     lifecycle_tx
         .send(LinkEndpointLifecycleEvent {
             binding: LinkEndpointBinding {
+                interface_owner: None,
                 link_id,
                 interface_id: 7,
                 role: LinkEndpointRole::Initiator,
@@ -3773,6 +3799,7 @@ fn outgoing_link_attempt_timeout_is_driven_by_endpoint_tick() {
     endpoint.outgoing_attempts.insert(
         link_id,
         OutgoingLinkAttempt {
+            dispatch_result: None,
             link,
             remote_public_key: remote_identity.get_public_key(),
             event_rx,
@@ -3781,6 +3808,7 @@ fn outgoing_link_attempt_timeout_is_driven_by_endpoint_tick() {
 
     event_tx
         .try_send(DestinationEvent::InboundPacket {
+            interface_owner: None,
             raw: Bytes::from(link_proof_packet(link_id, &[0xA5; 96])),
             interface_id: 44,
             metrics: PacketMetrics {
@@ -4032,6 +4060,7 @@ async fn native_codec2_duplex_and_input_lease_use_the_real_link() {
             .unwrap();
         incoming
             .try_send(DestinationEvent::InboundPacket {
+                interface_owner: None,
                 raw: Bytes::from(link_data_packet(
                     link_id,
                     rns_wire::context::PacketContext::None,

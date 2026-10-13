@@ -337,6 +337,8 @@ fn register_interface_entry(
         _ => rns_transport::constants::InterfaceMode::Gateway,
     };
     let entry = InterfaceEntry {
+        owner: handle.owner,
+        packet_capacity: handle.packet_capacity,
         name: handle.name,
         mode,
         role: InterfaceRole::Normal,
@@ -1063,6 +1065,15 @@ async fn python_telephone_announce_reaches_rust_transport() {
         .expect("timeout waiting for Python Telephone helper TCP connection")
         .expect("TCP accept channel closed");
 
+    let (accepted_id, accepted_entry, accepted_read_task) = register_interface_entry(accepted);
+    actor_tx
+        .send(TransportMessage::RegisterInterface {
+            id: accepted_id,
+            entry: accepted_entry,
+        })
+        .await
+        .expect("register accepted Python TCP interface");
+
     helper.send(json!({"cmd": "announce", "id": "announce-1"}));
     let announced = helper.wait_event("ANNOUNCED", Duration::from_secs(10));
     assert_eq!(announced["destination_hash"], hex::encode(destination_hash));
@@ -1081,15 +1092,6 @@ async fn python_telephone_announce_reaches_rust_transport() {
         announce.hops <= 1,
         "direct Python TCP announce should not arrive through a routed path"
     );
-
-    let (accepted_id, accepted_entry, accepted_read_task) = register_interface_entry(accepted);
-    actor_tx
-        .send(TransportMessage::RegisterInterface {
-            id: accepted_id,
-            entry: accepted_entry,
-        })
-        .await
-        .expect("register accepted Python TCP interface");
 
     let local_identity = Identity::new();
     let endpoint = TelephonyRnsEndpoint::register(actor_tx.clone(), &local_identity)
