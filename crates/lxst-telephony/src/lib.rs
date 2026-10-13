@@ -2481,7 +2481,9 @@ pub struct TelephonyRnsEndpoint {
 }
 
 struct OutgoingLinkAttempt {
-    dispatch_result: Option<oneshot::Receiver<Result<(),rns_transport::link_messages::LinkRequestDispatchError>>>,
+    dispatch_result: Option<
+        oneshot::Receiver<Result<(), rns_transport::link_messages::LinkRequestDispatchError>>,
+    >,
     link: Link,
     remote_public_key: [u8; 64],
     event_rx: mpsc::Receiver<DestinationEvent>,
@@ -2551,8 +2553,12 @@ impl TelephonyRnsEndpoint {
         let (closed_tx, link_closed_rx) = mpsc::channel(64);
         manager.set_link_established_channel(established_tx);
         manager.set_link_identified_channel(identified_tx);
-        manager.set_ordinary_packet_proof_strategy(ProofStrategy::ProveNone).expect("voice packets do not use delivery proofs");
-        manager.set_link_packet_channel(packet_tx).expect("voice packets use automatic proof policy");
+        manager
+            .set_ordinary_packet_proof_strategy(ProofStrategy::ProveNone)
+            .expect("voice packets do not use delivery proofs");
+        manager
+            .set_link_packet_channel(packet_tx)
+            .expect("voice packets use automatic proof policy");
         manager.set_link_closed_channel(closed_tx);
 
         Ok(Self {
@@ -2745,15 +2751,15 @@ impl TelephonyRnsEndpoint {
             },
         )?;
 
-        let (dispatch_tx,dispatch_rx)=oneshot::channel();
-        if let Err(error)=try_send_transport(
+        let (dispatch_tx, dispatch_rx) = oneshot::channel();
+        if let Err(error) = try_send_transport(
             &self.transport_tx,
             TransportMessage::SendLinkRequest {
                 request: OutboundRequest {
                     raw: build_link_request_packet(destination_hash, &request_data),
                     destination_hash,
                 },
-                result_tx:dispatch_tx,
+                result_tx: dispatch_tx,
             },
         ) {
             self.close_outgoing_link_locally(link_id)?;
@@ -2763,7 +2769,7 @@ impl TelephonyRnsEndpoint {
         self.outgoing_attempts.insert(
             link_id,
             OutgoingLinkAttempt {
-                dispatch_result:Some(dispatch_rx),
+                dispatch_result: Some(dispatch_rx),
                 link,
                 remote_public_key,
                 event_rx,
@@ -3234,14 +3240,14 @@ impl TelephonyRnsEndpoint {
             let Some(attempt) = self.outgoing_attempts.get_mut(&link_id) else {
                 continue;
             };
-            if let Some(receiver)=attempt.dispatch_result.as_mut() {
+            if let Some(receiver) = attempt.dispatch_result.as_mut() {
                 match receiver.try_recv() {
-                    Ok(Ok(()))=>attempt.dispatch_result=None,
-                    Ok(Err(_))|Err(oneshot::error::TryRecvError::Closed)=> {
+                    Ok(Ok(())) => attempt.dispatch_result = None,
+                    Ok(Err(_)) | Err(oneshot::error::TryRecvError::Closed) => {
                         self.close_outgoing_link_locally(link_id)?;
-                        return Ok(Some(TelephonyLinkEvent::LinkClosed {link_id}));
-                    },
-                    Err(oneshot::error::TryRecvError::Empty)=>continue,
+                        return Ok(Some(TelephonyLinkEvent::LinkClosed { link_id }));
+                    }
+                    Err(oneshot::error::TryRecvError::Empty) => continue,
                 }
             }
             match attempt.event_rx.try_recv() {
@@ -3607,7 +3613,10 @@ impl TelephonyRnsEndpoint {
             .outgoing_links
             .get(&link_id)
             .and_then(|state| state.endpoint.as_ref())
-            .is_some_and(|endpoint| endpoint.attached_interface != interface_id || endpoint.interface_owner != interface_owner)
+            .is_some_and(|endpoint| {
+                endpoint.attached_interface != interface_id
+                    || endpoint.interface_owner != interface_owner
+            })
         {
             return Ok(None);
         }

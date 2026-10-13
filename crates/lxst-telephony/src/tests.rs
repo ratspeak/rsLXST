@@ -1108,7 +1108,10 @@ fn rns_endpoint_try_step_feeds_established_and_packet_events() {
     );
 
     let (packet_tx, packet_rx) = mpsc::unbounded_channel();
-    endpoint.manager.set_link_packet_channel(packet_tx.clone()).unwrap();
+    endpoint
+        .manager
+        .set_link_packet_channel(packet_tx.clone())
+        .unwrap();
     endpoint.link_packet_rx = packet_rx;
     let remote = identity(0xD2);
     core.caller_identified(link_id, remote).unwrap();
@@ -1158,7 +1161,10 @@ fn rns_endpoint_try_drive_once_executes_step_commands() {
         .unwrap();
 
     let (packet_tx, packet_rx) = mpsc::unbounded_channel();
-    endpoint.manager.set_link_packet_channel(packet_tx.clone()).unwrap();
+    endpoint
+        .manager
+        .set_link_packet_channel(packet_tx.clone())
+        .unwrap();
     endpoint.link_packet_rx = packet_rx;
     packet_tx
         .send((
