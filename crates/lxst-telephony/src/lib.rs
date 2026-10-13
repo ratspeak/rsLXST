@@ -3527,19 +3527,32 @@ impl TelephonyRnsEndpoint {
             metrics.q.map(f64::from),
         );
 
-        // Bind and emit LRRTT in actor order. Reserving both slots before
-        // publishing either operation prevents a valid handshake from being
-        // left half-transitioned by transport mailbox pressure.
-        let bind_permit = self
-            .transport_tx
-            .clone()
-            .try_reserve_owned()
-            .map_err(map_transport_try_send_error)?;
-        let rtt_permit = self
-            .transport_tx
-            .clone()
-            .try_reserve_owned()
-            .map_err(map_transport_try_send_error)?;
+        // Authenticate before treating mailbox pressure as terminal. A valid
+        // proof has already activated this Link, so failure to reserve the
+        // complete bind/LRRTT transaction must retire the attempt. The closure
+        // drops a first permit before cleanup if the second reservation fails.
+        let permits = (|| -> Result<_, Error> {
+            let bind_permit = self
+                .transport_tx
+                .clone()
+                .try_reserve_owned()
+                .map_err(map_transport_try_send_error)?;
+            let rtt_permit = self
+                .transport_tx
+                .clone()
+                .try_reserve_owned()
+                .map_err(map_transport_try_send_error)?;
+            Ok((bind_permit, rtt_permit))
+        })();
+        let (bind_permit, rtt_permit) = match permits {
+            Ok(permits) => permits,
+            Err(error) => {
+                self.close_outgoing_link_locally(link_id)?;
+                self.pending_outgoing_events
+                    .push_back(TelephonyLinkEvent::LinkClosed { link_id });
+                return Err(error);
+            }
+        };
         let (lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
         let (bind_result_tx, bind_result_rx) = oneshot::channel();
         bind_permit.send(TransportMessage::BindLinkEndpoint {

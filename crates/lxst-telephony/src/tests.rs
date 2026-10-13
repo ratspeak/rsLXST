@@ -2972,6 +2972,159 @@ async fn telephony_service_soaks_bidirectional_opus_stream_loop() {
 }
 
 #[test]
+fn outgoing_authenticated_proof_retires_attempt_when_handshake_queue_is_full() {
+    for free_slots in [0, 1] {
+        let local_identity = Identity::new();
+        let remote_identity = Identity::new();
+        let destination_hash = telephony_destination_hash(&remote_identity.hash);
+        let (transport_tx, mut transport_rx) = mpsc::channel(8);
+        let mut endpoint = TelephonyRnsEndpoint::register(transport_tx, &local_identity).unwrap();
+        transport_rx.try_recv().unwrap();
+        let (link, request_data) = Link::new_initiator(destination_hash, 1);
+        let link_id = link.link_id;
+        let (_, proof_data) = Link::new_responder(
+            &request_data,
+            &remote_identity.get_signing_key().unwrap(),
+            destination_hash,
+            1,
+        )
+        .unwrap();
+        let (_event_tx, event_rx) = mpsc::channel(4);
+        endpoint.outgoing_attempts.insert(
+            link_id,
+            OutgoingLinkAttempt {
+                dispatch_result: None,
+                link,
+                remote_public_key: remote_identity.get_public_key(),
+                event_rx,
+            },
+        );
+        for _ in 0..8 - free_slots {
+            endpoint
+                .transport_tx
+                .try_send(TransportMessage::Shutdown)
+                .unwrap();
+        }
+
+        let event = |proof: &[u8]| DestinationEvent::InboundPacket {
+            interface_owner: None,
+            raw: Bytes::from(link_proof_packet(link_id, proof)),
+            interface_id: 7,
+            metrics: PacketMetrics::default(),
+        };
+        let mut invalid_proof = proof_data.clone();
+        invalid_proof[0] ^= 1;
+        assert_eq!(
+            endpoint
+                .handle_outgoing_attempt_event(link_id, event(&invalid_proof))
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            endpoint.outgoing_attempts[&link_id].link.state,
+            LinkState::Pending
+        );
+        assert!(endpoint.pending_outgoing_events.is_empty());
+
+        assert!(matches!(
+            endpoint.handle_outgoing_attempt_event(link_id, event(&proof_data)),
+            Err(Error::TransportFull)
+        ));
+        assert!(!endpoint.outgoing_attempts.contains_key(&link_id));
+        assert!(!endpoint.outgoing_links.contains_key(&link_id));
+        assert_eq!(endpoint.pending_outgoing_events.len(), 1);
+
+        let mut unbinds = 0;
+        let mut deregistrations = 0;
+        while let Ok(message) = transport_rx.try_recv() {
+            match message {
+                TransportMessage::Shutdown => (),
+                TransportMessage::UnbindLinkEndpoint {
+                    link_id: closed_id, ..
+                } => {
+                    assert_eq!(closed_id, link_id);
+                    unbinds += 1;
+                }
+                other => panic!("unexpected partial handshake: {other:?}"),
+            }
+        }
+        endpoint.flush_outgoing_cleanup();
+        while let Ok(message) = transport_rx.try_recv() {
+            match message {
+                TransportMessage::UnbindLinkEndpoint {
+                    link_id: closed_id, ..
+                } => {
+                    assert_eq!(closed_id, link_id);
+                    unbinds += 1;
+                }
+                TransportMessage::DeregisterDestination { hash } => {
+                    assert_eq!(hash, link_id);
+                    deregistrations += 1;
+                }
+                other => panic!("unexpected cleanup: {other:?}"),
+            }
+        }
+        assert_eq!(unbinds, 1);
+        assert_eq!(deregistrations, 1);
+        assert!(endpoint.pending_outgoing_cleanup.is_empty());
+        assert_eq!(
+            endpoint.try_recv_link_event().unwrap(),
+            Some(TelephonyLinkEvent::LinkClosed { link_id })
+        );
+        assert_eq!(endpoint.try_recv_link_event().unwrap(), None);
+    }
+}
+
+#[test]
+fn outgoing_authenticated_proof_retires_attempt_when_transport_closes() {
+    let local_identity = Identity::new();
+    let remote_identity = Identity::new();
+    let destination_hash = telephony_destination_hash(&remote_identity.hash);
+    let (transport_tx, transport_rx) = mpsc::channel(8);
+    let mut endpoint = TelephonyRnsEndpoint::register(transport_tx, &local_identity).unwrap();
+    let (link, request_data) = Link::new_initiator(destination_hash, 1);
+    let link_id = link.link_id;
+    let (_, proof_data) = Link::new_responder(
+        &request_data,
+        &remote_identity.get_signing_key().unwrap(),
+        destination_hash,
+        1,
+    )
+    .unwrap();
+    let (_event_tx, event_rx) = mpsc::channel(4);
+    endpoint.outgoing_attempts.insert(
+        link_id,
+        OutgoingLinkAttempt {
+            dispatch_result: None,
+            link,
+            remote_public_key: remote_identity.get_public_key(),
+            event_rx,
+        },
+    );
+    drop(transport_rx);
+    assert!(matches!(
+        endpoint.handle_outgoing_attempt_event(
+            link_id,
+            DestinationEvent::InboundPacket {
+                interface_owner: None,
+                raw: Bytes::from(link_proof_packet(link_id, &proof_data)),
+                interface_id: 7,
+                metrics: PacketMetrics::default(),
+            },
+        ),
+        Err(Error::TransportClosed)
+    ));
+    assert!(!endpoint.outgoing_attempts.contains_key(&link_id));
+    assert!(!endpoint.outgoing_links.contains_key(&link_id));
+    assert!(endpoint.pending_outgoing_cleanup.is_empty());
+    assert_eq!(
+        endpoint.try_recv_link_event().unwrap(),
+        Some(TelephonyLinkEvent::LinkClosed { link_id })
+    );
+    assert_eq!(endpoint.try_recv_link_event().unwrap(), None);
+}
+
+#[test]
 fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
     let local_identity = Identity::new();
     let remote_identity = Identity::new();
