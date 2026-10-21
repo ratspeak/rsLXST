@@ -79,7 +79,7 @@ jobs:
           path: upstream/Reticulum
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
-          toolchain: stable
+          toolchain: 1.96.0
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
@@ -131,7 +131,7 @@ jobs:
           path: upstream/Reticulum
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
-          toolchain: stable
+          toolchain: 1.96.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
@@ -217,16 +217,16 @@ jobs:
         include:
           - os: ubuntu-latest
             target: aarch64-linux-android
-            toolchain: stable
+            toolchain: 1.96.0
           - os: ubuntu-latest
             target: armv7-linux-androideabi
-            toolchain: stable
+            toolchain: 1.96.0
           - os: ubuntu-latest
             target: x86_64-linux-android
-            toolchain: stable
+            toolchain: 1.96.0
           - os: macos-latest
             target: aarch64-apple-ios
-            toolchain: stable
+            toolchain: 1.96.0
           - os: ubuntu-latest
             target: aarch64-linux-android
             toolchain: 1.89.0
