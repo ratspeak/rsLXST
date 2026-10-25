@@ -16,10 +16,9 @@ use rns_identity::identity::Identity;
 use rns_identity::name_hash::name_hash;
 use rns_interface::tcp::{TcpClientConfig, TcpServerConfig, spawn_tcp_client, spawn_tcp_server};
 use rns_transport::actor::TransportActor;
-use rns_transport::constants::{ANNOUNCE_CAP, InterfaceDirection as TransportInterfaceDirection};
-use rns_transport::ingress::IngressController;
+use rns_transport::constants::InterfaceDirection as TransportInterfaceDirection;
 use rns_transport::messages::{
-    AnnounceHandlerEvent, InterfaceEntry, InterfaceRole, OutboundRequest, TransportMessage,
+    AnnounceHandlerEvent, InterfaceEntry, OutboundRequest, TransportMessage,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -336,36 +335,24 @@ fn register_interface_entry(
         }
         _ => rns_transport::constants::InterfaceMode::Gateway,
     };
+    let direction = TransportInterfaceDirection {
+        inbound: handle.direction.inbound,
+        outbound: handle.direction.outbound,
+    };
     let entry = InterfaceEntry {
         owner: handle.owner,
         packet_capacity: handle.packet_capacity,
-        name: handle.name,
-        mode,
-        role: InterfaceRole::Normal,
-        direction: TransportInterfaceDirection {
-            inbound: handle.direction.inbound,
-            outbound: handle.direction.outbound,
-        },
-        bitrate: handle.bitrate,
-        mtu: handle.mtu,
-        tx: handle.tx,
-        ifac_key: None,
-        ifac_size: 0,
-        announce_cap: ANNOUNCE_CAP,
-        announce_allowed_at: 0.0,
-        announce_rate_target: None,
-        announce_rate_grace: None,
-        announce_rate_penalty: None,
         online: Some(handle.online),
         rxb: handle.rxb,
         txb: handle.txb,
-        inspection: None,
-        tx_drops: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
-        ingress: IngressController::new(),
-        announce_queue: Vec::new(),
-        multipoint: false,
-        recursive_prs: false,
-        announces_from_internal: true,
+        ..InterfaceEntry::new(
+            handle.name,
+            mode,
+            direction,
+            handle.bitrate,
+            handle.mtu,
+            handle.tx,
+        )
     };
     (handle.id, entry, handle.read_task)
 }
