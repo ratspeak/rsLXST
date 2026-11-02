@@ -10,16 +10,19 @@ for telephony is the existing `lxst_telephony::TelephonyService` service seam:
 - use `TelephonyControl`, `request_answer`, and `TelephonyServiceEvent` without
   translating raw Reticulum events in the application.
 
-The compiled `lxst-telephony` `service` example exercises this path.
+The compiled `lxst-telephony` `service` example checks construction and handle
+types. It does not run the service or demonstrate an end-to-end call.
 
 ## Stability
 
 All workspace packages are experimental:
 
 - `lxst-core` contains codec, profile, stream, signalling, and wire concepts;
-- `lxst-rns` binds media packets to Reticulum Links; and
+- `lxst-rns` binds media packets to Reticulum Links;
 - `lxst-telephony` contains the service boundary plus extensive runtime and
-  state-machine machinery.
+  state-machine machinery;
+- `lxst-codec2` provides bounded native Codec2 processing; and
+- `lxst-embedded` provides the bounded `no_std` framing and session boundary.
 
 Selecting `TelephonyService` does not stabilize the whole package or change
 channel capacities, backpressure, event ordering, cancellation, timeouts,

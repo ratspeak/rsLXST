@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate immutable Rust 700C codebooks from the pinned Codec2 source tree."""
+"""Generate Rust 700C codebooks from Codec2 inputs with pinned source hashes."""
 import argparse
 import hashlib
 import json
@@ -11,8 +11,8 @@ BACKEND = ROOT / "crates/lxst-codec2"
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("source", type=Path)
-    parser.add_argument("--check", action="store_true")
+    parser.add_argument("source", type=Path, help="Codec2 source-tree root containing the codebook files listed in UPSTREAM.json")
+    parser.add_argument("--check", action="store_true", help="compare with the generated Rust file without rewriting it")
     args = parser.parse_args()
     provenance = json.loads((BACKEND / "UPSTREAM.json").read_text())["codec2_700c"]
     lines = [

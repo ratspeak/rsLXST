@@ -122,9 +122,9 @@ impl<B: Codec2Backend> Codec2PacketCodec<B> {
 
     /// Encode exactly one profile packet. PCM is mono 8 kHz, signed 16-bit.
     ///
-    /// Capacity/shape errors leave backend and output unchanged. A backend error
-    /// invalidates this stream and the partially written output; replace it before
-    /// reuse. Bytes beyond the returned length remain untouched.
+    /// Capacity/shape errors leave output unchanged and do not call the native
+    /// encoder. A backend error invalidates this stream and its partial output;
+    /// replace it before reuse. Bytes beyond the returned length stay untouched.
     pub fn encode_into(
         &mut self,
         pcm: &[i16],
@@ -159,8 +159,9 @@ impl<B: Codec2Backend> Codec2PacketCodec<B> {
 
     /// Decode exactly one negotiated-profile payload, including its mode header.
     ///
-    /// A peer cannot trigger mode changes, unbounded frame counts or allocations
-    /// through this wrapper. The backend is never called on malformed payloads.
+    /// The wrapper fixes the mode and frame count and allocates no memory.
+    /// It checks mode header, payload length and output capacity before calling
+    /// the native decoder; codec-content validation belongs to the backend.
     /// On backend failure discard the partial PCM and replace this stream.
     pub fn decode_into(
         &mut self,

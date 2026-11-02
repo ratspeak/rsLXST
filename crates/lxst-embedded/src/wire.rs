@@ -43,6 +43,10 @@ impl<'a> Packet<'a> {
         &self.frames[..self.frame_count]
     }
 
+    /// Borrow one complete packet within the fixed size and item-count limits.
+    /// Trailing bytes and duplicate signalling/frame fields are rejected.
+    /// Unknown fields are skipped within bounded depth; their duplicates are
+    /// not tracked. Codec payload contents require validation by the embedder.
     pub fn decode(bytes: &'a [u8]) -> Result<Self, Error> {
         if bytes.len() > MAX_PACKET_BYTES {
             return Err(Error::Limit);

@@ -283,10 +283,10 @@ impl Session {
         events.transitions(self.call.receive_signal(signal));
         events
     }
-    /// Matching authenticated media confirms adoption of a suggested profile.
-    /// Some standard peers change codec without echoing PreferredProfile. The
-    /// embedder must validate codec, mode and complete native packet size first.
-    /// This does not open audio, answer a call, or start the microphone.
+    /// Confirm adoption of the current suggested profile using authenticated media.
+    /// The embedder must first validate codec, mode and complete native packet size.
+    /// This clears a pending profile deadline only; it does not change the
+    /// selected profile, open audio, answer a call or start the microphone.
     pub fn receive_profile_media(&mut self, profile: Profile, now_ms: u64) -> Events {
         if self.ended.is_none()
             && self.linked

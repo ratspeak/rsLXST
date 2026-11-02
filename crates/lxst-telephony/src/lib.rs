@@ -1,9 +1,8 @@
 //! Telephony runtime core for LXST.
 //!
-//! This crate owns the deterministic call-control boundary between Reticulum
-//! link events and the pure LXST signalling planner. It deliberately avoids
-//! spawning tasks or touching audio devices so live runtime code can be a thin
-//! adapter around tested protocol behavior.
+//! This crate combines a call-control state machine with a Tokio service,
+//! Reticulum endpoint management and media codecs. The service spawns discovery
+//! work; the embedding application owns audio devices and handles service events.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -758,7 +757,7 @@ pub enum TelephonyControl {
         bit_depth: RawBitDepth,
         frames: Vec<RawAudioFrame>,
     },
-    /// Encode negotiated Opus or native Codec2 1600/3200 PCM.
+    /// Encode PCM for the negotiated Opus or native Codec2 700C/1600/3200 profile.
     SendAudioFrames {
         profile: Profile,
         frames: Vec<RawAudioFrame>,
@@ -797,7 +796,9 @@ pub enum TelephonyControl {
 
 /// Submit an exact-link answer request and wait until the telephony service
 /// has validated the active incoming call, atomically admitted its signalling
-/// packets, and published the authoritative CONNECTING snapshot.
+/// packets, and queued the authoritative CONNECTING snapshot for the event consumer.
+/// This does not confirm peer receipt or an established call. There is no built-in
+/// wait deadline; cancelling this future does not retract an already queued request.
 pub async fn request_answer(
     control_tx: &mpsc::Sender<TelephonyControl>,
     expected_link_id: LinkId,
@@ -3446,8 +3447,9 @@ impl TelephonyRnsEndpoint {
         }
     }
 
-    /// Number of media packets the exact-interface best-effort boundary
-    /// dropped for this Link since it became active.
+    /// Count media backpressure drops observed at local transport-queue admission or reported
+    /// by the exact-interface best-effort path. Results still awaiting polling
+    /// are not counted; unknown or removed Link counters return zero.
     pub fn media_drop_count(&self, link_id: LinkId) -> u64 {
         self.media_drops.get(&link_id).copied().unwrap_or(0)
     }

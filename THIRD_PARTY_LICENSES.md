@@ -1,6 +1,8 @@
 # Third-party licenses
 
-rsLXST is licensed under AGPL-3.0-or-later as described in [LICENSE](LICENSE).
+The host crates and `lxst-embedded` use AGPL-3.0-or-later as described in
+[LICENSE](LICENSE). The adapted `lxst-codec2` crate retains the separate terms
+described below.
 Third-party components retain their own licenses; the rsLXST license does not
 replace those terms or notices.
 

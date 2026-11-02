@@ -164,7 +164,11 @@ expected = json.dumps(build_inventory(), indent=2, sort_keys=False) + "\n"
 if len(sys.argv) == 2 and sys.argv[1] == "--write":
     INVENTORY.write_text(expected, encoding="utf-8")
 elif len(sys.argv) != 1:
-    fail("usage: check-third-party-licenses.py [--write]")
+    fail(
+        "usage: check-third-party-licenses.py [--write]\n"
+        "Without --write, compare the locked dependency inventory with THIRD_PARTY_LICENSES.json.\n"
+        "With --write, replace that file after checking dependency provenance; review the diff before committing."
+    )
 elif not INVENTORY.is_file():
     fail("THIRD_PARTY_LICENSES.json is missing; run with --write")
 elif INVENTORY.read_text(encoding="utf-8") != expected:

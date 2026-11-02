@@ -11,8 +11,10 @@ pub const OPUS_ENCODED_FRAME_MAX_BYTES: usize = 1_275;
 
 /// The maximum encoded Opus packet accepted by the interoperable decoder.
 ///
-/// RFC 7845 bounds one Opus packet at 61,440 encoded bytes. This is distinct from the 1,275-byte
-/// limit for each frame inside the packet and from the bounded decoded PCM allocation.
+/// This implementation uses the 61,440-byte processing limit recommended by
+/// [RFC 7845, section 6](https://www.rfc-editor.org/rfc/rfc7845.html#section-6).
+/// Valid padded Opus packets can be larger. This is separate from the
+/// 1,275-byte per-frame limit and the decoded PCM allocation.
 pub const OPUS_ENCODED_PACKET_MAX_BYTES: usize = 61_440;
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -360,7 +362,9 @@ impl OpusMonoDecoder {
         1
     }
 
-    /// Decodes one complete Opus packet to mono PCM at 48 kHz.
+    /// Decode one complete mono Opus packet to PCM at 48 kHz.
+    /// Stereo packets are rejected, as are packets exceeding
+    /// [`OPUS_ENCODED_PACKET_MAX_BYTES`] or the per-frame size/duration limits.
     pub fn decode_packet(&mut self, packet: &[u8]) -> Result<RawAudioFrame, OpusCodecError> {
         let inspected = inspect_opus_packet(packet)?;
         if inspected.channels != 1 {

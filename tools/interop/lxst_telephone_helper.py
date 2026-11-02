@@ -577,15 +577,17 @@ def run_command_loop(args):
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["self-test", "host"], required=True)
-    parser.add_argument("--storage-dir", required=True)
-    parser.add_argument("--tcp-role", choices=["server", "client"], default="client")
-    parser.add_argument("--tcp-host", default="127.0.0.1")
-    parser.add_argument("--tcp-port", type=int, default=0)
-    parser.add_argument("--ring-time", type=float, default=20.0)
-    parser.add_argument("--wait-time", type=float, default=20.0)
-    parser.add_argument("--enable-transport", action="store_true")
+    parser = argparse.ArgumentParser(
+        description="Headless LXST interop harness: starts Reticulum and exchanges JSON events/commands without physical audio."
+    )
+    parser.add_argument("--mode", choices=["self-test", "host"], required=True, help="self-test starts the stack, emits a snapshot and stops; host reads JSON commands from stdin")
+    parser.add_argument("--storage-dir", required=True, help="scratch directory: existing contents are deleted and the directory is recreated on startup in both modes")
+    parser.add_argument("--tcp-role", choices=["server", "client"], default="client", help="TCP interface role when --tcp-port is positive (default: client)")
+    parser.add_argument("--tcp-host", default="127.0.0.1", help="client destination or server listen address (default: 127.0.0.1)")
+    parser.add_argument("--tcp-port", type=int, default=0, help="TCP port; zero or negative omits the TCP interface (default: 0)")
+    parser.add_argument("--ring-time", type=float, default=20.0, help="incoming-call ring timeout in seconds (default: 20)")
+    parser.add_argument("--wait-time", type=float, default=20.0, help="outgoing-call/path-recall timeout in seconds (default: 20)")
+    parser.add_argument("--enable-transport", action="store_true", help="enable transport mode in the generated Reticulum config (default: off)")
     args = parser.parse_args()
 
     try:

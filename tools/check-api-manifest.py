@@ -122,17 +122,19 @@ def render_contract() -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Compare current library Cargo metadata with api/snapshots/manifest-contract.json."
+    )
     parser.add_argument(
         "--print",
         action="store_true",
         dest="print_contract",
-        help="print the current canonical contract for reviewed application",
+        help="print current Cargo contract JSON instead of comparing it with the saved snapshot",
     )
     parser.add_argument(
         "--update",
         action="store_true",
-        help="write the current reviewed manifest contract",
+        help="replace the saved manifest contract with current Cargo metadata; review the diff before committing",
     )
     args = parser.parse_args()
     if args.print_contract and args.update:

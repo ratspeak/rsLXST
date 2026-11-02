@@ -97,9 +97,9 @@ impl CallState {
         actions
     }
 
-    /// Re-send the wire-compatible answer offer without reopening pipelines
-    /// or changing local state. The service bounds these retries and stops as
-    /// soon as the outgoing peer's ESTABLISHED echo is observed.
+    /// Return the answer offer again without reopening pipelines or changing state.
+    /// The caller controls retry timing and count. No actions are returned once
+    /// the incoming call leaves CONNECTING, including after an ESTABLISHED echo.
     pub fn retry_answer(&self) -> Actions {
         if self.role != CallRole::Incoming
             || !self.answered

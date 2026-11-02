@@ -1,8 +1,8 @@
 //! Core LXST wire types.
 //!
-//! This crate owns the byte-level contract with Python LXST. It deliberately
-//! avoids audio and Reticulum runtime dependencies so packet/profile parity can
-//! be tested in isolation.
+//! This crate provides LXST packet/profile types, call transitions and audio
+//! codec helpers. It has no Reticulum runtime dependency and does not open
+//! audio devices; callers supply and consume PCM frames.
 
 #[path = "shared/actions.rs"]
 mod actions;

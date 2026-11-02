@@ -90,8 +90,9 @@ def generate_fixtures():
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--decode-hex", default="")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--decode-hex", default="",
+                        help="decode a hex-encoded LXST wire packet to JSON; omit or pass an empty string to generate fixture cases")
     args = parser.parse_args()
 
     if args.decode_hex:

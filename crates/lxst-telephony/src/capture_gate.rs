@@ -1,8 +1,10 @@
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-/// A release-aware local PTT lease. A stalled UI stops media within 750 ms;
-/// a ten-second burst requires a new release/press. It adds no LXST wire fields.
+/// A local PTT lease that expires after 750 ms without renewal or a ten-second
+/// burst. The caller must check [`Self::allows`] before forwarding each frame;
+/// this gate does not stop an audio device itself. Once expiry is observed,
+/// a release is required before another press. It adds no LXST wire fields.
 #[derive(Default, Debug)]
 pub struct AudioTransmitGate {
     state: Mutex<State>,
@@ -74,6 +76,8 @@ impl AudioTransmitGate {
             state.blocked = true;
         }
     }
+    /// Check the current lease; contention, expiry or closure returns `false`.
+    /// This may mark an expired press blocked until a release arrives.
     pub fn allows(&self) -> bool {
         self.allows_at(Instant::now())
     }

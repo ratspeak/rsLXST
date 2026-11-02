@@ -11,8 +11,9 @@ the same fixed action list. Preserve this shared source layout in source bundles
 these unpublished workspace crates are built from the complete repository.
 
 `wire::Packet` borrows validated input with fixed ceilings (512 packet bytes,
-eight signals, four frames, 256 bytes per codec frame). It rejects duplicates,
-trailing data, excessive nesting and oversized declared containers. Unknown
+eight signals, four frames, 256 bytes per encoded frame including its codec
+identifier). It rejects duplicate signal/media fields, trailing data, excessive
+nesting and oversized declared containers. Unknown
 metadata is skipped within those limits. `wire::encode` matches the full Rust
 encoder's canonical MessagePack forms and validates before writing output.
 The negotiated Reticulum Link MDU can be smaller than the parser ceiling; the

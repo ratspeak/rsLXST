@@ -38,9 +38,15 @@ FFT coefficient tables are shared read-only data, generated using the pinned
 `libm` and the original native initialisation formulas. Per-stream state keeps
 only integer selectors; encoder/decoder histories and mutable FFT scratch remain
 independent. A bit-for-bit table test covers every supported size and direction.
-Regenerate the checked-in coefficients with:
+Generate coefficients into a temporary file and compare them with the checked-in table:
 
 ```sh
-cargo run -p lxst-codec2 --example generate_fft_tables --locked --offline > crates/lxst-codec2/src/native/fft_coefficients.rs
-cargo fmt -p lxst-codec2
+coefficients=$(mktemp)
+cargo run -p lxst-codec2 --example generate_fft_tables --locked --offline > "$coefficients"
+diff -u crates/lxst-codec2/src/native/fft_coefficients.rs "$coefficients"
 ```
+
+These comparison commands are for a POSIX shell. Inspect the generated file and
+diff before replacing checked-in coefficients; redirecting straight to the
+source would truncate it before Cargo has compiled the generator. `--offline`
+requires the pinned dependencies to be available in the Cargo cache.

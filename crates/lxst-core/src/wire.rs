@@ -142,6 +142,10 @@ impl LxstPacket {
         Ok(out)
     }
 
+    /// Decode the first MessagePack value as an LXST packet. Trailing bytes are
+    /// ignored, and repeated signalling/frame fields are concatenated.
+    /// This allocating parser has no packet-size limit; bound input before use.
+    /// Codec headers are checked, but encoded audio content is not decoded here.
     pub fn decode(bytes: &[u8]) -> Result<Self, Error> {
         let value = read_value(&mut &bytes[..]).map_err(|e| Error::Decode(e.to_string()))?;
         Self::from_value(value)

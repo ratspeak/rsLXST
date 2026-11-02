@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Source builds now use the rsReticulum `~1.4.0` dependency line. The published
+  `v0.3.0` standalone source release retains `~1.3.0`.
+- Retire outgoing calls when Link-request dispatch or handshake queue admission
+  fails, and keep established traffic bound to the original interface owner.
+
 ## 0.3.0 - 2026-10-12
 
 ### Added
@@ -33,7 +38,7 @@
   buffers and an application-supplied native backend. Reject malformed lengths,
   unexpected modes and insufficient capacity before codec processing; stop
   further processing after a backend failure. Preserve native 700C frame padding.
-  Codec backend selection and live Codec2 telephony remain separate work.
+  Native Codec2 telephony streams use this adapter boundary.
 
 ### Build and compatibility
 

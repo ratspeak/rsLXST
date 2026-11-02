@@ -1,8 +1,8 @@
 //! Reticulum transport boundary for LXST.
 //!
-//! This crate is intentionally small: it turns already-encoded LXST packets into
-//! Reticulum link data packets and leaves call state, audio, and codec work to
-//! higher layers.
+//! Packet helpers encrypt LXST payloads for Reticulum Links; ingress/egress
+//! adapters track frames, provide a jitter queue and convert raw or Opus audio.
+//! Call policy and audio-device ownership stay with the embedding runtime.
 
 use bytes::Bytes;
 use lxst_core::{
@@ -67,6 +67,8 @@ impl LxstLinkIngress {
     }
 
     /// Decode decrypted plaintext from `LinkManager::set_link_packet_channel`.
+    /// The caller supplies the authenticated Link association; parsing does not
+    /// verify `link_id`. Input parsing follows [`LxstPacket::decode`].
     pub fn accept_plaintext(
         &mut self,
         link_id: [u8; 16],
@@ -267,16 +269,18 @@ pub fn prepare_lxst_link_packet_send(
     Ok(prepare_packed_link_endpoint_send(packet, role))
 }
 
-/// One packet plus the typed transport operation that owns its delivery
-/// outcome. Callers must retain and inspect `result_rx`; deliberately
-/// discarding the result would turn terminal endpoint failures into silent
-/// media or signalling loss.
+/// One packet, a transport command and its local admission result.
+///
+/// Enqueue `message` and inspect `result_rx`. `Sent` and `Queued` do not
+/// acknowledge peer receipt; later failures need endpoint-lifecycle handling.
 pub struct PreparedLinkEndpointSend {
     pub packet: PackedLinkPacket,
     pub message: TransportMessage,
     pub result_rx: oneshot::Receiver<LinkEndpointSendResult>,
 }
 
+/// Prepare an ordered send for an already packed Link packet.
+/// This only constructs the command; it does not enqueue or transmit it.
 pub fn prepare_packed_link_endpoint_send(
     packet: PackedLinkPacket,
     role: LinkEndpointRole,
@@ -298,9 +302,10 @@ pub fn prepare_packed_link_endpoint_send(
     }
 }
 
-/// Prepare the final ordered packet for an established Link. Transport keeps
-/// the endpoint alive until this packet and all earlier control packets have
-/// drained, then atomically unbinds it.
+/// Prepare an ordered send followed by endpoint unbinding.
+/// Once admitted, the transport drains earlier control packets and this packet
+/// before unbinding; a terminal send/interface error may end the Link earlier.
+/// The caller must enqueue the command and inspect its local result.
 pub fn prepare_packed_link_endpoint_final_send(
     packet: PackedLinkPacket,
     role: LinkEndpointRole,
