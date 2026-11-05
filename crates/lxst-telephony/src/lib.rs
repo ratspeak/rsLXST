@@ -51,7 +51,7 @@ pub const TELEPHONY_ANNOUNCE_INTERVAL: Duration = Duration::from_secs(60 * 60 * 
 pub const TELEPHONY_STARTUP_ANNOUNCE_RETRY_INTERVAL: Duration = Duration::from_secs(5);
 pub const TELEPHONY_STARTUP_ANNOUNCE_RETRIES: u8 = 6;
 /// Housekeeping cadence with no call activity; link events still wake the service at once.
-pub const TELEPHONY_IDLE_POLL_INTERVAL: Duration = Duration::from_secs(1);
+const TELEPHONY_IDLE_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Error)]
 pub enum Error {
