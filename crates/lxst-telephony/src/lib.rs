@@ -50,6 +50,8 @@ pub type IdentityHash = [u8; 16];
 pub const TELEPHONY_ANNOUNCE_INTERVAL: Duration = Duration::from_secs(60 * 60 * 3);
 pub const TELEPHONY_STARTUP_ANNOUNCE_RETRY_INTERVAL: Duration = Duration::from_secs(5);
 pub const TELEPHONY_STARTUP_ANNOUNCE_RETRIES: u8 = 6;
+/// Housekeeping cadence with no call activity; link events still wake the service at once.
+pub const TELEPHONY_IDLE_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -1286,10 +1288,23 @@ impl TelephonyService {
     }
 
     pub async fn run(mut self) {
-        let mut interval = tokio::time::interval(self.config.poll_interval);
+        let mut period = self.poll_period();
+        let mut interval = tokio::time::interval(period);
+        let mut manager_open = true;
 
         loop {
+            let wanted = self.poll_period();
+            if wanted != period {
+                period = wanted;
+                interval = tokio::time::interval(period);
+            }
             tokio::select! {
+                progressed = self.endpoint.manager.step(), if manager_open => {
+                    manager_open = progressed;
+                    if !self.drive_ready().await {
+                        break;
+                    }
+                }
                 control = self.control_rx.recv() => {
                     let Some(control) = control else {
                         break;
@@ -1330,6 +1345,36 @@ impl TelephonyService {
         self.shutdown().await;
         self.deregister_destinations();
         let _ = self.event_tx.send(TelephonyServiceEvent::Stopped).await;
+    }
+
+    fn poll_period(&self) -> Duration {
+        if self.has_call_activity() {
+            self.config.poll_interval
+        } else {
+            self.config.poll_interval.max(TELEPHONY_IDLE_POLL_INTERVAL)
+        }
+    }
+
+    fn has_call_activity(&self) -> bool {
+        let core = &self.core;
+        let endpoint = &self.endpoint;
+        let media = &self.media;
+        core.active_call.is_some()
+            || !core.pending_links.is_empty()
+            || !core.ingress.is_empty()
+            || self.answering.is_some()
+            || self.active_timeout.is_some()
+            || self.outgoing_discovery.is_some()
+            || media.opus_encoder.is_some()
+            || media.opus_decoder.is_some()
+            || media.opus_transmit_stream.is_some()
+            || media.opus_receive_stream.is_some()
+            || !endpoint.outgoing_attempts.is_empty()
+            || !endpoint.outgoing_links.is_empty()
+            || !endpoint.pending_outgoing_events.is_empty()
+            || !endpoint.pending_control_results.is_empty()
+            || !endpoint.pending_media_results.is_empty()
+            || !endpoint.pending_outgoing_cleanup.is_empty()
     }
 
     async fn handle_due_announce(&mut self) -> bool {
