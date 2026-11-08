@@ -1298,10 +1298,22 @@ impl TelephonyService {
                 period = wanted;
                 interval = tokio::time::interval(period);
             }
+            // Announces keep their own deadline; the idle tick would quantize them to a second.
+            let next_announce_at = self.next_announce_at;
             tokio::select! {
                 progressed = self.endpoint.manager.step(), if manager_open => {
                     manager_open = progressed;
                     if !self.drive_ready().await {
+                        break;
+                    }
+                }
+                _ = async {
+                    match next_announce_at {
+                        Some(at) => tokio::time::sleep_until(at).await,
+                        None => std::future::pending().await,
+                    }
+                } => {
+                    if !self.handle_due_announce().await {
                         break;
                     }
                 }
