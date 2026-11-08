@@ -1,6 +1,6 @@
 # Rust API
 
-rsLXST is experimental and remains below 1.0. Its current application boundary
+rsLXST is experimental and remains below 1.0. The service boundary Ratspeak uses
 for telephony is the existing `lxst_telephony::TelephonyService` service seam:
 
 - construct it with `TelephonyService::registered` or

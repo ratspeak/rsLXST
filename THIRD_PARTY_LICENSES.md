@@ -1,8 +1,18 @@
 # Third-party licenses
 
-The host crates and `lxst-embedded` use AGPL-3.0-or-later as described in
-[LICENSE](LICENSE). The adapted `lxst-codec2` crate retains the separate terms
-described below.
+rsLXST is used under the license in [LICENSE](LICENSE), reproduced here:
+
+```
+LXST Copyright 2026 Mark Qvist.
+
+This implementation of LXST is derived from the LXST reference implementation,
+and used under license for Ratspeak, for non-commercial use only.
+No derivatives or use outside Ratspeak is permitted.
+
+For commercial licensing inquiries, contact license@unsigned.io
+```
+
+The adapted `lxst-codec2` crate retains the separate terms described below.
 Third-party components retain their own licenses; the rsLXST license does not
 replace those terms or notices.
 

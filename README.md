@@ -4,10 +4,10 @@
 
 **Rust LXST telephony and media streaming for Reticulum.**
 
-[![License: AGPL-3.0-or-later](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)](LICENSE)
+[![License: LXST license](https://img.shields.io/badge/license-LXST%20license-blue.svg)](LICENSE)
 [![Rust 1.89+](https://img.shields.io/badge/rust-1.89%2B-orange.svg)](https://www.rust-lang.org)
 [![LXST 0.4.5](https://img.shields.io/badge/target-LXST%200.4.5-success.svg)](https://github.com/markqvist/LXST)
-[![Status](https://img.shields.io/badge/status-library-yellow.svg)](#release-scope)
+[![Status](https://img.shields.io/badge/status-experimental-yellow.svg)](#release-scope)
 
 [rsLXMF](https://github.com/ratspeak/rsLXMF) |
 [Ratspeak](https://github.com/ratspeak/Ratspeak) |
@@ -18,15 +18,20 @@
 
 ---
 
-rsLXST is a Rust implementation of [LXST](https://github.com/markqvist/LXST), the Lightweight Extensible Signal
-Transport used for real-time voice calls and other media streams over Reticulum. This is not a
-fork of LXST; it is LXST written in a different language with interoperability
-as the primary focus. Python LXST remains the source-of-truth
-implementation, do not treat this repository as one.
+rsLXST is a Rust port of [LXST](https://github.com/markqvist/LXST), Mark Qvist's
+Lightweight Extensible Signal Transport for real-time voice calls and other
+media streams over Reticulum. It was written from the reference source with
+interoperability as the primary focus. Python LXST remains the source-of-truth
+implementation; do not treat this repository as one.
+
+rsLXST is Ratspeak's voice component. The LXST author licenses this port for
+use in Ratspeak only, for non-commercial use, with no derivatives or use outside
+Ratspeak; see [License](#license). The build, test, and API notes below document
+the code for Ratspeak development.
 
 The current rsLXST is experimental and incomplete. It provides LXST wire codecs,
 Reticulum link media packet boundaries, a telephony runtime, and Opus stream
-integration for applications (such as Ratspeak).
+integration for Ratspeak.
 
 This README describes the source revision used by Ratspeak 1.0.37: rsLXST
 `8f8e664427b03c4440778bd6b63b65055fd2ad14`, declaring version **0.3.0**
@@ -185,14 +190,14 @@ python -m pip install numpy cryptography pyserial cffi "audioop-lts; python_vers
 | Crate | Purpose |
 | --- | --- |
 | `lxst-codec2` | Allocation-free native Codec2 700C/1600/3200 processing. |
-| `lxst-embedded` | Bounded `no_std` framing, session/PTT policy and Codec2 integration for constrained applications. |
+| `lxst-embedded` | Bounded `no_std` framing, session/PTT policy and Codec2 integration for Ratspeak's constrained devices. |
 | `lxst-core` | LXST constants, telephony profiles, signalling values, codec IDs, MessagePack packets, Raw audio frames, Opus encode/decode state, stream packetization, synthetic sources, and jitter buffers. This crate has no Reticulum runtime dependency. |
 | `lxst-rns` | The Reticulum link-packet boundary for no-receipt LXST signalling and media over active links. It packs outbound LXST packets and decodes inbound link plaintext into typed LXST packet/frame events. |
 | `lxst-telephony` | The telephony runtime and service layer. It owns call state, caller policy, Reticulum destination registration, announce discovery, outgoing link establishment, typed control/event channels, Opus transmit/receive stream boundaries, timeout handling, and shutdown teardown. |
 
 ## Using Telephony
 
-Applications normally use `lxst-telephony` through `TelephonyService`, not by
+Ratspeak uses `lxst-telephony` through `TelephonyService`, not by
 manually translating Reticulum events. The service registers the local
 `lxst.telephony` destination, emits startup/periodic announces, owns the call
 runtime, and exposes typed control and event channels.
@@ -246,12 +251,12 @@ delivery instead: it never enters the lossless control queue, reports drops
 under backpressure, and intentionally does not request Reticulum delivery
 receipts.
 
-For Opus calls, applications supply and receive `RawAudioFrame` values through
+For Opus calls, the host app supplies and receives `RawAudioFrame` values through
 `StartOpusStream` and `StartOpusReceiveStream`. rsLXST enforces the negotiated
 LXST profile and reports profile changes, source/sink closure, frame drops, and
 call-end stream shutdown explicitly.
 
-Applications still own platform integration:
+The host app still owns platform integration:
 
 - contact or peer lookup
 - UI and call controls
@@ -290,9 +295,20 @@ PRs are closed for now until I have time to catch up on everything.
 
 ## License
 
-The host crates and `lxst-embedded` use AGPL-3.0-or-later. See [LICENSE](LICENSE).
-The adapted `lxst-codec2` crate declares `LGPL-2.1-only AND MIT AND BSD-3-Clause`;
-retain its [NOTICE](crates/lxst-codec2/NOTICE) and upstream license files.
+rsLXST is used under the license in [LICENSE](LICENSE), reproduced here:
+
+```
+LXST Copyright 2026 Mark Qvist.
+
+This implementation of LXST is derived from the LXST reference implementation,
+and used under license for Ratspeak, for non-commercial use only.
+No derivatives or use outside Ratspeak is permitted.
+
+For commercial licensing inquiries, contact license@unsigned.io
+```
+
+The adapted `lxst-codec2` crate retains its own [NOTICE](crates/lxst-codec2/NOTICE)
+and upstream license files.
 
 ## Third-party licenses
 
@@ -301,6 +317,7 @@ dependency inventory, including the exact upstream BSD-3-Clause Opus package,
 checksum, source commit, and preserved notice, is documented in
 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
-The host workspace requires Rust 1.89 or later. The standalone `lxst-codec2`
-and `lxst-embedded` libraries retain Rust 1.87 compatibility for MCU consumers;
-CI checks that independent minimum without the host-only development tests.
+The host workspace requires Rust 1.89 or later. The `lxst-codec2` and
+`lxst-embedded` crates retain Rust 1.87 compatibility for Ratspeak's constrained
+targets; CI checks that independent minimum without the host-only development
+tests.
