@@ -33,11 +33,11 @@ The current rsLXST is experimental and incomplete. It provides LXST wire codecs,
 Reticulum link media packet boundaries, a telephony runtime, and Opus stream
 integration for Ratspeak.
 
-This README describes the source revision used by Ratspeak 1.0.37: rsLXST
-`8f8e664427b03c4440778bd6b63b65055fd2ad14`, declaring version **0.3.0**
-and using rsReticulum **1.4.0**. The standalone `v0.3.0` release uses the
-**1.3.0** Reticulum dependency line. Keep the dependency set associated with
-the source you build; a matching rsLXST package version alone is not enough.
+This README describes the 0.3.1 release, `v0.3.1`, declaring version **0.3.1**
+and using rsReticulum **1.4.0** (`v1.4.0`); it is the source line Ratspeak
+builds from. The earlier `v0.3.0` release uses the **1.3.0** Reticulum
+dependency line. Keep the dependency set associated with the source you build;
+a matching rsLXST package version alone is not enough.
 
 ## Contents
 
@@ -83,14 +83,13 @@ mkdir ratspeak-src
 cd ratspeak-src
 git clone https://github.com/ratspeak/rsReticulum
 git clone https://github.com/ratspeak/rsLXST
-git -C rsReticulum checkout --detach 5b38cae702a5b3984adf12a435f6d3012fcf90e1
-git -C rsLXST checkout --detach 8f8e664427b03c4440778bd6b63b65055fd2ad14
+git -C rsReticulum checkout --detach v1.4.0
+git -C rsLXST checkout --detach v0.3.1
 cd rsLXST
 ```
 
-The commands below run from that `rsLXST` directory. These pins describe the
-coordinated source above. For the standalone release, use `v0.3.0` and its
-rsReticulum `v1.3.0` sibling instead.
+The commands below run from that `rsLXST` directory. For the earlier 0.3.0
+release, use `v0.3.0` with its rsReticulum `v1.3.0` sibling instead.
 
 ### macOS
 

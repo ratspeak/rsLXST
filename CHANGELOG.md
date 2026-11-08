@@ -2,8 +2,13 @@
 
 ## Unreleased
 
-- Source builds now use the rsReticulum `~1.4.0` dependency line. The published
-  `v0.3.0` standalone source release retains `~1.3.0`.
+## 0.3.1 - 2026-11-08
+
+- Telephony wakes on Link events instead of polling, polls once a second when
+  idle, and sends announces on their own deadline instead of the idle tick.
+- Replaced the AGPL license text with the LXST license.
+- Uses the rsReticulum `~1.4.0` dependency line; the `v0.3.0` release used
+  `~1.3.0`.
 - Retire outgoing calls when Link-request dispatch or handshake queue admission
   fails, and keep established traffic bound to the original interface owner.
 

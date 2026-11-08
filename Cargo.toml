@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 license-file = "LICENSE"
 rust-version = "1.89"
@@ -35,5 +35,5 @@ rns-runtime = { path = "../rsReticulum/crates/rns-runtime", version = "~1.4.0" }
 rns-transport = { path = "../rsReticulum/crates/rns-transport", version = "~1.4.0" }
 rns-wire = { path = "../rsReticulum/crates/rns-wire", version = "~1.4.0" }
 
-lxst-core = { path = "crates/lxst-core", version = "0.3.0" }
-lxst-rns = { path = "crates/lxst-rns", version = "0.3.0" }
+lxst-core = { path = "crates/lxst-core", version = "0.3.1" }
+lxst-rns = { path = "crates/lxst-rns", version = "0.3.1" }
