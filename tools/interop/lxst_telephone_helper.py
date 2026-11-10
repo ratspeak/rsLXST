@@ -277,12 +277,33 @@ def patch_headless_audio(Telephony, LXST, np, opus_available: bool) -> None:
 
 def patch_signalling_events(Telephony) -> None:
     original = Telephony.Telephone.signalling_received
+    # LXST_HELPER_DROP_RECEIVED lists signal values this phone never sees, to model loss.
+    dropped = {int(value) for value in os.environ.get("LXST_HELPER_DROP_RECEIVED", "").split(",") if value.strip()}
 
     def signalling_received(self, signals, source):
         emit({"event": "SIGNALS", "signals": [int(signal) for signal in signals]})
+        signals = [signal for signal in signals if int(signal) not in dropped]
         return original(self, signals, source)
 
     Telephony.Telephone.signalling_received = signalling_received
+
+
+def patch_dropped_signals() -> None:
+    # LXST_HELPER_DROP_SENT lists signal values this phone never puts on the wire, to model loss.
+    dropped = {int(value) for value in os.environ.get("LXST_HELPER_DROP_SENT", "").split(",") if value.strip()}
+    if not dropped:
+        return
+    import LXST.Network as Network
+
+    original = Network.SignallingReceiver.signal
+
+    def signal(self, signal, destination, immediate=True):
+        signals = signal if type(signal) == list else [signal]
+        kept = [value for value in signals if value not in dropped]
+        if kept:
+            return original(self, kept, destination, immediate)
+
+    Network.SignallingReceiver.signal = signal
 
 
 def patch_open_pipelines_observer(Telephony) -> None:
@@ -309,6 +330,7 @@ def setup_python_stack():
     patch_headless_audio(Telephony, _LXST, np, _opus_available)
     patch_signalling_events(Telephony)
     patch_open_pipelines_observer(Telephony)
+    patch_dropped_signals()
     _Telephony = Telephony
     _np = np
     return codec2_stubbed
@@ -326,6 +348,7 @@ def snapshot_event():
             "squelched": bool(getattr(getattr(telephone.active_call, "packetizer", None), "squelched", False)),
             "status": telephone.call_status,
             "answered": bool(getattr(telephone.active_call, "answered", False)),
+            "audio_started": bool(telephone.audio_input is not None and telephone.audio_input.should_run),
         }
 
     return {
@@ -417,7 +440,7 @@ def create_telephone(args):
     telephone = _Telephony.Telephone(
         identity,
         ring_time=args.ring_time,
-        wait_time=args.wait_time,
+        wait_time=float(os.environ.get("LXST_HELPER_WAIT_TIME", args.wait_time)),
     )
     configure_callbacks(telephone)
     _telephone = telephone

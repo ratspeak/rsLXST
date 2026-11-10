@@ -13,6 +13,7 @@ pub struct CallState {
     /// Raw mode value; Python stores unknown modes without acting on them.
     mode: Option<u8>,
     answered: bool,
+    pipelines_started: bool,
     transmit_squelched: bool,
     remote_mode_follow_disabled: bool,
 }
@@ -29,6 +30,7 @@ impl CallState {
             profile,
             mode: mode.map(|mode| mode.wire_value()),
             answered: false,
+            pipelines_started: false,
             transmit_squelched: false,
             remote_mode_follow_disabled: false,
         }
@@ -41,6 +43,7 @@ impl CallState {
             profile: None,
             mode: None,
             answered: false,
+            pipelines_started: false,
             transmit_squelched: false,
             remote_mode_follow_disabled: false,
         }
@@ -60,6 +63,11 @@ impl CallState {
 
     pub const fn answered(&self) -> bool {
         self.answered
+    }
+
+    /// Whether audio pipelines were started; a caller only starts them on the callee's ESTABLISHED.
+    pub const fn audio_started(&self) -> bool {
+        self.pipelines_started
     }
 
     /// Selected call mode, or `None` before selection or for an unknown remote mode.
@@ -127,6 +135,7 @@ impl CallState {
         actions.push(TelephonyAction::OpenAudioPipelines);
         self.push_status_signal(SignallingStatus::Established, &mut actions);
         actions.push(TelephonyAction::StartAudioPipelines);
+        self.pipelines_started = true;
         actions
     }
 
@@ -189,19 +198,18 @@ impl CallState {
                     TelephonyAction::OpenAudioPipelines,
                 ];
                 if self.role == CallRole::Outgoing {
-                    // This mirrors Python Telephone.__open_pipelines(): the
-                    // caller echoes ESTABLISHED after observing CONNECTING.
-                    actions.push(TelephonyAction::SendSignal(Signal::from(
-                        SignallingStatus::Established,
-                    )));
+                    // Python's caller signals ESTABLISHED once its pipelines are open,
+                    // which makes its own call status ESTABLISHED.
+                    self.push_status_signal(SignallingStatus::Established, &mut actions);
                 }
                 actions
             }
             Signal::Status(SignallingStatus::Established) => {
-                if self.status == SignallingStatus::Established {
+                if self.role != CallRole::Outgoing || self.pipelines_started {
                     return actions![TelephonyAction::IgnoreSignal(signal)];
                 }
                 self.status = SignallingStatus::Established;
+                self.pipelines_started = true;
                 actions![TelephonyAction::StartAudioPipelines]
             }
             Signal::PreferredProfile(profile) => {
@@ -286,6 +294,7 @@ impl CallState {
         actions.push(TelephonyAction::TeardownLink);
         self.status = SignallingStatus::Available;
         self.answered = false;
+        self.pipelines_started = false;
         actions
     }
 

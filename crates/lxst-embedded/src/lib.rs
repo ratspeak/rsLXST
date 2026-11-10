@@ -24,7 +24,9 @@ pub use wire::{Codec2Mode, CodecKind, Signal};
 mod codec2;
 pub use codec2::{Codec2Backend, Codec2PacketCodec, Codec2PacketError};
 mod session;
-pub use session::{ConfigError, EndReason, Event, Events, ProfileSet, Session, SessionConfig};
+pub use session::{
+    CallTimes, ConfigError, EndReason, Event, Events, ProfileSet, Session, SessionConfig,
+};
 
 impl Codec2Backend for &mut lxst_codec2::Codec {
     type Error = lxst_codec2::Error;

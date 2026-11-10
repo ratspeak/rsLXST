@@ -1,6 +1,6 @@
 use lxst_embedded::{
-    CallMode, CallRole, CallState, EndReason, Event, Profile, ProfileSet, Session, SessionConfig,
-    Signal, SignallingStatus as Status, TelephonyAction as Action,
+    CallMode, CallRole, CallState, CallTimes, EndReason, Event, Profile, ProfileSet, Session,
+    SessionConfig, Signal, SignallingStatus as Status, TelephonyAction as Action,
 };
 
 #[test]
@@ -80,6 +80,7 @@ fn config() -> SessionConfig {
         preferred: Profile::BandwidthVeryLow,
         capture: true,
         playback: true,
+        times: CallTimes::default(),
     }
 }
 fn connect(role: CallRole) -> Session {
@@ -366,4 +367,52 @@ fn preferred_mode_signal_is_recorded_by_the_session() {
     session.receive_signal(Signal::from_wire(0xF2), 2);
     assert_eq!(session.mode(), Some(CallMode::HalfDuplex));
     assert_eq!(session.ended(), None);
+}
+
+#[test]
+fn configured_call_times_replace_the_python_defaults() {
+    let slow = SessionConfig {
+        times: CallTimes {
+            connect_ms: 20_000,
+            wait_ms: 200_000,
+            ring_ms: 150_000,
+        },
+        ..config()
+    };
+    let mut outgoing = Session::new(CallRole::Outgoing, slow, 0).unwrap();
+    outgoing.link_established();
+    outgoing.peer_verified(1);
+    outgoing.tick(19_999);
+    assert_eq!(outgoing.ended(), None);
+    outgoing.receive_signal(Status::Available.into(), 19_999);
+    outgoing.receive_signal(Status::Ringing.into(), 19_999);
+    outgoing.tick(199_999);
+    assert_eq!(outgoing.ended(), None);
+    outgoing.tick(200_000);
+    assert_eq!(outgoing.ended(), Some(EndReason::Timeout));
+
+    let mut incoming = Session::new(CallRole::Incoming, slow, 0).unwrap();
+    incoming.link_established();
+    incoming.peer_verified(0);
+    incoming.tick(149_999);
+    assert_eq!(incoming.ended(), None);
+    incoming.tick(150_000);
+    assert_eq!(incoming.ended(), Some(EndReason::Timeout));
+}
+
+#[test]
+fn caller_keeps_call_past_wait_time_when_callee_established_is_lost() {
+    let mut session = Session::new(CallRole::Outgoing, config(), 0).unwrap();
+    session.link_established();
+    session.peer_verified(1);
+    for status in [Status::Available, Status::Ringing, Status::Connecting] {
+        session.receive_signal(status.into(), 100);
+    }
+    session.audio_ready(session.audio_generation(), true);
+    assert_eq!(session.status(), Status::Established);
+    assert!(!session.media_ready());
+    session.tick(70_001);
+    assert_eq!(session.ended(), None);
+    session.receive_signal(Status::Established.into(), 70_002);
+    assert!(session.media_ready());
 }

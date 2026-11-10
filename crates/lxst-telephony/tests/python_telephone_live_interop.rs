@@ -2961,6 +2961,10 @@ struct ServiceCallPair {
 
 impl ServiceCallPair {
     async fn connect(env: &[(&str, &str)]) -> Self {
+        Self::connect_with_config(env, TelephonyServiceConfig::default()).await
+    }
+
+    async fn connect_with_config(env: &[(&str, &str)], config: TelephonyServiceConfig) -> Self {
         let port = free_tcp_port();
         let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
         let mut announce_rx = register_telephony_announce_handler(&actor_tx).await;
@@ -2993,7 +2997,7 @@ impl ServiceCallPair {
                 poll_interval: Duration::from_millis(20),
                 announce_on_start: false,
                 announce_interval: None,
-                ..TelephonyServiceConfig::default()
+                ..config
             },
         );
         let service_task = tokio::spawn(service.run());
@@ -3180,6 +3184,56 @@ async fn rust_caller_is_answered_once_by_python_callee() {
         .any(|event| matches!(event, TelephonyServiceEvent::CallTerminated { .. }));
     assert!(!terminated);
     assert_eq!(pair.helper.count_stashed("ENDED", Duration::ZERO), 0);
+    pair.shutdown().await;
+}
+
+#[serial_test::serial(python_lxst_live)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
+async fn rust_caller_keeps_call_when_python_callee_established_is_lost() {
+    let wait = Duration::from_secs(10);
+    let mut pair = ServiceCallPair::connect_with_config(
+        &[("LXST_HELPER_DROP_SENT", "6")],
+        TelephonyServiceConfig {
+            outgoing_call_timeout: Some(wait),
+            ..TelephonyServiceConfig::default()
+        },
+    )
+    .await;
+    pair.rust_calls_python_and_python_answers(None).await;
+    tokio::time::sleep(wait + Duration::from_secs(2)).await;
+    let terminated = pair
+        .drain()
+        .iter()
+        .any(|event| matches!(event, TelephonyServiceEvent::CallTerminated { .. }));
+    assert!(!terminated, "Rust caller ended the call at its wait time");
+    assert_eq!(pair.helper.count_stashed("ENDED", Duration::ZERO), 0);
+    let python = pair.python_snapshot();
+    assert_eq!(python["active_call"]["status"], 6, "{python}");
+    pair.shutdown().await;
+}
+
+#[serial_test::serial(python_lxst_live)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
+async fn python_caller_keeps_call_when_rust_callee_established_is_lost() {
+    let wait = 8;
+    let mut pair = ServiceCallPair::connect(&[
+        ("LXST_HELPER_DROP_RECEIVED", "6"),
+        ("LXST_HELPER_WAIT_TIME", "8"),
+    ])
+    .await;
+    pair.python_calls_rust_and_rust_answers(None).await;
+    tokio::time::sleep(Duration::from_secs(wait + 2)).await;
+    assert_eq!(pair.helper.count_stashed("ENDED", Duration::ZERO), 0);
+    let python = pair.python_snapshot();
+    assert_eq!(python["active_call"]["status"], 6, "{python}");
+    assert_eq!(python["active_call"]["audio_started"], false, "{python}");
+    let terminated = pair
+        .drain()
+        .iter()
+        .any(|event| matches!(event, TelephonyServiceEvent::CallTerminated { .. }));
+    assert!(!terminated);
     pair.shutdown().await;
 }
 

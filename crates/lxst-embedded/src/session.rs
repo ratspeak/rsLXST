@@ -6,12 +6,6 @@ use crate::{
 
 /// Local limit for an incoming link to identify its caller; Python has no counterpart.
 const SETUP_MS: u64 = 30_000;
-/// Python `Telephone.RING_TIME`.
-const RING_MS: u64 = 60_000;
-/// Python `Telephone.WAIT_TIME`, measured from the start of the outgoing call.
-const WAIT_MS: u64 = 70_000;
-/// Python `Telephone.CONNECT_TIME`: the callee must ring within this time of the call start.
-const CONNECT_MS: u64 = 5_000;
 const PROFILE_MS: u64 = 5_000;
 pub const TALK_LIMIT_MS: u64 = 30_000;
 
@@ -31,6 +25,29 @@ impl ProfileSet {
     }
 }
 
+/// Call setup limits in milliseconds; the defaults are Python `Telephone`'s.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CallTimes {
+    /// Python `CONNECT_TIME` (`set_connect_timeout`): the callee must ring within this time of the call start.
+    pub connect_ms: u64,
+    /// Python `wait_time`, measured from the start of the outgoing call.
+    pub wait_ms: u64,
+    /// Python `ring_time`.
+    pub ring_ms: u64,
+}
+impl CallTimes {
+    pub const DEFAULT: Self = Self {
+        connect_ms: 5_000,
+        wait_ms: 70_000,
+        ring_ms: 60_000,
+    };
+}
+impl Default for CallTimes {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SessionConfig {
     /// The embedder must qualify each selected codec and route before admission.
@@ -38,6 +55,7 @@ pub struct SessionConfig {
     pub preferred: Profile,
     pub capture: bool,
     pub playback: bool,
+    pub times: CallTimes,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConfigError {
@@ -131,11 +149,11 @@ impl Session {
             ended: None,
             deadline: now_ms.saturating_add(match role {
                 CallRole::Incoming => SETUP_MS,
-                CallRole::Outgoing => WAIT_MS,
+                CallRole::Outgoing => config.times.wait_ms,
             }),
             connect_deadline: match role {
                 CallRole::Incoming => None,
-                CallRole::Outgoing => Some(now_ms.saturating_add(CONNECT_MS)),
+                CallRole::Outgoing => Some(now_ms.saturating_add(config.times.connect_ms)),
             },
             talk_started: 0,
             suggested: false,
@@ -167,6 +185,7 @@ impl Session {
             && self.ready
             && self.profile_deadline.is_none()
             && self.call.status() == SignallingStatus::Established
+            && self.call.audio_started()
     }
     pub fn playback_allowed(&self) -> bool {
         self.media_ready() && self.config.playback && !self.transmitting
@@ -192,7 +211,7 @@ impl Session {
         }
         self.verified = true;
         if self.call.role() == CallRole::Incoming {
-            self.deadline = now_ms.saturating_add(RING_MS);
+            self.deadline = now_ms.saturating_add(self.config.times.ring_ms);
             events.transitions(self.call.caller_identified(false, true));
             events.push(Event::Transition(TelephonyAction::SendSignal(
                 self.config.preferred.into(),

@@ -1811,7 +1811,7 @@ impl TelephonyService {
         frames_tx: mpsc::Sender<RawAudioFrame>,
     ) -> Result<(), Error> {
         let active = self.core.active_call().ok_or(Error::NoActiveCall)?;
-        if active.call.status() != SignallingStatus::Established {
+        if active.call.status() != SignallingStatus::Established || !active.call.audio_started() {
             return Err(Error::CallNotEstablished);
         }
 
@@ -1858,7 +1858,7 @@ impl TelephonyService {
         frames_rx: mpsc::Receiver<RawAudioFrame>,
     ) -> Result<(), Error> {
         let active = self.core.active_call().ok_or(Error::NoActiveCall)?;
-        if active.call.status() != SignallingStatus::Established {
+        if active.call.status() != SignallingStatus::Established || !active.call.audio_started() {
             return Err(Error::CallNotEstablished);
         }
         let active_profile = active.call.profile().unwrap_or(Profile::DEFAULT);
@@ -2042,7 +2042,7 @@ impl TelephonyService {
         frames: Vec<RawAudioFrame>,
     ) -> Result<(), Error> {
         let active = self.core.active_call().ok_or(Error::NoActiveCall)?;
-        if active.call.status() != SignallingStatus::Established {
+        if active.call.status() != SignallingStatus::Established || !active.call.audio_started() {
             return Err(Error::CallNotEstablished);
         }
         // A squelched Python Packetizer drops frames silently.
@@ -2075,7 +2075,7 @@ impl TelephonyService {
         frames: Vec<RawAudioFrame>,
     ) -> Result<(), Error> {
         let active = self.core.active_call().ok_or(Error::NoActiveCall)?;
-        if active.call.status() != SignallingStatus::Established {
+        if active.call.status() != SignallingStatus::Established || !active.call.audio_started() {
             return Err(Error::CallNotEstablished);
         }
         let active_profile = active.call.profile().unwrap_or(Profile::DEFAULT);
@@ -2226,7 +2226,7 @@ impl TelephonyService {
             return Err(Error::WrongActiveLink);
         }
         let link_id = active.link_id;
-        if active.call.status() != SignallingStatus::Established {
+        if active.call.status() != SignallingStatus::Established || !active.call.audio_started() {
             return Ok((Vec::new(), Vec::new()));
         }
         let profile = active.call.profile().unwrap_or(Profile::DEFAULT);

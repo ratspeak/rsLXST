@@ -364,6 +364,7 @@ pub struct lxst_core::TelephonyCall
 impl lxst_core::TelephonyCall
 pub fn lxst_core::TelephonyCall::answer(&mut self) -> alloc::vec::Vec<lxst_core::TelephonyAction>
 pub const fn lxst_core::TelephonyCall::answered(&self) -> bool
+pub const fn lxst_core::TelephonyCall::audio_started(&self) -> bool
 pub fn lxst_core::TelephonyCall::caller_identified(&mut self, bool, bool) -> alloc::vec::Vec<lxst_core::TelephonyAction>
 pub fn lxst_core::TelephonyCall::disable_remote_mode_follow(&mut self)
 pub fn lxst_core::TelephonyCall::hangup(&mut self, bool) -> alloc::vec::Vec<lxst_core::TelephonyAction>

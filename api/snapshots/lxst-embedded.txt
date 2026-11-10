@@ -244,6 +244,7 @@ pub struct lxst_embedded::CallState
 impl lxst_embedded::CallState
 pub fn lxst_embedded::CallState::answer(&mut self) -> lxst_embedded::Actions
 pub const fn lxst_embedded::CallState::answered(&self) -> bool
+pub const fn lxst_embedded::CallState::audio_started(&self) -> bool
 pub fn lxst_embedded::CallState::caller_identified(&mut self, bool, bool) -> lxst_embedded::Actions
 pub fn lxst_embedded::CallState::disable_remote_mode_follow(&mut self)
 pub fn lxst_embedded::CallState::hangup(&mut self, bool) -> lxst_embedded::Actions
@@ -260,6 +261,14 @@ pub const fn lxst_embedded::CallState::status(&self) -> lxst_embedded::Signallin
 pub fn lxst_embedded::CallState::switch_mode(&mut self, lxst_embedded::CallMode) -> lxst_embedded::Actions
 pub fn lxst_embedded::CallState::switch_profile(&mut self, lxst_embedded::Profile) -> lxst_embedded::Actions
 pub const fn lxst_embedded::CallState::transmit_squelched(&self) -> bool
+pub struct lxst_embedded::CallTimes
+pub lxst_embedded::CallTimes::connect_ms: u64
+pub lxst_embedded::CallTimes::ring_ms: u64
+pub lxst_embedded::CallTimes::wait_ms: u64
+impl lxst_embedded::CallTimes
+pub const lxst_embedded::CallTimes::DEFAULT: Self
+impl core::default::Default for lxst_embedded::CallTimes
+pub fn lxst_embedded::CallTimes::default() -> Self
 pub struct lxst_embedded::Codec2PacketCodec<B>
 impl<B: lxst_embedded::Codec2Backend> lxst_embedded::Codec2PacketCodec<B>
 pub fn lxst_embedded::Codec2PacketCodec<B>::decode_into(&mut self, &[u8], &mut [i16]) -> core::result::Result<usize, lxst_embedded::Codec2PacketError<<B as lxst_embedded::Codec2Backend>::Error>>
@@ -315,6 +324,7 @@ pub lxst_embedded::SessionConfig::allowed: lxst_embedded::ProfileSet
 pub lxst_embedded::SessionConfig::capture: bool
 pub lxst_embedded::SessionConfig::playback: bool
 pub lxst_embedded::SessionConfig::preferred: lxst_embedded::Profile
+pub lxst_embedded::SessionConfig::times: lxst_embedded::CallTimes
 pub trait lxst_embedded::Codec2Backend
 pub type lxst_embedded::Codec2Backend::Error
 pub fn lxst_embedded::Codec2Backend::decode_native(&mut self, &[u8], &mut [i16]) -> core::result::Result<(), Self::Error>

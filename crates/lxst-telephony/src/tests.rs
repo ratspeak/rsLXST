@@ -4219,7 +4219,7 @@ fn native_codec2_rejects_bad_shapes_and_mode_without_poisoning_valid_media() {
 
 fn upstream_media_vectors() -> serde_json::Value {
     let vectors: serde_json::Value =
-        serde_json::from_str(include_str!("../tests/fixtures/lxst_060_media.json")).unwrap();
+        serde_json::from_str(include_str!("../tests/fixtures/media_vectors.json")).unwrap();
     assert_eq!(vectors["lxst_version"], "0.6.0");
     assert_eq!(vectors["rns_version"], "1.6.0");
     vectors

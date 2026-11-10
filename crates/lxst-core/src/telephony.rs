@@ -34,6 +34,9 @@ impl TelephonyCall {
     pub const fn answered(&self) -> bool {
         self.state.answered()
     }
+    pub const fn audio_started(&self) -> bool {
+        self.state.audio_started()
+    }
     pub const fn mode(&self) -> Option<CallMode> {
         self.state.mode()
     }
@@ -201,6 +204,87 @@ mod tests {
             ))]
         );
         assert_eq!(outgoing.status(), SignallingStatus::Established);
+    }
+
+    #[test]
+    fn caller_is_established_after_connecting_and_starts_audio_on_callee_established() {
+        let mut call = TelephonyCall::outgoing(None);
+        call.receive_signal(Signal::from(SignallingStatus::Available));
+        call.receive_signal(Signal::from(SignallingStatus::Ringing));
+        call.receive_signal(Signal::from(SignallingStatus::Connecting));
+        assert_eq!(call.status(), SignallingStatus::Established);
+        assert_eq!(
+            call.receive_signal(Signal::from(SignallingStatus::Established)),
+            vec![TelephonyAction::StartAudioPipelines]
+        );
+        assert_eq!(
+            call.receive_signal(Signal::from(SignallingStatus::Established)),
+            vec![TelephonyAction::IgnoreSignal(Signal::from(
+                SignallingStatus::Established
+            ))]
+        );
+    }
+
+    fn signals(packet: &str) -> Vec<Signal> {
+        crate::LxstPacket::decode(&hex::decode(packet).unwrap())
+            .unwrap()
+            .signals
+    }
+
+    fn sent(actions: &[TelephonyAction]) -> Vec<Vec<u8>> {
+        actions
+            .iter()
+            .filter_map(|action| match action {
+                TelephonyAction::SendSignal(signal) => Some(vec![*signal]),
+                TelephonyAction::SendSignalPair(first, second) => Some(vec![*first, *second]),
+                _ => None,
+            })
+            .map(|signals| crate::LxstPacket::signalling(signals).encode().unwrap())
+            .collect()
+    }
+
+    // Packets recorded from the rsLXST 0.3.1 call state machine; it decodes the mode
+    // byte of a profile-and-mode packet as an ignored raw signal.
+    #[test]
+    fn caller_completes_a_call_with_a_0_3_1_callee() {
+        let mut call = TelephonyCall::outgoing(None);
+        let mut out = Vec::new();
+        for packet in ["81009103", "81009104", "81009105", "81009106", "81009105"] {
+            for signal in signals(packet) {
+                out.extend(sent(&call.receive_signal(signal)));
+            }
+        }
+        assert_eq!(
+            out.iter().map(hex::encode).collect::<Vec<_>>(),
+            ["810092cd013fccf1", "81009106", "81009106"]
+        );
+        assert_eq!(call.status(), SignallingStatus::Established);
+        assert!(call.audio_started());
+    }
+
+    #[test]
+    fn callee_completes_a_call_with_a_0_3_1_caller() {
+        let mut call = TelephonyCall::incoming();
+        call.caller_identified(false, true);
+        for signal in signals("810091cd013f") {
+            call.receive_signal(signal);
+        }
+        assert_eq!(
+            sent(&call.answer())
+                .iter()
+                .map(hex::encode)
+                .collect::<Vec<_>>(),
+            ["81009105", "81009106"]
+        );
+        for signal in signals("81009106") {
+            assert!(matches!(
+                call.receive_signal(signal).as_slice(),
+                [TelephonyAction::IgnoreSignal(_)]
+            ));
+        }
+        assert_eq!(call.status(), SignallingStatus::Established);
+        assert_eq!(call.profile(), Some(Profile::QualityMedium));
+        assert_eq!(call.mode(), Some(CallMode::FullDuplex));
     }
 
     #[test]

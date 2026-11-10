@@ -21,8 +21,13 @@ Parity with Python LXST 0.6.0. Several experimental APIs change.
   skipped instead of dropping its packet.
 - `Profile::buffer_frames` gives the receive buffer depth of each profile.
 - Raw float128 samples use IEEE binary128.
-- `lxst-embedded` sessions use the 60, 70, and 5 second ring, wait, and
-  connect times.
+- `lxst-embedded` sessions default to the 60, 70, and 5 second ring, wait,
+  and connect times; `SessionConfig::times` (`CallTimes`) changes them.
+- A caller is established once it has handled CONNECTING, so a lost
+  ESTABLISHED no longer ends the call at the wait time. Its audio, and media
+  sent or received, still start only on the callee's ESTABLISHED
+  (`audio_started`).
+- The media vector generator moved to `tools/fixtures/lxst_media_fixtures.py`.
 
 ## 0.3.1 - 2026-11-08
 
