@@ -44,6 +44,9 @@ fn path_entry(destination_hash: [u8; 16], hops: u8) -> PathTableRpcEntry {
         via: None,
         hops,
         expires: 3600.0,
+        value: None,
+        used: 0.0,
+        lr_cost: None,
         interface: "test".to_string(),
         interface_id: 1,
         interface_mode: InterfaceMode::Full,
@@ -4669,7 +4672,7 @@ async fn path_discovery_is_bounded_by_wait_time_from_call_start() {
         while let Some(message) = transport_rx.recv().await {
             if let TransportMessage::Rpc { query, response_tx } = message {
                 let response = match query {
-                    TransportQuery::DropPath { .. } => TransportQueryResponse::Ok,
+                    TransportQuery::DropPath { .. } => TransportQueryResponse::BoolResult(true),
                     _ => TransportQueryResponse::RecalledDestination(None),
                 };
                 let _ = response_tx.send(response);
@@ -4749,7 +4752,7 @@ async fn known_peer_call_sends_no_path_request_or_drop() {
                     }
                     TransportQuery::DropPath { .. } => {
                         drops += 1;
-                        TransportQueryResponse::Ok
+                        TransportQueryResponse::BoolResult(true)
                     }
                     TransportQuery::GetPathTable => {
                         TransportQueryResponse::PathTable(vec![path_entry(remote_destination, 1)])
