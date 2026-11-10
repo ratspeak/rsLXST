@@ -113,6 +113,8 @@ pub enum Error {
     RemoteTelephonyPeerNotDiscovered,
     #[error("remote LXST telephony Reticulum path was not discovered before timeout")]
     RemotePathNotDiscovered,
+    #[error("Reticulum link request stamp failed: {0}")]
+    LinkStamp(#[from] rns_link::stamp::LinkStampError),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,6 +123,38 @@ pub struct RemoteTelephonyPeer {
     pub destination_hash: [u8; 16],
     pub public_key: [u8; 64],
     pub hops: u8,
+}
+
+/// A call link request ready to send; its stamp, if any, is already generated.
+pub struct OutgoingLinkRequest {
+    remote_identity: IdentityHash,
+    link: Link,
+    request_data: Vec<u8>,
+}
+
+impl std::fmt::Debug for OutgoingLinkRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OutgoingLinkRequest")
+            .field("link_id", &self.link.link_id)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Build the call link request to `remote_identity`, stamped at the cost its
+/// telephony destination announced, as Python's `RNS.Link` does.
+pub async fn prepare_outgoing_link_request(
+    transport_tx: &mpsc::Sender<TransportMessage>,
+    remote_identity: IdentityHash,
+    hops: u8,
+) -> Result<OutgoingLinkRequest, Error> {
+    let destination_hash = telephony_destination_hash(&remote_identity);
+    let (link, request_data) =
+        rns_runtime::link_stamp::new_initiator(transport_tx, destination_hash, hops.max(1)).await?;
+    Ok(OutgoingLinkRequest {
+        remote_identity,
+        link,
+        request_data,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1005,7 +1039,7 @@ enum TelephonyInternalEvent {
         remote_identity: IdentityHash,
         profile: Option<Profile>,
         mode: Option<CallMode>,
-        result: Result<RemoteTelephonyPeer, Error>,
+        result: Result<(RemoteTelephonyPeer, OutgoingLinkRequest), Error>,
     },
 }
 
@@ -1718,8 +1752,11 @@ impl TelephonyService {
                     stage_timeout(),
                 )
                 .await?;
-                let peer = refresh_peer_hops_from_transport(transport_tx, peer).await?;
-                Ok(peer)
+                let peer = refresh_peer_hops_from_transport(transport_tx.clone(), peer).await?;
+                let request =
+                    prepare_outgoing_link_request(&transport_tx, remote_identity, peer.hops)
+                        .await?;
+                Ok((peer, request))
             }
             .await;
 
@@ -1755,14 +1792,13 @@ impl TelephonyService {
                 self.outgoing_discovery = None;
                 self.core.set_dialling(false);
 
-                match result.and_then(|peer| {
-                    self.endpoint.begin_outgoing_link_with_mode(
+                match result.and_then(|(peer, request)| {
+                    self.endpoint.begin_prepared_outgoing_link(
                         &mut self.core,
-                        remote_identity,
                         peer.public_key,
                         profile,
                         mode,
-                        peer.hops,
+                        request,
                     )
                 }) {
                     Ok(link_id) => {
@@ -2793,9 +2829,10 @@ impl TelephonyRnsEndpoint {
             profile,
             peer.hops,
         )
+        .await
     }
 
-    pub fn begin_outgoing_link_with_remote_pubkey(
+    pub async fn begin_outgoing_link_with_remote_pubkey(
         &mut self,
         core: &mut TelephonyRuntimeCore,
         remote_identity: IdentityHash,
@@ -2811,11 +2848,12 @@ impl TelephonyRnsEndpoint {
             None,
             hops,
         )
+        .await
     }
 
     /// Open the call link without a path request; Python `call()` requests a path only
     /// when none is known, which discovery has already done.
-    pub fn begin_outgoing_link_with_mode(
+    pub async fn begin_outgoing_link_with_mode(
         &mut self,
         core: &mut TelephonyRuntimeCore,
         remote_identity: IdentityHash,
@@ -2824,8 +2862,26 @@ impl TelephonyRnsEndpoint {
         mode: Option<CallMode>,
         hops: u8,
     ) -> Result<LinkId, Error> {
+        let request =
+            prepare_outgoing_link_request(&self.transport_tx, remote_identity, hops).await?;
+        self.begin_prepared_outgoing_link(core, remote_public_key, profile, mode, request)
+    }
+
+    /// Open a call link from a request built by [`prepare_outgoing_link_request`].
+    pub fn begin_prepared_outgoing_link(
+        &mut self,
+        core: &mut TelephonyRuntimeCore,
+        remote_public_key: [u8; 64],
+        profile: Option<Profile>,
+        mode: Option<CallMode>,
+        request: OutgoingLinkRequest,
+    ) -> Result<LinkId, Error> {
+        let OutgoingLinkRequest {
+            remote_identity,
+            link,
+            request_data,
+        } = request;
         let destination_hash = telephony_destination_hash(&remote_identity);
-        let (link, request_data) = Link::new_initiator(destination_hash, hops.max(1));
         let link_id = link.link_id;
         core.start_outgoing_call_with_mode(link_id, remote_identity, profile, mode)?;
 

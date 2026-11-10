@@ -1565,6 +1565,8 @@ async fn begin_outgoing_link_discovers_announce_and_sends_link_request() {
             )]))
             .unwrap();
 
+        answer_no_link_cost(&mut transport_rx, destination_hash).await;
+
         let register_link = transport_rx.recv().await.unwrap();
         let TransportMessage::RegisterDestination {
             hash: registered_link_id,
@@ -2046,6 +2048,8 @@ async fn telephony_service_call_control_discovers_peer_and_emits_started() {
             1,
         )]))
         .unwrap();
+
+    answer_no_link_cost(&mut transport_rx, destination_hash).await;
 
     let register_link = transport_rx.recv().await.unwrap();
     let TransportMessage::RegisterDestination {
@@ -3088,8 +3092,8 @@ fn outgoing_authenticated_proof_retires_attempt_when_transport_closes() {
     assert_eq!(endpoint.try_recv_link_event().unwrap(), None);
 }
 
-#[test]
-fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
+#[tokio::test]
+async fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
     let local_identity = Identity::new();
     let remote_identity = Identity::new();
     let remote_signing_key = remote_identity.get_signing_key().unwrap();
@@ -3102,15 +3106,18 @@ fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
     let _listener_registration = transport_rx.try_recv().unwrap();
     let mut core = TelephonyRuntimeCore::new();
 
-    let link_id = endpoint
-        .begin_outgoing_link_with_remote_pubkey(
-            &mut core,
-            remote_hash,
-            remote_public_key,
-            Some(Profile::LatencyLow),
-            1,
-        )
-        .unwrap();
+    let call = endpoint.begin_outgoing_link_with_remote_pubkey(
+        &mut core,
+        remote_hash,
+        remote_public_key,
+        Some(Profile::LatencyLow),
+        1,
+    );
+    let (link_id, ()) = tokio::join!(
+        call,
+        answer_no_link_cost(&mut transport_rx, destination_hash)
+    );
+    let link_id = link_id.unwrap();
 
     let register_link = transport_rx.try_recv().unwrap();
     let TransportMessage::RegisterDestination {
@@ -4772,4 +4779,18 @@ async fn known_peer_call_sends_no_path_request_or_drop() {
     assert_eq!((path_requests, drops), (0, 0));
     control_tx.send(TelephonyControl::Shutdown).await.unwrap();
     task.abort();
+}
+
+async fn answer_no_link_cost(
+    transport_rx: &mut mpsc::Receiver<TransportMessage>,
+    destination_hash: [u8; 16],
+) {
+    let rpc = transport_rx.recv().await.unwrap();
+    let TransportMessage::Rpc { query, response_tx } = rpc else {
+        panic!("expected link cost recall, got {rpc:?}");
+    };
+    assert!(matches!(query, TransportQuery::RecallLinkCost { dest } if dest == destination_hash));
+    response_tx
+        .send(TransportQueryResponse::FloatResult(None))
+        .unwrap();
 }

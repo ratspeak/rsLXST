@@ -417,7 +417,8 @@ def setup_reticulum(storage: Path, tcp_role: str, tcp_host: str, tcp_port: int, 
     config_dir = storage / "rns"
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "config").write_text(
-        build_rns_config(tcp_role, tcp_host, tcp_port, enable_transport),
+        build_rns_config(tcp_role, tcp_host, tcp_port, enable_transport)
+        + ("\n[stamps]\n" + os.environ["LXST_HELPER_STAMPS"].replace(";", "\n") + "\n" if os.environ.get("LXST_HELPER_STAMPS") else ""),
         encoding="utf-8",
     )
 

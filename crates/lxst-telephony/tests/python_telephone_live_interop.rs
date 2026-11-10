@@ -1,7 +1,7 @@
 //! Opt-in live interoperability against Python LXST over real TCP interfaces.
 //!
-//! Every test in this binary is ignored by default. Run it explicitly with the
-//! command documented in the repository README.
+//! Tests are ignored by default, except the link request stamp tests at the
+//! end. Run the rest explicitly with the command documented in the repository README.
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -3364,4 +3364,184 @@ async fn python_caller_gets_busy_while_rust_service_discovers_a_path() {
         .any(|event| matches!(event, TelephonyServiceEvent::IncomingCall { .. }));
     assert!(!rang);
     pair.shutdown().await;
+}
+
+// Link request stamps under enforcement (Link.py:187-200, :300-395@RNS 1.6.0).
+// LXST 0.6.0 has no stamp code of its own; its Telephone destination keeps the
+// default link cost LR_COST = 12.5.
+
+const PY_ENFORCING_STAMPS: &str =
+    "stamp_destinations = yes;enforce_stamps = yes;destination_cost = 6;destination_value = 8";
+
+fn low_cost_policy() -> rns_transport::stamps::StampPolicy {
+    rns_transport::stamps::StampPolicy {
+        destination_cost: 6.0,
+        ..Default::default()
+    }
+}
+
+/// A Rust caller reaches an enforcing Python Telephone: it recalls the
+/// announced link cost and stamps its link request at it.
+#[serial_test::serial(python_lxst_live)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn rust_outgoing_call_reaches_an_enforcing_python_telephone() {
+    let port = free_tcp_port();
+    let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
+    actor_tx
+        .send(TransportMessage::SetStampPolicy {
+            policy: low_cost_policy(),
+        })
+        .await
+        .unwrap();
+    let mut announce_rx = register_telephony_announce_handler(&actor_tx).await;
+    let mut helper = PythonTelephoneHost::spawn_with_env(
+        port,
+        "client",
+        false,
+        &[("LXST_HELPER_STAMPS", PY_ENFORCING_STAMPS)],
+    );
+    let ready = helper.wait_event("READY", Duration::from_secs(10));
+    let remote_identity_hash = hash_from_ready(&ready, "identity_hash");
+    let remote_destination_hash = hash_from_ready(&ready, "destination_hash");
+    let accepted = tokio::time::timeout(Duration::from_secs(15), handle_rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let (accepted_id, accepted_entry, accepted_read_task) = register_interface_entry(accepted);
+    actor_tx
+        .send(TransportMessage::RegisterInterface {
+            id: accepted_id,
+            entry: accepted_entry,
+        })
+        .await
+        .unwrap();
+    helper.send(json!({"cmd": "announce", "id": "announce-1"}));
+    helper.wait_event("ANNOUNCED", Duration::from_secs(20));
+    tokio::time::timeout(Duration::from_secs(20), announce_rx.recv())
+        .await
+        .expect("Python announce")
+        .unwrap();
+    let recalled =
+        rns_runtime::link_stamp::recall_link_cost(&actor_tx, remote_destination_hash).await;
+    assert_eq!(recalled, Some(12.5), "announced link cost");
+
+    let local_identity = Identity::new();
+    let mut endpoint = TelephonyRnsEndpoint::register(actor_tx.clone(), &local_identity).unwrap();
+    let mut core = TelephonyRuntimeCore::new();
+    endpoint
+        .begin_outgoing_link(
+            &mut core,
+            remote_identity_hash,
+            None,
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("start stamped outgoing call");
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    loop {
+        endpoint.try_drive_ready(&mut core).unwrap();
+        if core
+            .snapshot()
+            .active_call
+            .is_some_and(|call| call.status == SignallingStatus::Ringing)
+        {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "Rust call did not reach the enforcing Python Telephone:\n{}",
+            helper.stderr_log()
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    helper.wait_event("RINGING", Duration::from_secs(5));
+    endpoint.deregister_destination().unwrap();
+    accepted_read_task.abort();
+    server.read_task.abort();
+}
+
+/// An enforcing Rust telephone answers a Python caller that stamps at its
+/// cost (`lr_cost`, via `always_stamp_lrs` since the Rust announce here
+/// carries no cost) and drops one that does not stamp.
+#[serial_test::serial(python_lxst_live)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn python_outgoing_call_reaches_an_enforcing_rust_telephone_only_when_stamped() {
+    // Below 10 upstream grinds in-process; its worker pool deadlocks in this helper.
+    for (rust_lr_cost, python_stamps, expect_ringing) in [
+        (8.0, "always_stamp_lrs = yes;lr_cost = 8", true),
+        (12.5, "", false),
+    ] {
+        let mut policy = rns_transport::stamps::StampPolicy {
+            lr_cost: rust_lr_cost,
+            ..Default::default()
+        };
+        policy.enforce();
+        rns_runtime::destination_stamper::configure(policy, None);
+        let port = free_tcp_port();
+        let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
+        let mut helper = PythonTelephoneHost::spawn_with_env(
+            port,
+            "client",
+            false,
+            &[("LXST_HELPER_STAMPS", python_stamps)],
+        );
+        let ready = helper.wait_event("READY", Duration::from_secs(10));
+        let python_identity_hash = hash_from_ready(&ready, "identity_hash");
+        let accepted = tokio::time::timeout(Duration::from_secs(15), handle_rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        let (accepted_id, accepted_entry, accepted_read_task) = register_interface_entry(accepted);
+        actor_tx
+            .send(TransportMessage::RegisterInterface {
+                id: accepted_id,
+                entry: accepted_entry,
+            })
+            .await
+            .unwrap();
+        let local_identity = Identity::new();
+        let mut endpoint =
+            TelephonyRnsEndpoint::register(actor_tx.clone(), &local_identity).unwrap();
+        let mut core = TelephonyRuntimeCore::new();
+        let rust_destination_hash = send_rust_telephony_announce(&actor_tx, &local_identity).await;
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        helper.send(json!({
+            "cmd": "call",
+            "id": "call-rust-1",
+            "target_destination_hash": hex::encode(rust_destination_hash),
+        }));
+        helper.wait_event("CALL_REQUESTED", Duration::from_secs(10));
+        let wait = if expect_ringing { 40 } else { 15 };
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(wait);
+        let rang = loop {
+            endpoint.try_drive_ready(&mut core).unwrap();
+            if core
+                .snapshot()
+                .active_call
+                .is_some_and(|call| call.status == SignallingStatus::Ringing)
+            {
+                break true;
+            }
+            if tokio::time::Instant::now() >= deadline {
+                break false;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        };
+        rns_runtime::destination_stamper::configure(Default::default(), None);
+        assert_eq!(
+            rang,
+            expect_ringing,
+            "Python stamps {python_stamps:?} against Rust cost {rust_lr_cost}:\n{}",
+            helper.stderr_log()
+        );
+        if rang {
+            assert_eq!(
+                core.snapshot().active_call.unwrap().remote_identity,
+                python_identity_hash
+            );
+        }
+        endpoint.deregister_destination().unwrap();
+        accepted_read_task.abort();
+        server.read_task.abort();
+    }
 }
