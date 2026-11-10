@@ -14,8 +14,8 @@
     "commit": "af89a03094605dbdf7264d06fdc546526ec6980b"
   },
   "compatibilityFloor": {
-    "evidenceCommit": "21a54b778472343b70fd71d34ae96c61c44187c3",
-    "sourceCommit": "af89a03094605dbdf7264d06fdc546526ec6980b"
+    "evidenceCommit": "1c037655b217dc5346166dc24df83f5efc3e8deb",
+    "sourceCommit": "1c037655b217dc5346166dc24df83f5efc3e8deb"
   },
   "packages": [
     {
@@ -64,8 +64,5 @@
       "sha256": "1e7083b6302801c0d7f2417ff182e4dc559e1bf5a1ebde8638efaae26af62a24"
     }
   ],
-  "newPackages": [
-    "lxst-codec2",
-    "lxst-embedded"
-  ]
+  "newPackages": []
 }
