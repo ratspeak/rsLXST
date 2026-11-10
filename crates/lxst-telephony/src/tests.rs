@@ -1454,10 +1454,11 @@ async fn endpoint_announce_sends_lxst_telephony_announce_with_public_key() {
     let public_key = identity.get_public_key();
 
     let (transport_tx, mut transport_rx) = mpsc::channel(4);
-    let endpoint = TelephonyRnsEndpoint::register(transport_tx, &identity).unwrap();
+    let mut endpoint = TelephonyRnsEndpoint::register(transport_tx, &identity).unwrap();
     let _listener_registration = transport_rx.recv().await.unwrap();
 
     endpoint.announce().unwrap();
+    assert!(endpoint.try_pump_reticulum());
 
     let (header, payload) = take_outbound(&mut transport_rx);
     assert_eq!(header.destination_hash, destination_hash);
@@ -1469,7 +1470,10 @@ async fn endpoint_announce_sends_lxst_telephony_announce_with_public_key() {
 
     let announce = AnnounceData::unpack(&payload, header.flags.context_flag).unwrap();
     assert_eq!(announce.public_key, public_key);
-    assert_eq!(announce.name_hash, name_hash(TELEPHONY_DESTINATION_NAME));
+    assert_eq!(
+        announce.name_hash,
+        rns_identity::name_hash::name_hash(TELEPHONY_DESTINATION_NAME)
+    );
     let announced_identity = announce.validate(&destination_hash).unwrap();
     assert_eq!(announced_identity.hash, identity.hash);
 }

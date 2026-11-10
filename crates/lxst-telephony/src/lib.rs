@@ -5,7 +5,6 @@
 //! work; the embedding application owns audio devices and handles service events.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
 use lxst_core::{
@@ -23,13 +22,12 @@ use rns_identity::destination::{
     DestType, Destination, DestinationError, Direction, ProofStrategy,
 };
 use rns_identity::identity::Identity;
-use rns_identity::name_hash::name_hash;
 use rns_link::link::{CloseReason, Link, LinkAction, LinkRole};
 use rns_runtime::destination_resolver::{
     DestinationResolveError, DestinationResolveOptions, resolve_destination_on_transport,
 };
 use rns_runtime::link_manager::LinkManager;
-use rns_transport::link_messages::DestinationEvent;
+use rns_transport::link_messages::{AnnounceRequest, DestinationEvent};
 use rns_transport::messages::{
     InterfaceId, LinkEndpointBindResult, LinkEndpointBinding, LinkEndpointLifecycleEvent,
     LinkEndpointRole, LinkEndpointSendResult, OutboundRequest, TransportMessage, TransportQuery,
@@ -2578,6 +2576,8 @@ pub struct TelephonyRnsEndpoint {
     pub link_packet_rx: mpsc::UnboundedReceiver<(Vec<u8>, LinkId)>,
     pub link_closed_rx: mpsc::Receiver<LinkId>,
     transport_tx: mpsc::Sender<TransportMessage>,
+    /// The manager's destination event channel; announces are requested through it.
+    destination_tx: mpsc::Sender<DestinationEvent>,
     identity_pub_key: [u8; 64],
     identity: Identity,
     outgoing_attempts: HashMap<LinkId, OutgoingLinkAttempt>,
@@ -2645,7 +2645,7 @@ impl TelephonyRnsEndpoint {
             TransportMessage::RegisterDestination {
                 hash: destination_hash,
                 app_name: TELEPHONY_DESTINATION_NAME.to_string(),
-                delivery_tx: Some(destination_tx),
+                delivery_tx: Some(destination_tx.clone()),
             },
         )?;
 
@@ -2678,6 +2678,7 @@ impl TelephonyRnsEndpoint {
             link_packet_rx,
             link_closed_rx,
             transport_tx,
+            destination_tx,
             identity_pub_key,
             identity: identity.clone(),
             outgoing_attempts: HashMap::new(),
@@ -2708,62 +2709,21 @@ impl TelephonyRnsEndpoint {
         )
     }
 
+    /// Ask the destination's manager for an announce (Python `Telephone.announce`),
+    /// stamped when the stamp policy stamps destinations. The manager sends it
+    /// on its next step.
     pub fn announce(&self) -> Result<(), Error> {
-        let raw = self.announce_packet()?;
-        try_send_transport(
-            &self.transport_tx,
-            TransportMessage::Outbound(OutboundRequest {
-                raw: Bytes::from(raw),
-                destination_hash: self.destination_hash,
-            }),
-        )
-    }
-
-    fn announce_packet(&self) -> Result<Vec<u8>, Error> {
-        let announce_name_hash = name_hash(TELEPHONY_DESTINATION_NAME);
-        let random_bytes = rns_crypto::random::random_bytes(5);
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        let timestamp_bytes = timestamp.to_be_bytes();
-        let mut random_hash = [0u8; 10];
-        random_hash[..5].copy_from_slice(&random_bytes);
-        random_hash[5..].copy_from_slice(&timestamp_bytes[3..8]);
-
-        let mut signed_data = Vec::with_capacity(16 + 64 + 10 + 10);
-        signed_data.extend_from_slice(&self.destination_hash);
-        signed_data.extend_from_slice(&self.identity_pub_key);
-        signed_data.extend_from_slice(&announce_name_hash);
-        signed_data.extend_from_slice(&random_hash);
-        let signature = self
-            .identity
-            .sign(&signed_data)
-            .ok_or(Error::NoSigningKey)?;
-
-        let mut announce_data = Vec::with_capacity(64 + 10 + 10 + 64);
-        announce_data.extend_from_slice(&self.identity_pub_key);
-        announce_data.extend_from_slice(&announce_name_hash);
-        announce_data.extend_from_slice(&random_hash);
-        announce_data.extend_from_slice(&signature);
-
-        let flags = rns_wire::flags::PacketFlags {
-            header_type: rns_wire::flags::HeaderType::Header1,
-            context_flag: false,
-            transport_type: rns_wire::flags::TransportType::Broadcast,
-            destination_type: rns_wire::flags::DestinationType::Single,
-            packet_type: rns_wire::flags::PacketType::Announce,
-        };
-        let header = rns_wire::header::PacketHeader {
-            flags,
-            hops: 0,
-            transport_id: None,
-            destination_hash: self.destination_hash,
-            context: rns_wire::context::PacketContext::None,
-        };
-        let mut raw = header.pack();
-        raw.extend_from_slice(&announce_data);
-        Ok(raw)
+        if !self.identity.has_private_key() && !self.identity.has_backend() {
+            return Err(Error::NoSigningKey);
+        }
+        self.destination_tx
+            .try_send(DestinationEvent::AnnounceRequested(
+                AnnounceRequest::normal(TELEPHONY_DESTINATION_NAME.to_string()),
+            ))
+            .map_err(|err| match err {
+                mpsc::error::TrySendError::Full(_) => Error::TransportFull,
+                mpsc::error::TrySendError::Closed(_) => Error::TransportClosed,
+            })
     }
 
     pub fn deregister_link_destination(&self, link_id: LinkId) -> Result<(), Error> {
