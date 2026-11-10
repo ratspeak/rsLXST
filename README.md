@@ -219,6 +219,7 @@ control_tx
     .send(TelephonyControl::Call {
         remote_identity,
         profile: Some(Profile::QualityMedium),
+        mode: None,
         discovery_timeout: Duration::from_secs(8),
     })
     .await?;

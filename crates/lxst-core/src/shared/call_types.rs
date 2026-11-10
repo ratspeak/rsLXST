@@ -1,4 +1,4 @@
-use crate::{Profile, Signal, SignallingStatus};
+use crate::{CallMode, Profile, Signal, SignallingStatus};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CallRole {
@@ -9,6 +9,8 @@ pub enum CallRole {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TelephonyAction {
     SendSignal(Signal),
+    /// Send both signals in one packet, as Python sends profile and mode on RINGING.
+    SendSignalPair(Signal, Signal),
     IdentifyLocalIdentity,
     SelectProfile(Profile),
     PrepareDialingPipelines,
@@ -20,5 +22,7 @@ pub enum TelephonyAction {
     TeardownLink,
     RingIncomingCall,
     SwitchProfile(Profile),
+    SelectMode(CallMode),
+    SwitchMode(CallMode),
     IgnoreSignal(Signal),
 }

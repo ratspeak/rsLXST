@@ -159,12 +159,65 @@ impl Profile {
         }
     }
 
+    /// Python `Profiles.get_buffer_frames`: its sink holds one frame more than this and
+    /// starts playback at `max(1, buffer_frames() - 2)` frames.
+    pub const fn buffer_frames(self) -> u8 {
+        match self {
+            Self::BandwidthUltraLow => 2,
+            Self::BandwidthVeryLow => 2,
+            Self::BandwidthLow => 2,
+            Self::QualityMedium => 5,
+            Self::QualityHigh => 5,
+            Self::QualityMax => 5,
+            Self::LatencyLow => 3,
+            Self::LatencyUltraLow => 2,
+        }
+    }
+
     pub fn next(self) -> Self {
         let index = Self::ORDER
             .iter()
             .position(|candidate| *candidate == self)
             .unwrap_or(0);
         Self::ORDER[(index + 1) % Self::ORDER.len()]
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum CallMode {
+    FullDuplex = 0x01,
+    HalfDuplex = 0x02,
+}
+
+impl CallMode {
+    pub const DEFAULT: Self = Self::FullDuplex;
+    pub const AVAILABLE: [Self; 2] = [Self::FullDuplex, Self::HalfDuplex];
+
+    pub const fn wire_value(self) -> u8 {
+        self as u8
+    }
+
+    pub const fn from_wire(value: u8) -> Option<Self> {
+        match value {
+            0x01 => Some(Self::FullDuplex),
+            0x02 => Some(Self::HalfDuplex),
+            _ => None,
+        }
+    }
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::FullDuplex => "Full Duplex",
+            Self::HalfDuplex => "Half Duplex",
+        }
+    }
+
+    pub const fn abbreviation(self) -> &'static str {
+        match self {
+            Self::FullDuplex => "FDX",
+            Self::HalfDuplex => "HDX",
+        }
     }
 }
 

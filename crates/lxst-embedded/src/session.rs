@@ -1,10 +1,17 @@
 //! Local admission and microphone policy around the trusted call transitions.
 //! No extra wire extension, turn token or directional capability is invented.
-use crate::{Actions, CallRole, CallState, Profile, Signal, SignallingStatus, TelephonyAction};
+use crate::{
+    Actions, CallMode, CallRole, CallState, Profile, Signal, SignallingStatus, TelephonyAction,
+};
 
+/// Local limit for an incoming link to identify its caller; Python has no counterpart.
 const SETUP_MS: u64 = 30_000;
-const RING_MS: u64 = 90_000;
-const ANSWER_MS: u64 = 10_000;
+/// Python `Telephone.RING_TIME`.
+const RING_MS: u64 = 60_000;
+/// Python `Telephone.WAIT_TIME`, measured from the start of the outgoing call.
+const WAIT_MS: u64 = 70_000;
+/// Python `Telephone.CONNECT_TIME`: the callee must ring within this time of the call start.
+const CONNECT_MS: u64 = 5_000;
 const PROFILE_MS: u64 = 5_000;
 pub const TALK_LIMIT_MS: u64 = 30_000;
 
@@ -94,11 +101,10 @@ pub struct Session {
     audio_generation: u32,
     ended: Option<EndReason>,
     deadline: u64,
+    connect_deadline: Option<u64>,
     talk_started: u64,
     suggested: bool,
     profile_deadline: Option<u64>,
-    answer_retry: u64,
-    retries: u8,
 }
 impl Session {
     pub fn new(role: CallRole, config: SessionConfig, now_ms: u64) -> Result<Self, ConfigError> {
@@ -123,12 +129,17 @@ impl Session {
             input_down: false,
             audio_generation: 1,
             ended: None,
-            deadline: now_ms.saturating_add(SETUP_MS),
+            deadline: now_ms.saturating_add(match role {
+                CallRole::Incoming => SETUP_MS,
+                CallRole::Outgoing => WAIT_MS,
+            }),
+            connect_deadline: match role {
+                CallRole::Incoming => None,
+                CallRole::Outgoing => Some(now_ms.saturating_add(CONNECT_MS)),
+            },
             talk_started: 0,
             suggested: false,
             profile_deadline: None,
-            answer_retry: 0,
-            retries: 0,
         })
     }
     pub const fn status(&self) -> SignallingStatus {
@@ -136,6 +147,9 @@ impl Session {
     }
     pub const fn profile(&self) -> Option<Profile> {
         self.call.profile()
+    }
+    pub const fn mode(&self) -> Option<CallMode> {
+        self.call.mode()
     }
     pub const fn ended(&self) -> Option<EndReason> {
         self.ended
@@ -186,7 +200,7 @@ impl Session {
         }
         events
     }
-    pub fn answer(&mut self, now_ms: u64) -> Events {
+    pub fn answer(&mut self, _now_ms: u64) -> Events {
         let mut events = Events::new();
         if self.ended.is_some()
             || !self.verified
@@ -195,8 +209,6 @@ impl Session {
         {
             return events;
         }
-        self.deadline = now_ms.saturating_add(ANSWER_MS);
-        self.answer_retry = now_ms.saturating_add(1000);
         events.transitions(self.call.answer());
         events
     }
@@ -220,6 +232,7 @@ impl Session {
                 return events;
             }
             self.profile_deadline = None;
+            self.suggested = false;
             if self.call.profile() != Some(profile) {
                 self.stop_capture(&mut events);
                 self.ready = false;
@@ -273,11 +286,8 @@ impl Session {
             if !allowed {
                 return events;
             }
-            if status == SignallingStatus::Ringing && current != status {
-                self.deadline = now_ms.saturating_add(RING_MS);
-            }
-            if status == SignallingStatus::Connecting && current == SignallingStatus::Ringing {
-                self.deadline = now_ms.saturating_add(ANSWER_MS);
+            if status == SignallingStatus::Ringing {
+                self.connect_deadline = None;
             }
         }
         events.transitions(self.call.receive_signal(signal));
@@ -352,19 +362,15 @@ impl Session {
         if self.status() != SignallingStatus::Established && now_ms >= self.deadline {
             return self.end(EndReason::Timeout);
         }
+        if self
+            .connect_deadline
+            .is_some_and(|deadline| now_ms >= deadline)
+        {
+            return self.end(EndReason::Timeout);
+        }
         if self.transmitting && now_ms.saturating_sub(self.talk_started) >= TALK_LIMIT_MS {
             self.stop_capture(&mut events);
             events.push(Event::FlushMedia);
-        }
-        if self.call.role() == CallRole::Incoming
-            && self.call.answered()
-            && self.status() == SignallingStatus::Connecting
-            && now_ms >= self.answer_retry
-            && self.retries < 3
-        {
-            self.retries += 1;
-            self.answer_retry = now_ms.saturating_add(1000);
-            events.transitions(self.call.retry_answer());
         }
         events
     }

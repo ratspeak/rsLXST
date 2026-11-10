@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use bytes::Bytes;
 use lxst_core::{
-    CallRole, CodecKind, Frame, FrameStreamEvent, LxstPacket, OpusCodecError, Profile,
+    CallMode, CallRole, CodecKind, Frame, FrameStreamEvent, LxstPacket, OpusCodecError, Profile,
     RawAudioFrame, RawBitDepth, Signal, SignallingStatus, TELEPHONY_DESTINATION_NAME,
     TelephonyAction, TelephonyCall,
 };
@@ -42,7 +42,7 @@ use tokio::time::{Duration, Instant, timeout};
 mod capture_gate;
 mod media;
 pub use capture_gate::AudioTransmitGate;
-use media::{AudioDecoder, AudioEncoder};
+use media::{AudioEncoder, ReceiveDecoder};
 
 pub type LinkId = [u8; 16];
 pub type IdentityHash = [u8; 16];
@@ -50,6 +50,14 @@ pub type IdentityHash = [u8; 16];
 pub const TELEPHONY_ANNOUNCE_INTERVAL: Duration = Duration::from_secs(60 * 60 * 3);
 pub const TELEPHONY_STARTUP_ANNOUNCE_RETRY_INTERVAL: Duration = Duration::from_secs(5);
 pub const TELEPHONY_STARTUP_ANNOUNCE_RETRIES: u8 = 6;
+/// Python `Telephone.JOB_INTERVAL`: the first periodic announce follows one job tick.
+pub const TELEPHONY_JOB_INTERVAL: Duration = Duration::from_secs(5);
+/// Python `Telephone.CONNECT_TIME`.
+pub const TELEPHONY_CONNECT_TIME: Duration = Duration::from_secs(5);
+/// Python `Telephone.WAIT_TIME`.
+pub const TELEPHONY_WAIT_TIME: Duration = Duration::from_secs(70);
+/// Python `Telephone.RING_TIME`.
+pub const TELEPHONY_RING_TIME: Duration = Duration::from_secs(60);
 /// Housekeeping cadence with no call activity; link events still wake the service at once.
 const TELEPHONY_IDLE_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -161,6 +169,11 @@ pub enum TelephonyCommand {
         link_id: LinkId,
         signal: Signal,
     },
+    /// Two signals in one LXST packet.
+    SendSignalPair {
+        link_id: LinkId,
+        signals: [Signal; 2],
+    },
     IdentifyLocalIdentity {
         link_id: LinkId,
     },
@@ -171,6 +184,14 @@ pub enum TelephonyCommand {
     SwitchProfile {
         link_id: LinkId,
         profile: Profile,
+    },
+    SelectMode {
+        link_id: LinkId,
+        mode: CallMode,
+    },
+    SwitchMode {
+        link_id: LinkId,
+        mode: CallMode,
     },
     PrepareDialingPipelines {
         link_id: LinkId,
@@ -227,9 +248,12 @@ impl TelephonyCommand {
     pub const fn link_id(&self) -> LinkId {
         match self {
             Self::SendSignal { link_id, .. }
+            | Self::SendSignalPair { link_id, .. }
             | Self::IdentifyLocalIdentity { link_id }
             | Self::SelectProfile { link_id, .. }
             | Self::SwitchProfile { link_id, .. }
+            | Self::SelectMode { link_id, .. }
+            | Self::SwitchMode { link_id, .. }
             | Self::PrepareDialingPipelines { link_id }
             | Self::ResetDialingPipelines { link_id }
             | Self::OpenAudioPipelines { link_id }
@@ -251,7 +275,11 @@ impl TelephonyCommand {
     }
 
     pub fn to_lxst_packet(&self) -> Option<LxstPacket> {
-        self.signal().map(signalling_packet)
+        match self {
+            Self::SendSignal { signal, .. } => Some(signalling_packet(*signal)),
+            Self::SendSignalPair { signals, .. } => Some(LxstPacket::signalling(*signals)),
+            _ => None,
+        }
     }
 }
 
@@ -314,7 +342,9 @@ pub struct ActiveCallSnapshot {
     pub role: CallRole,
     pub status: SignallingStatus,
     pub profile: Option<Profile>,
+    pub mode: Option<CallMode>,
     pub answered: bool,
+    pub transmit_squelched: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -328,6 +358,7 @@ pub struct TelephonyRuntimeSnapshot {
 pub struct TelephonyRuntimeCore {
     access: CallerAccessPolicy,
     external_busy: bool,
+    dialling: bool,
     pending_links: HashSet<LinkId>,
     ingress: HashMap<LinkId, LxstLinkIngress>,
     active_call: Option<ActiveCall>,
@@ -361,8 +392,17 @@ impl TelephonyRuntimeCore {
         self.external_busy = busy;
     }
 
+    /// Python `Telephone.busy`: a call in setup, including path discovery, makes the line busy.
     pub fn line_busy(&self) -> bool {
-        self.external_busy || self.active_call.is_some()
+        self.external_busy || self.dialling || self.active_call.is_some()
+    }
+
+    pub const fn dialling(&self) -> bool {
+        self.dialling
+    }
+
+    fn set_dialling(&mut self, dialling: bool) {
+        self.dialling = dialling;
     }
 
     pub fn active_call(&self) -> Option<&ActiveCall> {
@@ -383,7 +423,9 @@ impl TelephonyRuntimeCore {
                 role: active.call.role(),
                 status: active.call.status(),
                 profile: active.call.profile(),
+                mode: active.call.mode(),
                 answered: active.call.answered(),
+                transmit_squelched: active.call.transmit_squelched(),
             }),
         }
     }
@@ -434,6 +476,16 @@ impl TelephonyRuntimeCore {
         remote_identity: IdentityHash,
         profile: Option<Profile>,
     ) -> Result<(), Error> {
+        self.start_outgoing_call_with_mode(link_id, remote_identity, profile, None)
+    }
+
+    pub fn start_outgoing_call_with_mode(
+        &mut self,
+        link_id: LinkId,
+        remote_identity: IdentityHash,
+        profile: Option<Profile>,
+        mode: Option<CallMode>,
+    ) -> Result<(), Error> {
         if self.line_busy() {
             return Err(Error::LineBusy);
         }
@@ -442,7 +494,7 @@ impl TelephonyRuntimeCore {
         self.active_call = Some(ActiveCall {
             link_id,
             remote_identity,
-            call: TelephonyCall::outgoing(profile),
+            call: TelephonyCall::outgoing_with_mode(profile, mode),
         });
         Ok(())
     }
@@ -475,27 +527,6 @@ impl TelephonyRuntimeCore {
         Ok(self.commands_from_actions(link_id, Some(remote_identity), actions))
     }
 
-    fn retry_answer_active(
-        &self,
-        expected_link_id: LinkId,
-    ) -> Result<Vec<TelephonyCommand>, Error> {
-        let active = self.active_call.as_ref().ok_or(Error::NoActiveCall)?;
-        if active.link_id != expected_link_id {
-            return Err(Error::WrongActiveLink);
-        }
-        if active.call.role() != CallRole::Incoming
-            || !active.call.answered()
-            || active.call.status() != SignallingStatus::Connecting
-        {
-            return Err(Error::CallNotAnswerable);
-        }
-        Ok(self.commands_from_actions(
-            active.link_id,
-            Some(active.remote_identity),
-            active.call.retry_answer(),
-        ))
-    }
-
     pub fn switch_active_profile(
         &mut self,
         profile: Profile,
@@ -511,25 +542,34 @@ impl TelephonyRuntimeCore {
         Ok(self.commands_from_actions(link_id, Some(remote_identity), actions))
     }
 
-    pub fn hangup_active(&mut self, ring_timeout: bool) -> Result<Vec<TelephonyCommand>, Error> {
-        self.terminate_active(ring_timeout, None)
+    /// Python `switch_mode`: only an established call changes mode and signals it.
+    pub fn switch_active_mode(&mut self, mode: CallMode) -> Result<Vec<TelephonyCommand>, Error> {
+        let active = self.active_call.as_mut().ok_or(Error::NoActiveCall)?;
+        if active.call.status() != SignallingStatus::Established {
+            return Err(Error::CallNotEstablished);
+        }
+
+        let link_id = active.link_id;
+        let remote_identity = active.remote_identity;
+        let actions = active.call.switch_mode(mode);
+        Ok(self.commands_from_actions(link_id, Some(remote_identity), actions))
     }
 
-    fn timeout_answer_active(
-        &mut self,
-        expected_link_id: LinkId,
-    ) -> Result<Vec<TelephonyCommand>, Error> {
-        let active = self.active_call.as_ref().ok_or(Error::NoActiveCall)?;
-        if active.link_id != expected_link_id {
-            return Err(Error::WrongActiveLink);
-        }
-        if active.call.role() != CallRole::Incoming
-            || !active.call.answered()
-            || active.call.status() != SignallingStatus::Connecting
-        {
-            return Err(Error::CallNotAnswerable);
-        }
-        self.terminate_active(false, Some(SignallingStatus::Connecting))
+    /// Python `squelch_transmit`/`unsquelch_transmit`: local only, nothing is signalled.
+    pub fn set_active_transmit_squelched(&mut self, squelched: bool) -> Result<(), Error> {
+        let active = self.active_call.as_mut().ok_or(Error::NoActiveCall)?;
+        active.call.set_transmit_squelched(squelched);
+        Ok(())
+    }
+
+    pub fn disable_remote_mode_follow(&mut self) -> Result<(), Error> {
+        let active = self.active_call.as_mut().ok_or(Error::NoActiveCall)?;
+        active.call.disable_remote_mode_follow();
+        Ok(())
+    }
+
+    pub fn hangup_active(&mut self, ring_timeout: bool) -> Result<Vec<TelephonyCommand>, Error> {
+        self.terminate_active(ring_timeout, None)
     }
 
     fn terminate_active(
@@ -615,7 +655,18 @@ impl TelephonyRuntimeCore {
         let mut commands = Vec::new();
 
         for signal in inbound.packet.signals.clone() {
+            // Python returns at the first signal below PREFERRED_MODE on an unanswered
+            // incoming call, which drops the rest of the packet.
+            let ends_packet = signal.wire_value() < Signal::PreferredMode(0).wire_value()
+                && self.active_call.as_ref().is_some_and(|active| {
+                    active.link_id == link_id
+                        && active.call.role() == CallRole::Incoming
+                        && !active.call.answered()
+                });
             commands.extend(self.receive_signal(link_id, signal)?);
+            if ends_packet {
+                break;
+            }
         }
 
         Ok(TelephonyStep {
@@ -702,6 +753,18 @@ impl TelephonyRuntimeCore {
                 TelephonyAction::SendSignal(signal) => {
                     Some(TelephonyCommand::SendSignal { link_id, signal })
                 }
+                TelephonyAction::SendSignalPair(first, second) => {
+                    Some(TelephonyCommand::SendSignalPair {
+                        link_id,
+                        signals: [first, second],
+                    })
+                }
+                TelephonyAction::SelectMode(mode) => {
+                    Some(TelephonyCommand::SelectMode { link_id, mode })
+                }
+                TelephonyAction::SwitchMode(mode) => {
+                    Some(TelephonyCommand::SwitchMode { link_id, mode })
+                }
                 TelephonyAction::IdentifyLocalIdentity => {
                     Some(TelephonyCommand::IdentifyLocalIdentity { link_id })
                 }
@@ -746,6 +809,7 @@ pub enum TelephonyControl {
     Call {
         remote_identity: IdentityHash,
         profile: Option<Profile>,
+        mode: Option<CallMode>,
         discovery_timeout: Duration,
     },
     Answer {
@@ -791,16 +855,23 @@ pub enum TelephonyControl {
     SwitchProfile {
         profile: Profile,
     },
+    SwitchMode {
+        mode: CallMode,
+    },
+    /// Drop outbound media frames without signalling, as Python `squelch_transmit`.
+    SquelchTransmit(bool),
+    DisableRemoteModeFollow,
     SetExternalBusy(bool),
     SetAccessPolicy(CallerAccessPolicy),
     Shutdown,
 }
 
 /// Submit an exact-link answer request and wait until the telephony service
-/// has validated the active incoming call, atomically admitted its signalling
-/// packets, and queued the authoritative CONNECTING snapshot for the event consumer.
-/// This does not confirm peer receipt or an established call. There is no built-in
-/// wait deadline; cancelling this future does not retract an already queued request.
+/// has validated the active incoming call, atomically admitted its CONNECTING and
+/// ESTABLISHED signalling packets, and queued the ESTABLISHED snapshot for the event
+/// consumer. As in Python, there is no retry and no wait for the caller's echo.
+/// There is no built-in wait deadline; cancelling this future does not retract an
+/// already queued request.
 pub async fn request_answer(
     control_tx: &mpsc::Sender<TelephonyControl>,
     expected_link_id: LinkId,
@@ -935,6 +1006,7 @@ enum TelephonyInternalEvent {
     OutgoingDiscoveryCompleted {
         remote_identity: IdentityHash,
         profile: Option<Profile>,
+        mode: Option<CallMode>,
         result: Result<RemoteTelephonyPeer, Error>,
     },
 }
@@ -943,15 +1015,18 @@ enum TelephonyInternalEvent {
 struct OutgoingDiscoveryState {
     remote_identity: IdentityHash,
     profile: Option<Profile>,
+    mode: Option<CallMode>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TelephonyServiceConfig {
     pub poll_interval: Duration,
     pub incoming_ring_timeout: Option<Duration>,
-    pub answer_retry_interval: Option<Duration>,
-    pub answer_timeout: Option<Duration>,
+    /// Python `wait_time`, measured from the call request and including path discovery.
     pub outgoing_call_timeout: Option<Duration>,
+    /// Python `establishment_timeout` (`set_connect_timeout`): hang up unless the
+    /// callee rings within this time of the call request.
+    pub connect_timeout: Option<Duration>,
     pub media_frames_per_tick: usize,
     pub announce_on_start: bool,
     pub announce_interval: Option<Duration>,
@@ -963,15 +1038,14 @@ impl Default for TelephonyServiceConfig {
     fn default() -> Self {
         Self {
             poll_interval: Duration::from_millis(20),
-            incoming_ring_timeout: Some(Duration::from_secs(60)),
-            answer_retry_interval: Some(Duration::from_millis(750)),
-            answer_timeout: Some(Duration::from_secs(5)),
-            outgoing_call_timeout: Some(Duration::from_secs(70)),
+            incoming_ring_timeout: Some(TELEPHONY_RING_TIME),
+            outgoing_call_timeout: Some(TELEPHONY_WAIT_TIME),
+            connect_timeout: Some(TELEPHONY_CONNECT_TIME),
             media_frames_per_tick: 4,
             announce_on_start: true,
             announce_interval: Some(TELEPHONY_ANNOUNCE_INTERVAL),
             startup_announce_retry_interval: Some(TELEPHONY_STARTUP_ANNOUNCE_RETRY_INTERVAL),
-            startup_announce_retries: TELEPHONY_STARTUP_ANNOUNCE_RETRIES,
+            startup_announce_retries: 0,
         }
     }
 }
@@ -1000,6 +1074,7 @@ pub struct TelephonyServiceParts {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TelephonyServiceTimeoutKind {
     IncomingRing,
+    OutgoingEstablishment,
     OutgoingCall,
 }
 
@@ -1008,13 +1083,6 @@ struct TelephonyServiceTimeout {
     link_id: LinkId,
     kind: TelephonyServiceTimeoutKind,
     expires_at: Instant,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct TelephonyAnsweringState {
-    link_id: LinkId,
-    next_retry_at: Option<Instant>,
-    expires_at: Option<Instant>,
 }
 
 #[derive(Default)]
@@ -1036,7 +1104,7 @@ struct ActiveOpusEncoder {
 struct ActiveOpusDecoder {
     link_id: LinkId,
     profile: Profile,
-    decoder: AudioDecoder,
+    decoder: ReceiveDecoder,
 }
 
 struct ActiveOpusTransmitStream {
@@ -1153,11 +1221,7 @@ impl TelephonyServiceMedia {
             .encoder)
     }
 
-    fn opus_decoder_for(
-        &mut self,
-        link_id: LinkId,
-        profile: Profile,
-    ) -> Result<&mut AudioDecoder, Error> {
+    fn opus_decoder_for(&mut self, link_id: LinkId, profile: Profile) -> &mut ReceiveDecoder {
         let needs_new = self
             .opus_decoder
             .as_ref()
@@ -1168,15 +1232,15 @@ impl TelephonyServiceMedia {
             self.opus_decoder = Some(ActiveOpusDecoder {
                 link_id,
                 profile,
-                decoder: AudioDecoder::new(profile)?,
+                decoder: ReceiveDecoder::new(profile),
             });
         }
 
-        Ok(&mut self
+        &mut self
             .opus_decoder
             .as_mut()
             .expect("Opus decoder exists after creation")
-            .decoder)
+            .decoder
     }
 }
 
@@ -1189,7 +1253,7 @@ pub struct TelephonyService {
     event_tx: mpsc::Sender<TelephonyServiceEvent>,
     config: TelephonyServiceConfig,
     active_timeout: Option<TelephonyServiceTimeout>,
-    answering: Option<TelephonyAnsweringState>,
+    outgoing_started_at: Option<Instant>,
     next_announce_at: Option<Instant>,
     startup_announce_retries_remaining: u8,
     outgoing_discovery: Option<OutgoingDiscoveryState>,
@@ -1256,7 +1320,7 @@ impl TelephonyService {
         config: TelephonyServiceConfig,
     ) -> Self {
         let next_announce_at = if config.announce_on_start {
-            Some(Instant::now())
+            Some(Instant::now() + TELEPHONY_JOB_INTERVAL)
         } else {
             config
                 .announce_interval
@@ -1279,7 +1343,7 @@ impl TelephonyService {
             event_tx,
             config,
             active_timeout: None,
-            answering: None,
+            outgoing_started_at: None,
             next_announce_at,
             startup_announce_retries_remaining,
             outgoing_discovery: None,
@@ -1341,9 +1405,6 @@ impl TelephonyService {
                     if !self.drive_ready().await {
                         break;
                     }
-                    if !self.handle_due_answer_retry().await {
-                        break;
-                    }
                     if !self.handle_due_timeout().await {
                         break;
                     }
@@ -1374,7 +1435,6 @@ impl TelephonyService {
         core.active_call.is_some()
             || !core.pending_links.is_empty()
             || !core.ingress.is_empty()
-            || self.answering.is_some()
             || self.active_timeout.is_some()
             || self.outgoing_discovery.is_some()
             || media.opus_encoder.is_some()
@@ -1430,7 +1490,7 @@ impl TelephonyService {
         let stream_events = self.media.clear_unless_established(None);
         let _ = emit_service_events(self.event_tx.clone(), stream_events).await;
         self.active_timeout = None;
-        self.answering = None;
+        self.outgoing_started_at = None;
     }
 
     fn deregister_destinations(&self) {
@@ -1461,10 +1521,11 @@ impl TelephonyService {
             TelephonyControl::Call {
                 remote_identity,
                 profile,
+                mode,
                 discovery_timeout,
             } => {
                 return self
-                    .start_outgoing_discovery(remote_identity, profile, discovery_timeout)
+                    .start_outgoing_discovery(remote_identity, profile, mode, discovery_timeout)
                     .await;
             }
             TelephonyControl::Answer {
@@ -1489,14 +1550,22 @@ impl TelephonyService {
             }
             TelephonyControl::Hangup { ring_timeout } => {
                 if let Some(discovery) = self.outgoing_discovery.take() {
-                    return emit_service_event(
+                    self.core.set_dialling(false);
+                    self.outgoing_started_at = None;
+                    if !emit_service_event(
                         self.event_tx.clone(),
                         TelephonyServiceEvent::OutgoingCallFailed {
                             remote_identity: discovery.remote_identity,
                             message: "cancelled".to_string(),
                         },
                     )
-                    .await;
+                    .await
+                    {
+                        return false;
+                    }
+                    if self.core.active_call().is_none() {
+                        return emit_snapshot(self.event_tx.clone(), self.core.snapshot()).await;
+                    }
                 }
                 let commands = self.core.hangup_active(ring_timeout);
                 self.control_commands(commands).await
@@ -1564,6 +1633,17 @@ impl TelephonyService {
                 let commands = self.core.switch_active_profile(profile);
                 self.control_commands(commands).await
             }
+            TelephonyControl::SwitchMode { mode } => {
+                let commands = self.core.switch_active_mode(mode);
+                self.control_commands(commands).await
+            }
+            TelephonyControl::SquelchTransmit(squelched) => {
+                if let Err(err) = self.core.set_active_transmit_squelched(squelched) {
+                    return emit_service_error(self.event_tx.clone(), err).await;
+                }
+                return emit_snapshot(self.event_tx.clone(), self.core.snapshot()).await;
+            }
+            TelephonyControl::DisableRemoteModeFollow => self.core.disable_remote_mode_follow(),
             TelephonyControl::SetExternalBusy(busy) => {
                 self.core.set_external_busy(busy);
                 let stream_events = self.refresh_active_timeout();
@@ -1589,16 +1669,31 @@ impl TelephonyService {
         &mut self,
         remote_identity: IdentityHash,
         profile: Option<Profile>,
+        mode: Option<CallMode>,
         discovery_timeout: Duration,
     ) -> bool {
         if self.core.line_busy() || self.outgoing_discovery.is_some() {
             return emit_service_error(self.event_tx.clone(), Error::LineBusy).await;
         }
 
+        let started_at = Instant::now();
+        self.outgoing_started_at = Some(started_at);
+        self.core.set_dialling(true);
         self.outgoing_discovery = Some(OutgoingDiscoveryState {
             remote_identity,
             profile,
+            mode,
         });
+        // Python bounds path discovery by wait_time from call().
+        let wait_deadline = self
+            .config
+            .outgoing_call_timeout
+            .map(|timeout| started_at + timeout);
+        let stage_timeout = move || {
+            wait_deadline.map_or(discovery_timeout, |deadline| {
+                discovery_timeout.min(deadline.saturating_duration_since(Instant::now()))
+            })
+        };
 
         if !emit_service_event(
             self.event_tx.clone(),
@@ -1616,13 +1711,13 @@ impl TelephonyService {
                 let peer = discover_remote_telephony_peer_on_transport(
                     transport_tx.clone(),
                     remote_identity,
-                    discovery_timeout,
+                    stage_timeout(),
                 )
                 .await?;
                 await_path_on_transport(
                     transport_tx.clone(),
                     peer.destination_hash,
-                    discovery_timeout,
+                    stage_timeout(),
                 )
                 .await?;
                 let peer = refresh_peer_hops_from_transport(transport_tx, peer).await?;
@@ -1634,6 +1729,7 @@ impl TelephonyService {
                 .send(TelephonyInternalEvent::OutgoingDiscoveryCompleted {
                     remote_identity,
                     profile,
+                    mode,
                     result,
                 })
                 .await;
@@ -1647,23 +1743,27 @@ impl TelephonyService {
             TelephonyInternalEvent::OutgoingDiscoveryCompleted {
                 remote_identity,
                 profile,
+                mode,
                 result,
             } => {
                 let expected = OutgoingDiscoveryState {
                     remote_identity,
                     profile,
+                    mode,
                 };
                 if self.outgoing_discovery != Some(expected) {
                     return true;
                 }
                 self.outgoing_discovery = None;
+                self.core.set_dialling(false);
 
                 match result.and_then(|peer| {
-                    self.endpoint.begin_outgoing_link_with_remote_pubkey(
+                    self.endpoint.begin_outgoing_link_with_mode(
                         &mut self.core,
                         remote_identity,
                         peer.public_key,
                         profile,
+                        mode,
                         peer.hops,
                     )
                 }) {
@@ -1686,8 +1786,9 @@ impl TelephonyService {
                         emit_snapshot(self.event_tx.clone(), self.core.snapshot()).await
                     }
                     Err(err) => {
+                        self.outgoing_started_at = None;
                         let message = err.to_string();
-                        emit_service_event(
+                        if !emit_service_event(
                             self.event_tx.clone(),
                             TelephonyServiceEvent::OutgoingCallFailed {
                                 remote_identity,
@@ -1695,6 +1796,10 @@ impl TelephonyService {
                             },
                         )
                         .await
+                        {
+                            return false;
+                        }
+                        emit_snapshot(self.event_tx.clone(), self.core.snapshot()).await
                     }
                 }
             }
@@ -1874,20 +1979,6 @@ impl TelephonyService {
             }
         };
 
-        let now = Instant::now();
-        self.answering = Some(TelephonyAnsweringState {
-            link_id: expected_link_id,
-            next_retry_at: self
-                .config
-                .answer_retry_interval
-                .filter(|interval| !interval.is_zero())
-                .map(|interval| now + interval),
-            expires_at: self
-                .config
-                .answer_timeout
-                .filter(|duration| !duration.is_zero())
-                .map(|duration| now + duration),
-        });
         self.publish_commands(commands, effects).await?;
 
         let active = self
@@ -1954,6 +2045,10 @@ impl TelephonyService {
         if active.call.status() != SignallingStatus::Established {
             return Err(Error::CallNotEstablished);
         }
+        // A squelched Python Packetizer drops frames silently.
+        if active.call.transmit_squelched() {
+            return Ok(());
+        }
 
         let link_id = active.link_id;
         let frame_count = frames.len();
@@ -1989,6 +2084,9 @@ impl TelephonyService {
                 active: active_profile,
                 requested: profile,
             });
+        }
+        if active.call.transmit_squelched() {
+            return Ok(());
         }
 
         let link_id = active.link_id;
@@ -2045,15 +2143,16 @@ impl TelephonyService {
                 for step in steps {
                     let service_events = service_events_from_commands(&step.step.commands);
                     let media_received = media_received_event(&step.step);
-                    let opus_received_events = match self.opus_received_events(&step.step) {
-                        Ok(events) => events,
-                        Err(err) => {
-                            if !emit_service_error(self.event_tx.clone(), err).await {
-                                return false;
-                            }
-                            Vec::new()
+                    let (opus_received_events, decode_errors) =
+                        match self.opus_received_events(&step.step) {
+                            Ok(decoded) => decoded,
+                            Err(err) => (Vec::new(), vec![err]),
+                        };
+                    for err in decode_errors {
+                        if !emit_service_error(self.event_tx.clone(), err).await {
+                            return false;
                         }
-                    };
+                    }
                     if !emit_service_event(
                         self.event_tx.clone(),
                         TelephonyServiceEvent::Drive(step),
@@ -2097,12 +2196,14 @@ impl TelephonyService {
         }
     }
 
+    /// Decode each received frame on its own; a bad frame is reported and skipped.
+    #[allow(clippy::type_complexity)]
     fn opus_received_events(
         &mut self,
         step: &TelephonyStep,
-    ) -> Result<Vec<TelephonyServiceEvent>, Error> {
+    ) -> Result<(Vec<TelephonyServiceEvent>, Vec<Error>), Error> {
         let Some(inbound) = step.inbound.as_ref() else {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new()));
         };
         let opus_frames = inbound
             .frame_events
@@ -2117,7 +2218,7 @@ impl TelephonyService {
             })
             .collect::<Vec<_>>();
         if opus_frames.is_empty() {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new()));
         }
 
         let active = self.core.active_call().ok_or(Error::NoActiveCall)?;
@@ -2126,16 +2227,26 @@ impl TelephonyService {
         }
         let link_id = active.link_id;
         if active.call.status() != SignallingStatus::Established {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new()));
         }
         let profile = active.call.profile().unwrap_or(Profile::DEFAULT);
+        let mut errors = Vec::new();
         let decoded = {
-            let decoder = self.media.opus_decoder_for(active.link_id, profile)?;
+            let decoder = self.media.opus_decoder_for(active.link_id, profile);
             opus_frames
                 .iter()
-                .map(|frame| decoder.decode_frame(frame))
-                .collect::<Result<Vec<_>, _>>()?
+                .filter_map(|frame| match decoder.decode_frame(frame) {
+                    Ok(frame) => Some(frame),
+                    Err(err) => {
+                        errors.push(err);
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
         };
+        if decoded.is_empty() {
+            return Ok((Vec::new(), errors));
+        }
 
         let receive_stream_events = self.deliver_opus_receive_stream(link_id, profile, &decoded);
         let mut events = Vec::with_capacity(1 + receive_stream_events.len());
@@ -2145,7 +2256,7 @@ impl TelephonyService {
             frames: decoded,
         });
         events.extend(receive_stream_events);
-        Ok(events)
+        Ok((events, errors))
     }
 
     fn deliver_opus_receive_stream(
@@ -2200,37 +2311,65 @@ impl TelephonyService {
 
     fn refresh_active_timeout(&mut self) -> Vec<TelephonyServiceEvent> {
         let snapshot = self.core.snapshot();
-        if self.answering.is_some_and(|answering| {
-            !snapshot.active_call.as_ref().is_some_and(|active| {
-                active.link_id == answering.link_id
-                    && active.role == CallRole::Incoming
-                    && active.answered
-                    && active.status == SignallingStatus::Connecting
-            })
-        }) {
-            self.answering = None;
-        }
         let stream_events = self
             .media
             .clear_unless_established(snapshot.active_call.as_ref());
         let Some(active) = snapshot.active_call else {
             self.active_timeout = None;
+            if self.outgoing_discovery.is_none() {
+                self.outgoing_started_at = None;
+            }
             return stream_events;
         };
+        if active.role != CallRole::Outgoing {
+            self.outgoing_started_at = None;
+        }
 
+        let now = Instant::now();
+        let started_at = match self.outgoing_started_at {
+            Some(started_at) => started_at,
+            None if active.role == CallRole::Outgoing => {
+                self.outgoing_started_at = Some(now);
+                now
+            }
+            None => now,
+        };
+        // Python arms both outgoing watchers from call(); the establishment one ends
+        // the call while the callee is not yet RINGING.
+        let wait_deadline = self
+            .config
+            .outgoing_call_timeout
+            .map(|duration| started_at + duration);
         let desired = match (active.role, active.status) {
             (CallRole::Incoming, SignallingStatus::Ringing) => self
                 .config
                 .incoming_ring_timeout
-                .map(|duration| (TelephonyServiceTimeoutKind::IncomingRing, duration)),
-            (CallRole::Outgoing, status) if status != SignallingStatus::Established => self
-                .config
-                .outgoing_call_timeout
-                .map(|duration| (TelephonyServiceTimeoutKind::OutgoingCall, duration)),
+                .map(|duration| (TelephonyServiceTimeoutKind::IncomingRing, now + duration)),
+            (CallRole::Outgoing, status)
+                if status.wire_value() < SignallingStatus::Ringing.wire_value() =>
+            {
+                let connect_deadline = self
+                    .config
+                    .connect_timeout
+                    .map(|duration| started_at + duration);
+                match (connect_deadline, wait_deadline) {
+                    (Some(connect), Some(wait)) if wait < connect => {
+                        Some((TelephonyServiceTimeoutKind::OutgoingCall, wait))
+                    }
+                    (Some(connect), _) => {
+                        Some((TelephonyServiceTimeoutKind::OutgoingEstablishment, connect))
+                    }
+                    (None, Some(wait)) => Some((TelephonyServiceTimeoutKind::OutgoingCall, wait)),
+                    (None, None) => None,
+                }
+            }
+            (CallRole::Outgoing, status) if status != SignallingStatus::Established => {
+                wait_deadline.map(|wait| (TelephonyServiceTimeoutKind::OutgoingCall, wait))
+            }
             _ => None,
         };
 
-        let Some((kind, duration)) = desired else {
+        let Some((kind, expires_at)) = desired else {
             self.active_timeout = None;
             return stream_events;
         };
@@ -2245,101 +2384,9 @@ impl TelephonyService {
         self.active_timeout = Some(TelephonyServiceTimeout {
             link_id: active.link_id,
             kind,
-            expires_at: Instant::now() + duration,
+            expires_at,
         });
         stream_events
-    }
-
-    async fn handle_due_answer_retry(&mut self) -> bool {
-        let Some(answering) = self.answering else {
-            return true;
-        };
-        let now = Instant::now();
-
-        if answering
-            .expires_at
-            .is_some_and(|expires_at| now >= expires_at)
-        {
-            return self.timeout_answering(answering.link_id).await;
-        }
-        let Some(next_retry_at) = answering.next_retry_at else {
-            return true;
-        };
-        if now < next_retry_at {
-            return true;
-        }
-
-        let commands = match self.core.retry_answer_active(answering.link_id) {
-            Ok(commands) => commands,
-            Err(_) => {
-                self.answering = None;
-                return true;
-            }
-        };
-        let effects = match self.endpoint.execute_signalling_batch(&commands) {
-            Ok(effects) => Some(effects),
-            Err(Error::TransportFull) => None,
-            Err(error) => {
-                let _ = emit_service_event(
-                    self.event_tx.clone(),
-                    TelephonyServiceEvent::Error {
-                        message: error.to_string(),
-                    },
-                )
-                .await;
-                None
-            }
-        };
-
-        if let Some(answering) = self.answering.as_mut() {
-            answering.next_retry_at = self
-                .config
-                .answer_retry_interval
-                .filter(|interval| !interval.is_zero())
-                .map(|interval| now + interval);
-        }
-
-        if let Some(effects) = effects
-            && !emit_service_event(
-                self.event_tx.clone(),
-                TelephonyServiceEvent::Drive(TelephonyDriveStep {
-                    step: TelephonyStep::commands(commands),
-                    effects,
-                }),
-            )
-            .await
-        {
-            return false;
-        }
-        true
-    }
-
-    async fn timeout_answering(&mut self, link_id: LinkId) -> bool {
-        self.answering = None;
-        let commands = match self.core.timeout_answer_active(link_id) {
-            Ok(commands) => commands,
-            Err(_) => return true,
-        };
-        let effect_count = commands.len();
-        let (effects, endpoint_error) = match self.endpoint.execute_commands(&commands) {
-            Ok(effects) => (effects, None),
-            Err(error) => (
-                vec![TelephonyCommandEffect::Noop; effect_count],
-                Some(error.to_string()),
-            ),
-        };
-
-        if self.publish_commands(commands, effects).await.is_err() {
-            return false;
-        }
-        if let Some(message) = endpoint_error {
-            return emit_service_event(
-                self.event_tx.clone(),
-                TelephonyServiceEvent::Error { message },
-            )
-            .await;
-        }
-        true
     }
 
     async fn handle_due_timeout(&mut self) -> bool {
@@ -2365,6 +2412,10 @@ impl TelephonyService {
         let should_timeout = match timeout_state.kind {
             TelephonyServiceTimeoutKind::IncomingRing => {
                 active.role == CallRole::Incoming && active.status == SignallingStatus::Ringing
+            }
+            TelephonyServiceTimeoutKind::OutgoingEstablishment => {
+                active.role == CallRole::Outgoing
+                    && active.status.wire_value() < SignallingStatus::Ringing.wire_value()
             }
             TelephonyServiceTimeoutKind::OutgoingCall => {
                 active.role == CallRole::Outgoing && active.status != SignallingStatus::Established
@@ -2792,12 +2843,31 @@ impl TelephonyRnsEndpoint {
         profile: Option<Profile>,
         hops: u8,
     ) -> Result<LinkId, Error> {
-        let destination_hash = telephony_destination_hash(&remote_identity);
-        self.request_path_to_identity(&remote_identity)?;
+        self.begin_outgoing_link_with_mode(
+            core,
+            remote_identity,
+            remote_public_key,
+            profile,
+            None,
+            hops,
+        )
+    }
 
+    /// Open the call link without a path request; Python `call()` requests a path only
+    /// when none is known, which discovery has already done.
+    pub fn begin_outgoing_link_with_mode(
+        &mut self,
+        core: &mut TelephonyRuntimeCore,
+        remote_identity: IdentityHash,
+        remote_public_key: [u8; 64],
+        profile: Option<Profile>,
+        mode: Option<CallMode>,
+        hops: u8,
+    ) -> Result<LinkId, Error> {
+        let destination_hash = telephony_destination_hash(&remote_identity);
         let (link, request_data) = Link::new_initiator(destination_hash, hops.max(1));
         let link_id = link.link_id;
-        core.start_outgoing_call(link_id, remote_identity, profile)?;
+        core.start_outgoing_call_with_mode(link_id, remote_identity, profile, mode)?;
 
         let (event_tx, event_rx) = mpsc::channel(128);
         try_send_transport(
@@ -3105,6 +3175,7 @@ impl TelephonyRnsEndpoint {
         if !matches!(
             command,
             TelephonyCommand::SendSignal { .. }
+                | TelephonyCommand::SendSignalPair { .. }
                 | TelephonyCommand::IdentifyLocalIdentity { .. }
                 | TelephonyCommand::TeardownLink { .. }
         ) {
@@ -3114,8 +3185,10 @@ impl TelephonyRnsEndpoint {
         let link_id = command.link_id();
         if self.manager.get_link(&link_id).is_some() {
             return match command {
-                TelephonyCommand::SendSignal { signal, .. } => {
-                    let payload = signalling_packet(*signal)
+                TelephonyCommand::SendSignal { .. } | TelephonyCommand::SendSignalPair { .. } => {
+                    let payload = command
+                        .to_lxst_packet()
+                        .expect("signal command has a packet")
                         .encode()
                         .map_err(lxst_rns::Error::from)?;
                     self.manager
@@ -3206,7 +3279,7 @@ impl TelephonyRnsEndpoint {
             .collect()
     }
 
-    /// Queue an answer/retry signalling batch without publishing a prefix.
+    /// Queue an answer signalling batch without publishing a prefix.
     ///
     /// Answer correctness depends on CONNECTING and ESTABLISHED being admitted
     /// together. Reserve every transport slot before sending either packet so
@@ -3218,14 +3291,15 @@ impl TelephonyRnsEndpoint {
     ) -> Result<Vec<TelephonyCommandEffect>, Error> {
         let signal_commands = commands
             .iter()
-            .filter_map(|command| match command {
-                TelephonyCommand::SendSignal { link_id, signal } => Some((*link_id, *signal)),
-                _ => None,
+            .filter_map(|command| {
+                command
+                    .to_lxst_packet()
+                    .map(|packet| (command.link_id(), packet))
             })
             .collect::<Vec<_>>();
 
         let mut prepared = Vec::with_capacity(signal_commands.len());
-        for (link_id, signal) in &signal_commands {
+        for (link_id, packet) in &signal_commands {
             let (link, role) = if let Some(link) = self.manager.get_link_mut(link_id) {
                 (link, LinkEndpointRole::Responder)
             } else {
@@ -3237,7 +3311,7 @@ impl TelephonyRnsEndpoint {
                     LinkEndpointRole::Initiator,
                 )
             };
-            let packet = prepare_lxst_link_packet_send(link, role, &signalling_packet(*signal))?;
+            let packet = prepare_lxst_link_packet_send(link, role, packet)?;
             prepared.push((*link_id, role, packet));
         }
 
@@ -3273,7 +3347,8 @@ impl TelephonyRnsEndpoint {
         Ok(commands
             .iter()
             .map(|command| match command {
-                TelephonyCommand::SendSignal { link_id, .. } => {
+                TelephonyCommand::SendSignal { link_id, .. }
+                | TelephonyCommand::SendSignalPair { link_id, .. } => {
                     TelephonyCommandEffect::QueuedLinkPacket {
                         link_id: *link_id,
                         kind: QueuedLinkPacketKind::LxstData,
@@ -3762,8 +3837,11 @@ fn prepare_command_with_link(
     command: &TelephonyCommand,
 ) -> Result<(TelephonyCommandEffect, Option<PreparedLinkEndpointSend>), Error> {
     let (effect, prepared) = match command {
-        TelephonyCommand::SendSignal { link_id, signal } => {
-            let packet = signalling_packet(*signal);
+        TelephonyCommand::SendSignal { link_id, .. }
+        | TelephonyCommand::SendSignalPair { link_id, .. } => {
+            let packet = command
+                .to_lxst_packet()
+                .expect("signal command has a packet");
             let prepared = prepare_lxst_link_packet_send(link, role, &packet)?;
             (
                 TelephonyCommandEffect::QueuedLinkPacket {
@@ -3918,8 +3996,8 @@ async fn discover_remote_telephony_peer_on_transport(
         destination_hash,
         DestinationResolveOptions {
             timeout: discovery_timeout,
-            drop_existing_path: true,
-            refresh_cached_path: true,
+            drop_existing_path: false,
+            refresh_cached_path: false,
         },
     )
     .await

@@ -6,6 +6,18 @@ impl lxst_core::AudioCodec
 pub const fn lxst_core::AudioCodec::channels(self) -> u8
 pub const fn lxst_core::AudioCodec::codec_kind(self) -> lxst_core::CodecKind
 pub const fn lxst_core::AudioCodec::sample_rate_hz(self) -> u32
+#[repr(u8)] pub enum lxst_core::CallMode
+pub lxst_core::CallMode::FullDuplex = 1
+pub lxst_core::CallMode::HalfDuplex = 2
+impl lxst_core::CallMode
+pub const lxst_core::CallMode::AVAILABLE: [Self; 2]
+pub const lxst_core::CallMode::DEFAULT: Self
+pub const fn lxst_core::CallMode::abbreviation(self) -> &'static str
+pub const fn lxst_core::CallMode::from_wire(u8) -> core::option::Option<Self>
+pub const fn lxst_core::CallMode::name(self) -> &'static str
+pub const fn lxst_core::CallMode::wire_value(self) -> u8
+impl core::convert::From<lxst_core::CallMode> for lxst_core::Signal
+pub fn lxst_core::Signal::from(lxst_core::CallMode) -> Self
 pub enum lxst_core::CallRole
 pub lxst_core::CallRole::Incoming
 pub lxst_core::CallRole::Outgoing
@@ -147,6 +159,7 @@ pub const lxst_core::Profile::DEFAULT: Self
 pub const lxst_core::Profile::ORDER: [Self; 8]
 pub const fn lxst_core::Profile::abbreviation(self) -> &'static str
 pub const fn lxst_core::Profile::audio_codec(self) -> lxst_core::AudioCodec
+pub const fn lxst_core::Profile::buffer_frames(self) -> u8
 pub const fn lxst_core::Profile::channels(self) -> u8
 pub const fn lxst_core::Profile::frame_time_ms(self) -> u16
 pub const fn lxst_core::Profile::from_wire(u32) -> core::option::Option<Self>
@@ -169,12 +182,15 @@ pub const fn lxst_core::RawBitDepth::bytes_per_sample(self) -> usize
 pub const fn lxst_core::RawBitDepth::from_header_bits(u8) -> core::result::Result<Self, lxst_core::Error>
 pub const fn lxst_core::RawBitDepth::numpy_dtype(self) -> &'static str
 pub enum lxst_core::Signal
+pub lxst_core::Signal::PreferredMode(u8)
 pub lxst_core::Signal::PreferredProfile(lxst_core::Profile)
 pub lxst_core::Signal::Raw(u32)
 pub lxst_core::Signal::Status(lxst_core::SignallingStatus)
 impl lxst_core::Signal
 pub const fn lxst_core::Signal::from_wire(u32) -> Self
 pub const fn lxst_core::Signal::wire_value(self) -> u32
+impl core::convert::From<lxst_core::CallMode> for lxst_core::Signal
+pub fn lxst_core::Signal::from(lxst_core::CallMode) -> Self
 impl core::convert::From<lxst_core::Profile> for lxst_core::Signal
 pub fn lxst_core::Signal::from(lxst_core::Profile) -> Self
 impl core::convert::From<lxst_core::SignallingStatus> for lxst_core::Signal
@@ -217,10 +233,13 @@ pub lxst_core::TelephonyAction::OpenAudioPipelines
 pub lxst_core::TelephonyAction::PrepareDialingPipelines
 pub lxst_core::TelephonyAction::ResetDialingPipelines
 pub lxst_core::TelephonyAction::RingIncomingCall
+pub lxst_core::TelephonyAction::SelectMode(lxst_core::CallMode)
 pub lxst_core::TelephonyAction::SelectProfile(lxst_core::Profile)
 pub lxst_core::TelephonyAction::SendSignal(lxst_core::Signal)
+pub lxst_core::TelephonyAction::SendSignalPair(lxst_core::Signal, lxst_core::Signal)
 pub lxst_core::TelephonyAction::StartAudioPipelines
 pub lxst_core::TelephonyAction::StartDialTone
+pub lxst_core::TelephonyAction::SwitchMode(lxst_core::CallMode)
 pub lxst_core::TelephonyAction::SwitchProfile(lxst_core::Profile)
 pub lxst_core::TelephonyAction::TeardownLink
 pub lxst_core::TelephonyAction::Terminate(core::option::Option<lxst_core::SignallingStatus>)
@@ -301,6 +320,12 @@ pub const fn lxst_core::OpusMonoDecoder::channels(&self) -> u8
 pub fn lxst_core::OpusMonoDecoder::decode_packet(&mut self, &[u8]) -> core::result::Result<lxst_core::RawAudioFrame, lxst_core::OpusCodecError>
 pub fn lxst_core::OpusMonoDecoder::new() -> core::result::Result<Self, lxst_core::OpusCodecError>
 pub const fn lxst_core::OpusMonoDecoder::sample_rate_hz(&self) -> u32
+pub struct lxst_core::OpusPacketDecoder
+impl lxst_core::OpusPacketDecoder
+pub const fn lxst_core::OpusPacketDecoder::channels(&self) -> u8
+pub fn lxst_core::OpusPacketDecoder::decode_packet(&mut self, &[u8]) -> core::result::Result<lxst_core::RawAudioFrame, lxst_core::OpusCodecError>
+pub fn lxst_core::OpusPacketDecoder::new(u32, u8) -> core::result::Result<Self, lxst_core::OpusCodecError>
+pub const fn lxst_core::OpusPacketDecoder::sample_rate_hz(&self) -> u32
 pub struct lxst_core::RawAudioFrame
 pub lxst_core::RawAudioFrame::channels: u8
 pub lxst_core::RawAudioFrame::samples: alloc::vec::Vec<f32>
@@ -308,9 +333,11 @@ impl lxst_core::RawAudioFrame
 pub fn lxst_core::RawAudioFrame::from_frame(&lxst_core::Frame) -> core::result::Result<Self, lxst_core::Error>
 pub fn lxst_core::RawAudioFrame::from_payload(&[u8]) -> core::result::Result<Self, lxst_core::Error>
 pub fn lxst_core::RawAudioFrame::new(u8, impl core::convert::Into<alloc::vec::Vec<f32>>) -> core::result::Result<Self, lxst_core::Error>
+pub fn lxst_core::RawAudioFrame::resampled(&self, u32, u32) -> Self
 pub fn lxst_core::RawAudioFrame::sample_frames(&self) -> usize
 pub fn lxst_core::RawAudioFrame::to_frame(&self, lxst_core::RawBitDepth) -> core::result::Result<lxst_core::Frame, lxst_core::Error>
 pub fn lxst_core::RawAudioFrame::to_payload(&self, lxst_core::RawBitDepth) -> core::result::Result<alloc::vec::Vec<u8>, lxst_core::Error>
+pub fn lxst_core::RawAudioFrame::with_channels(self, u8) -> core::result::Result<Self, lxst_core::Error>
 pub struct lxst_core::RawFrameCollector
 impl lxst_core::RawFrameCollector
 pub fn lxst_core::RawFrameCollector::frames(&self) -> &[lxst_core::RawAudioFrame]
@@ -338,16 +365,21 @@ impl lxst_core::TelephonyCall
 pub fn lxst_core::TelephonyCall::answer(&mut self) -> alloc::vec::Vec<lxst_core::TelephonyAction>
 pub const fn lxst_core::TelephonyCall::answered(&self) -> bool
 pub fn lxst_core::TelephonyCall::caller_identified(&mut self, bool, bool) -> alloc::vec::Vec<lxst_core::TelephonyAction>
+pub fn lxst_core::TelephonyCall::disable_remote_mode_follow(&mut self)
 pub fn lxst_core::TelephonyCall::hangup(&mut self, bool) -> alloc::vec::Vec<lxst_core::TelephonyAction>
 pub fn lxst_core::TelephonyCall::incoming() -> Self
 pub fn lxst_core::TelephonyCall::incoming_link_established(bool) -> alloc::vec::Vec<lxst_core::TelephonyAction>
+pub const fn lxst_core::TelephonyCall::mode(&self) -> core::option::Option<lxst_core::CallMode>
 pub fn lxst_core::TelephonyCall::outgoing(core::option::Option<lxst_core::Profile>) -> Self
+pub fn lxst_core::TelephonyCall::outgoing_with_mode(core::option::Option<lxst_core::Profile>, core::option::Option<lxst_core::CallMode>) -> Self
 pub const fn lxst_core::TelephonyCall::profile(&self) -> core::option::Option<lxst_core::Profile>
 pub fn lxst_core::TelephonyCall::receive_signal(&mut self, lxst_core::Signal) -> alloc::vec::Vec<lxst_core::TelephonyAction>
-pub fn lxst_core::TelephonyCall::retry_answer(&self) -> alloc::vec::Vec<lxst_core::TelephonyAction>
 pub const fn lxst_core::TelephonyCall::role(&self) -> lxst_core::CallRole
+pub fn lxst_core::TelephonyCall::set_transmit_squelched(&mut self, bool)
 pub const fn lxst_core::TelephonyCall::status(&self) -> lxst_core::SignallingStatus
+pub fn lxst_core::TelephonyCall::switch_mode(&mut self, lxst_core::CallMode) -> alloc::vec::Vec<lxst_core::TelephonyAction>
 pub fn lxst_core::TelephonyCall::switch_profile(&mut self, lxst_core::Profile) -> alloc::vec::Vec<lxst_core::TelephonyAction>
+pub const fn lxst_core::TelephonyCall::transmit_squelched(&self) -> bool
 pub const lxst_core::APP_NAME: &str
 pub const lxst_core::FIELD_FRAMES: u8
 pub const lxst_core::FIELD_SIGNALLING: u8

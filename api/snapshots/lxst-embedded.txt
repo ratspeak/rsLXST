@@ -33,12 +33,15 @@ pub lxst_embedded::wire::Error::Truncated
 pub lxst_embedded::wire::Error::UnknownCodec(u8)
 pub lxst_embedded::wire::Error::UnknownCodec2Mode(u8)
 pub enum lxst_embedded::wire::Signal
+pub lxst_embedded::wire::Signal::PreferredMode(u8)
 pub lxst_embedded::wire::Signal::PreferredProfile(lxst_embedded::Profile)
 pub lxst_embedded::wire::Signal::Raw(u32)
 pub lxst_embedded::wire::Signal::Status(lxst_embedded::SignallingStatus)
 impl lxst_embedded::wire::Signal
 pub const fn lxst_embedded::wire::Signal::from_wire(u32) -> Self
 pub const fn lxst_embedded::wire::Signal::wire_value(self) -> u32
+impl core::convert::From<lxst_embedded::CallMode> for lxst_embedded::wire::Signal
+pub fn lxst_embedded::wire::Signal::from(lxst_embedded::CallMode) -> Self
 impl core::convert::From<lxst_embedded::Profile> for lxst_embedded::wire::Signal
 pub fn lxst_embedded::wire::Signal::from(lxst_embedded::Profile) -> Self
 impl core::convert::From<lxst_embedded::SignallingStatus> for lxst_embedded::wire::Signal
@@ -63,6 +66,18 @@ impl lxst_embedded::AudioCodec
 pub const fn lxst_embedded::AudioCodec::channels(self) -> u8
 pub const fn lxst_embedded::AudioCodec::codec_kind(self) -> lxst_embedded::wire::CodecKind
 pub const fn lxst_embedded::AudioCodec::sample_rate_hz(self) -> u32
+#[repr(u8)] pub enum lxst_embedded::CallMode
+pub lxst_embedded::CallMode::FullDuplex = 1
+pub lxst_embedded::CallMode::HalfDuplex = 2
+impl lxst_embedded::CallMode
+pub const lxst_embedded::CallMode::AVAILABLE: [Self; 2]
+pub const lxst_embedded::CallMode::DEFAULT: Self
+pub const fn lxst_embedded::CallMode::abbreviation(self) -> &'static str
+pub const fn lxst_embedded::CallMode::from_wire(u8) -> core::option::Option<Self>
+pub const fn lxst_embedded::CallMode::name(self) -> &'static str
+pub const fn lxst_embedded::CallMode::wire_value(self) -> u8
+impl core::convert::From<lxst_embedded::CallMode> for lxst_embedded::wire::Signal
+pub fn lxst_embedded::wire::Signal::from(lxst_embedded::CallMode) -> Self
 pub enum lxst_embedded::CallRole
 pub lxst_embedded::CallRole::Incoming
 pub lxst_embedded::CallRole::Outgoing
@@ -159,6 +174,7 @@ pub const lxst_embedded::Profile::DEFAULT: Self
 pub const lxst_embedded::Profile::ORDER: [Self; 8]
 pub const fn lxst_embedded::Profile::abbreviation(self) -> &'static str
 pub const fn lxst_embedded::Profile::audio_codec(self) -> lxst_embedded::AudioCodec
+pub const fn lxst_embedded::Profile::buffer_frames(self) -> u8
 pub const fn lxst_embedded::Profile::channels(self) -> u8
 pub const fn lxst_embedded::Profile::frame_time_ms(self) -> u16
 pub const fn lxst_embedded::Profile::from_wire(u32) -> core::option::Option<Self>
@@ -176,12 +192,15 @@ pub lxst_embedded::QueueError::Expired
 pub lxst_embedded::QueueError::OutputCapacity
 pub lxst_embedded::QueueError::PayloadTooLarge
 pub enum lxst_embedded::Signal
+pub lxst_embedded::Signal::PreferredMode(u8)
 pub lxst_embedded::Signal::PreferredProfile(lxst_embedded::Profile)
 pub lxst_embedded::Signal::Raw(u32)
 pub lxst_embedded::Signal::Status(lxst_embedded::SignallingStatus)
 impl lxst_embedded::wire::Signal
 pub const fn lxst_embedded::wire::Signal::from_wire(u32) -> Self
 pub const fn lxst_embedded::wire::Signal::wire_value(self) -> u32
+impl core::convert::From<lxst_embedded::CallMode> for lxst_embedded::wire::Signal
+pub fn lxst_embedded::wire::Signal::from(lxst_embedded::CallMode) -> Self
 impl core::convert::From<lxst_embedded::Profile> for lxst_embedded::wire::Signal
 pub fn lxst_embedded::wire::Signal::from(lxst_embedded::Profile) -> Self
 impl core::convert::From<lxst_embedded::SignallingStatus> for lxst_embedded::wire::Signal
@@ -208,10 +227,13 @@ pub lxst_embedded::TelephonyAction::OpenAudioPipelines
 pub lxst_embedded::TelephonyAction::PrepareDialingPipelines
 pub lxst_embedded::TelephonyAction::ResetDialingPipelines
 pub lxst_embedded::TelephonyAction::RingIncomingCall
+pub lxst_embedded::TelephonyAction::SelectMode(lxst_embedded::CallMode)
 pub lxst_embedded::TelephonyAction::SelectProfile(lxst_embedded::Profile)
 pub lxst_embedded::TelephonyAction::SendSignal(lxst_embedded::wire::Signal)
+pub lxst_embedded::TelephonyAction::SendSignalPair(lxst_embedded::wire::Signal, lxst_embedded::wire::Signal)
 pub lxst_embedded::TelephonyAction::StartAudioPipelines
 pub lxst_embedded::TelephonyAction::StartDialTone
+pub lxst_embedded::TelephonyAction::SwitchMode(lxst_embedded::CallMode)
 pub lxst_embedded::TelephonyAction::SwitchProfile(lxst_embedded::Profile)
 pub lxst_embedded::TelephonyAction::TeardownLink
 pub lxst_embedded::TelephonyAction::Terminate(core::option::Option<lxst_embedded::SignallingStatus>)
@@ -223,16 +245,21 @@ impl lxst_embedded::CallState
 pub fn lxst_embedded::CallState::answer(&mut self) -> lxst_embedded::Actions
 pub const fn lxst_embedded::CallState::answered(&self) -> bool
 pub fn lxst_embedded::CallState::caller_identified(&mut self, bool, bool) -> lxst_embedded::Actions
+pub fn lxst_embedded::CallState::disable_remote_mode_follow(&mut self)
 pub fn lxst_embedded::CallState::hangup(&mut self, bool) -> lxst_embedded::Actions
 pub fn lxst_embedded::CallState::incoming() -> Self
 pub fn lxst_embedded::CallState::incoming_link_established(bool) -> lxst_embedded::Actions
+pub const fn lxst_embedded::CallState::mode(&self) -> core::option::Option<lxst_embedded::CallMode>
 pub fn lxst_embedded::CallState::outgoing(core::option::Option<lxst_embedded::Profile>) -> Self
+pub fn lxst_embedded::CallState::outgoing_with_mode(core::option::Option<lxst_embedded::Profile>, core::option::Option<lxst_embedded::CallMode>) -> Self
 pub const fn lxst_embedded::CallState::profile(&self) -> core::option::Option<lxst_embedded::Profile>
 pub fn lxst_embedded::CallState::receive_signal(&mut self, lxst_embedded::wire::Signal) -> lxst_embedded::Actions
-pub fn lxst_embedded::CallState::retry_answer(&self) -> lxst_embedded::Actions
 pub const fn lxst_embedded::CallState::role(&self) -> lxst_embedded::CallRole
+pub fn lxst_embedded::CallState::set_transmit_squelched(&mut self, bool)
 pub const fn lxst_embedded::CallState::status(&self) -> lxst_embedded::SignallingStatus
+pub fn lxst_embedded::CallState::switch_mode(&mut self, lxst_embedded::CallMode) -> lxst_embedded::Actions
 pub fn lxst_embedded::CallState::switch_profile(&mut self, lxst_embedded::Profile) -> lxst_embedded::Actions
+pub const fn lxst_embedded::CallState::transmit_squelched(&self) -> bool
 pub struct lxst_embedded::Codec2PacketCodec<B>
 impl<B: lxst_embedded::Codec2Backend> lxst_embedded::Codec2PacketCodec<B>
 pub fn lxst_embedded::Codec2PacketCodec<B>::decode_into(&mut self, &[u8], &mut [i16]) -> core::result::Result<usize, lxst_embedded::Codec2PacketError<<B as lxst_embedded::Codec2Backend>::Error>>
@@ -272,6 +299,7 @@ pub fn lxst_embedded::Session::end(&mut self, lxst_embedded::EndReason) -> lxst_
 pub const fn lxst_embedded::Session::ended(&self) -> core::option::Option<lxst_embedded::EndReason>
 pub fn lxst_embedded::Session::link_established(&mut self) -> lxst_embedded::Events
 pub fn lxst_embedded::Session::media_ready(&self) -> bool
+pub const fn lxst_embedded::Session::mode(&self) -> core::option::Option<lxst_embedded::CallMode>
 pub fn lxst_embedded::Session::new(lxst_embedded::CallRole, lxst_embedded::SessionConfig, u64) -> core::result::Result<Self, lxst_embedded::ConfigError>
 pub fn lxst_embedded::Session::peer_verified(&mut self, u64) -> lxst_embedded::Events
 pub fn lxst_embedded::Session::playback_allowed(&self) -> bool

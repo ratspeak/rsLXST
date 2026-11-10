@@ -46,6 +46,46 @@ impl RawAudioFrame {
         })
     }
 
+    /// Convert to `channels`: mono is duplicated, extra channels are averaged to mono,
+    /// otherwise the leading channels are kept and the last one repeated.
+    pub fn with_channels(self, channels: u8) -> Result<Self, Error> {
+        if channels == self.channels {
+            return Ok(self);
+        }
+        let source = usize::from(self.channels);
+        let target = usize::from(channels);
+        let mut samples = Vec::with_capacity(self.sample_frames() * target);
+        for frame in self.samples.chunks_exact(source) {
+            if target == 1 {
+                samples.push(frame.iter().sum::<f32>() / source as f32);
+            } else {
+                for channel in 0..target {
+                    samples.push(frame[channel.min(source - 1)]);
+                }
+            }
+        }
+        Self::new(channels, samples)
+    }
+
+    /// Linearly resample from `input_rate_hz` to `output_rate_hz`.
+    pub fn resampled(&self, input_rate_hz: u32, output_rate_hz: u32) -> Self {
+        if input_rate_hz == output_rate_hz || input_rate_hz == 0 {
+            return self.clone();
+        }
+        let input_frames = self.sample_frames();
+        let output_frames =
+            (input_frames as u64 * u64::from(output_rate_hz) / u64::from(input_rate_hz)) as usize;
+        Self {
+            channels: self.channels,
+            samples: crate::opus::resample_interleaved_linear(
+                &self.samples,
+                input_frames,
+                output_frames,
+                usize::from(self.channels),
+            ),
+        }
+    }
+
     pub fn to_payload(&self, bit_depth: RawBitDepth) -> Result<Vec<u8>, Error> {
         validate_sample_count(self.channels, self.samples.len())?;
         let header = RawFrameHeader::new(self.channels, bit_depth)?;
@@ -92,7 +132,7 @@ fn decode_samples(bytes: &[u8], bit_depth: RawBitDepth) -> Result<Vec<f32>, Erro
         }
         RawBitDepth::Float128 => {
             for chunk in bytes.as_chunks::<16>().0 {
-                samples.push(decode_float128_lossy(chunk));
+                samples.push(decode_float128(chunk));
             }
         }
     }
@@ -125,24 +165,50 @@ fn encode_samples(samples: &[f32], bit_depth: RawBitDepth, out: &mut Vec<u8>) {
     }
 }
 
-fn decode_float128_lossy(bytes: &[u8]) -> f32 {
-    // Python/Numpy names this dtype "float128", but on common little-endian
-    // platforms it may be backed by an 80-bit extended value padded to 16 bytes.
-    // We preserve finite zero exactly and otherwise use the leading f64 lane as
-    // a conservative lossy fallback until a platform-specific long-double codec
-    // is introduced.
-    if bytes.iter().all(|byte| *byte == 0) {
+// numpy float128 is IEEE binary128 on Linux aarch64; x86_64 pads an 80-bit value instead.
+const BINARY128_EXPONENT_BIAS: i32 = 16_383;
+const BINARY128_MANTISSA_BITS: u32 = 112;
+
+fn decode_float128(bytes: &[u8]) -> f32 {
+    let mut le = [0u8; 16];
+    le.copy_from_slice(bytes);
+    let bits = u128::from_le_bytes(le);
+    let negative = bits >> 127 != 0;
+    let exponent = ((bits >> BINARY128_MANTISSA_BITS) & 0x7FFF) as i32;
+    let mantissa = bits & ((1u128 << BINARY128_MANTISSA_BITS) - 1);
+    let magnitude = if exponent == 0x7FFF {
+        if mantissa == 0 {
+            f64::INFINITY
+        } else {
+            f64::NAN
+        }
+    } else if exponent == 0 {
+        // Subnormal binary128 values are far below the f32 range.
         0.0
     } else {
-        f64::from_le_bytes([
-            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-        ]) as f32
-    }
+        let fraction = (mantissa >> (BINARY128_MANTISSA_BITS - 52)) as f64 / (1u64 << 52) as f64;
+        (1.0 + fraction) * 2f64.powi(exponent - BINARY128_EXPONENT_BIAS)
+    };
+    (if negative { -magnitude } else { magnitude }) as f32
 }
 
 fn encode_float128_from_f32(sample: f32, out: &mut Vec<u8>) {
-    out.extend_from_slice(&f64::from(sample).to_le_bytes());
-    out.extend_from_slice(&[0u8; 8]);
+    let value = f64::from(sample);
+    let f64_bits = value.to_bits();
+    let sign = u128::from(f64_bits >> 63) << 127;
+    let exponent = ((f64_bits >> 52) & 0x7FF) as i32;
+    let mantissa = u128::from(f64_bits & ((1u64 << 52) - 1));
+    let bits = if value == 0.0 {
+        sign
+    } else if exponent == 0x7FF {
+        let nan_mantissa = if mantissa == 0 { 0 } else { 1u128 << 111 };
+        sign | (0x7FFFu128 << BINARY128_MANTISSA_BITS) | nan_mantissa
+    } else {
+        // Every f32 widens to a normal f64.
+        let exponent = (exponent - 1023 + BINARY128_EXPONENT_BIAS) as u128;
+        sign | (exponent << BINARY128_MANTISSA_BITS) | (mantissa << (BINARY128_MANTISSA_BITS - 52))
+    };
+    out.extend_from_slice(&bits.to_le_bytes());
 }
 
 #[cfg(test)]

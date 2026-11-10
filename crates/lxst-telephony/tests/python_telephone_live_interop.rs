@@ -24,7 +24,7 @@ use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
 use lxst_core::{
-    CallRole, FrameStreamEvent, Profile, RawAudioFrame, RawBitDepth, SignallingStatus,
+    CallMode, CallRole, FrameStreamEvent, Profile, RawAudioFrame, RawBitDepth, SignallingStatus,
     SyntheticSource, SyntheticSourceKind, TELEPHONY_DESTINATION_NAME,
 };
 use lxst_telephony::{
@@ -92,6 +92,15 @@ impl PythonTelephoneHost {
     }
 
     fn spawn_with_tcp(port: u16, tcp_role: &str, enable_transport: bool) -> Self {
+        Self::spawn_with_env(port, tcp_role, enable_transport, &[])
+    }
+
+    fn spawn_with_env(
+        port: u16,
+        tcp_role: &str,
+        enable_transport: bool,
+        env: &[(&str, &str)],
+    ) -> Self {
         let storage = temp_storage("rs-lxst-python-telephone-live");
         std::fs::create_dir_all(&storage).expect("create Python helper storage");
         let log_path = storage.join("helper.stderr.log");
@@ -119,6 +128,9 @@ impl PythonTelephoneHost {
             .stdout(Stdio::piped())
             .stderr(Stdio::from(log_file));
         add_platform_python_library_path(&mut command);
+        for (key, value) in env {
+            command.env(key, value);
+        }
         if enable_transport {
             command.arg("--enable-transport");
         }
@@ -751,6 +763,7 @@ impl RustCallerSession {
             .send(TelephonyControl::Call {
                 remote_identity: remote_identity_hash,
                 profile: Some(profile),
+                mode: None,
                 discovery_timeout: Duration::from_secs(5),
             })
             .await
@@ -1141,6 +1154,7 @@ async fn rust_to_rust_call_establishes_through_python_transport_hub() {
         .send(TelephonyControl::Call {
             remote_identity: callee.identity.hash,
             profile: Some(Profile::QualityMedium),
+            mode: None,
             discovery_timeout: Duration::from_secs(10),
         })
         .await
@@ -1237,7 +1251,8 @@ async fn rust_telephony_startup_retry_announces_after_late_tcp_hub_connection() 
     let announce = wait_for_announce(
         &mut caller_announces,
         callee.destination_hash,
-        Duration::from_secs(5),
+        // The first announce follows one job interval, as in Python.
+        Duration::from_secs(10),
         "callee startup retry after late TCP hub connection",
     )
     .await;
@@ -2322,6 +2337,7 @@ async fn rust_service_outgoing_timeout_ends_python_ringing_call_without_audio() 
         .send(TelephonyControl::Call {
             remote_identity: remote_identity_hash,
             profile: None,
+            mode: None,
             discovery_timeout: Duration::from_secs(5),
         })
         .await
@@ -2586,6 +2602,7 @@ async fn rust_service_sends_raw_media_to_python_established_call() {
         .send(TelephonyControl::Call {
             remote_identity: remote_identity_hash,
             profile: None,
+            mode: None,
             discovery_timeout: Duration::from_secs(5),
         })
         .await
@@ -2806,6 +2823,7 @@ async fn rust_service_receives_python_raw_media_on_established_call() {
         .send(TelephonyControl::Call {
             remote_identity: remote_identity_hash,
             profile: None,
+            mode: None,
             discovery_timeout: Duration::from_secs(5),
         })
         .await
@@ -2928,4 +2946,368 @@ async fn rust_service_decodes_python_opus_voice_profile_matrix() {
         session.send_python_opus_to_rust().await;
         session.shutdown().await;
     }
+}
+
+struct ServiceCallPair {
+    helper: PythonTelephoneHost,
+    actor_tx: mpsc::Sender<TransportMessage>,
+    control_tx: mpsc::Sender<TelephonyControl>,
+    events: mpsc::Receiver<TelephonyServiceEvent>,
+    python_identity: [u8; 16],
+    rust_destination: [u8; 16],
+    service_task: tokio::task::JoinHandle<()>,
+    tasks: Vec<tokio::task::JoinHandle<()>>,
+}
+
+impl ServiceCallPair {
+    async fn connect(env: &[(&str, &str)]) -> Self {
+        let port = free_tcp_port();
+        let (actor_tx, server, mut handle_rx) = spawn_rust_actor_and_tcp(port).await;
+        let mut announce_rx = register_telephony_announce_handler(&actor_tx).await;
+        let helper = PythonTelephoneHost::spawn_with_env(port, "client", false, env);
+        let ready = helper.wait_event("READY", Duration::from_secs(10));
+        assert_eq!(ready["lxst_version"], "0.6.0");
+        let python_identity = hash_from_ready(&ready, "identity_hash");
+        let python_destination = hash_from_ready(&ready, "destination_hash");
+        let accepted = tokio::time::timeout(Duration::from_secs(15), handle_rx.recv())
+            .await
+            .expect("Python helper TCP connection")
+            .expect("TCP accept channel");
+        let (id, entry, read_task) = register_interface_entry(accepted);
+        actor_tx
+            .send(TransportMessage::RegisterInterface { id, entry })
+            .await
+            .unwrap();
+
+        let endpoint = TelephonyRnsEndpoint::register(actor_tx.clone(), &Identity::new())
+            .expect("register Rust Telephone endpoint");
+        let rust_destination = endpoint.destination_hash;
+        let (control_tx, control_rx) = mpsc::channel(16);
+        let (event_tx, events) = mpsc::channel(256);
+        let service = TelephonyService::with_config(
+            endpoint,
+            TelephonyRuntimeCore::new(),
+            control_rx,
+            event_tx,
+            TelephonyServiceConfig {
+                poll_interval: Duration::from_millis(20),
+                announce_on_start: false,
+                announce_interval: None,
+                ..TelephonyServiceConfig::default()
+            },
+        );
+        let service_task = tokio::spawn(service.run());
+        control_tx.send(TelephonyControl::Announce).await.unwrap();
+        helper.send_announce();
+        wait_for_announce(
+            &mut announce_rx,
+            python_destination,
+            Duration::from_secs(15),
+            "Python Telephone",
+        )
+        .await;
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        Self {
+            helper,
+            actor_tx,
+            control_tx,
+            events,
+            python_identity,
+            rust_destination,
+            service_task,
+            tasks: vec![read_task, server.read_task],
+        }
+    }
+
+    async fn wait_event(
+        &mut self,
+        label: &str,
+        timeout: Duration,
+        matches: impl Fn(&TelephonyServiceEvent) -> bool,
+    ) -> TelephonyServiceEvent {
+        wait_matching_service_event(&mut self.events, timeout, label, matches).await
+    }
+
+    async fn wait_snapshot(
+        &mut self,
+        label: &str,
+        matches: impl Fn(&ActiveCallSnapshot) -> bool,
+    ) -> ActiveCallSnapshot {
+        let event = self
+            .wait_event(label, Duration::from_secs(10), |event| {
+                matches!(event, TelephonyServiceEvent::Snapshot(snapshot)
+                    if snapshot.active_call.as_ref().is_some_and(&matches))
+            })
+            .await;
+        let TelephonyServiceEvent::Snapshot(snapshot) = event else {
+            unreachable!()
+        };
+        snapshot.active_call.unwrap()
+    }
+
+    fn drain(&mut self) -> Vec<TelephonyServiceEvent> {
+        let mut events = Vec::new();
+        while let Ok(event) = self.events.try_recv() {
+            events.push(event);
+        }
+        events
+    }
+
+    async fn python_calls_rust_and_rust_answers(&mut self, mode: Option<u8>) -> [u8; 16] {
+        self.helper.send(json!({
+            "cmd": "call",
+            "id": "call",
+            "target_destination_hash": hex::encode(self.rust_destination),
+            "mode": mode,
+        }));
+        self.helper
+            .wait_event("CALL_REQUESTED", Duration::from_secs(20));
+        let python_identity = self.python_identity;
+        let incoming = self
+            .wait_event("incoming call", Duration::from_secs(15), |event| {
+                matches!(event, TelephonyServiceEvent::IncomingCall { remote_identity, .. }
+                    if *remote_identity == python_identity)
+            })
+            .await;
+        let TelephonyServiceEvent::IncomingCall { link_id, .. } = incoming else {
+            unreachable!()
+        };
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let answered = lxst_telephony::request_answer(&self.control_tx, link_id)
+            .await
+            .expect("Rust answer");
+        assert_eq!(answered.status, SignallingStatus::Established);
+        link_id
+    }
+
+    async fn rust_calls_python_and_python_answers(&mut self, mode: Option<CallMode>) {
+        self.control_tx
+            .send(TelephonyControl::Call {
+                remote_identity: self.python_identity,
+                profile: None,
+                mode,
+                discovery_timeout: Duration::from_secs(15),
+            })
+            .await
+            .unwrap();
+        self.helper.wait_event("RINGING", Duration::from_secs(20));
+        // Answer only after the caller's profile and mode packet has reached Python.
+        let mode_signal = 0xF0 + u64::from(mode.unwrap_or(CallMode::DEFAULT).wire_value());
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let signals = self.helper.wait_event("SIGNALS", Duration::from_secs(10));
+            if signals["signals"]
+                .as_array()
+                .is_some_and(|all| all.iter().any(|v| v.as_u64() == Some(mode_signal)))
+            {
+                break;
+            }
+            assert!(Instant::now() < deadline, "no mode signal reached Python");
+        }
+        self.helper.send(json!({"cmd": "answer", "id": "answer"}));
+        let answered = self.helper.wait_event("ANSWERED", Duration::from_secs(5));
+        assert_eq!(answered["accepted"], true);
+        self.wait_snapshot("Rust caller established", |call| {
+            call.status == SignallingStatus::Established
+        })
+        .await;
+    }
+
+    fn python_snapshot(&mut self) -> Value {
+        self.helper.send(json!({"cmd": "snapshot", "id": "snap"}));
+        self.helper.wait_event("SNAPSHOT", Duration::from_secs(5))
+    }
+
+    async fn shutdown(self) {
+        let _ = self.control_tx.send(TelephonyControl::Shutdown).await;
+        let _ = tokio::time::timeout(Duration::from_secs(2), self.service_task).await;
+        drop(self.actor_tx);
+        for task in self.tasks {
+            task.abort();
+        }
+        drop(self.helper);
+    }
+}
+
+impl PythonTelephoneHost {
+    fn send_announce(&self) {
+        let mut stdin = &self.stdin;
+        writeln!(stdin, "{}", json!({"cmd": "announce", "id": "announce"})).unwrap();
+        stdin.flush().unwrap();
+    }
+
+    fn count_stashed(&self, name: &str, within: Duration) -> usize {
+        let _ = self.try_wait_event("__none__", within);
+        self.stashed_events
+            .lock()
+            .expect("event stash")
+            .iter()
+            .filter(|event| event["event"] == name)
+            .count()
+    }
+}
+
+#[serial_test::serial(python_lxst_live)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
+async fn python_caller_with_slow_pipelines_is_answered_once_by_rust_service() {
+    let mut pair = ServiceCallPair::connect(&[("LXST_HELPER_OPEN_DELAY", "6.0")]).await;
+    pair.python_calls_rust_and_rust_answers(None).await;
+    // Python establishes once and the Rust callee does not give up while the caller is slow.
+    let established = pair
+        .helper
+        .count_stashed("ESTABLISHED", Duration::from_secs(9));
+    let opened = pair.helper.count_stashed("OPEN_PIPELINES", Duration::ZERO);
+    let ended = pair.helper.count_stashed("ENDED", Duration::ZERO);
+    let terminated = pair
+        .drain()
+        .iter()
+        .any(|event| matches!(event, TelephonyServiceEvent::CallTerminated { .. }));
+    assert_eq!((established, opened, ended, terminated), (1, 1, 0, false));
+    pair.shutdown().await;
+}
+
+#[serial_test::serial(python_lxst_live)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
+async fn rust_caller_is_answered_once_by_python_callee() {
+    let mut pair = ServiceCallPair::connect(&[]).await;
+    pair.rust_calls_python_and_python_answers(None).await;
+    tokio::time::sleep(Duration::from_secs(6)).await;
+    let terminated = pair
+        .drain()
+        .iter()
+        .any(|event| matches!(event, TelephonyServiceEvent::CallTerminated { .. }));
+    assert!(!terminated);
+    assert_eq!(pair.helper.count_stashed("ENDED", Duration::ZERO), 0);
+    pair.shutdown().await;
+}
+
+#[serial_test::serial(python_lxst_live)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
+async fn python_half_duplex_caller_sets_rust_callee_mode_and_squelch() {
+    let mut pair = ServiceCallPair::connect(&[]).await;
+    pair.python_calls_rust_and_rust_answers(Some(2)).await;
+    let call = pair
+        .wait_snapshot("Rust callee half duplex", |call| {
+            call.status == SignallingStatus::Established
+        })
+        .await;
+    assert_eq!(call.mode, Some(CallMode::HalfDuplex));
+    assert!(call.transmit_squelched);
+    pair.helper
+        .wait_event("ESTABLISHED", Duration::from_secs(5));
+    let python = pair.python_snapshot();
+    assert_eq!(python["active_call"]["call_mode"], 2);
+    assert_eq!(python["active_call"]["squelched"], true);
+
+    // Mid-call switch from Python reaches Rust.
+    pair.helper
+        .send(json!({"cmd": "switch_mode", "id": "fdx", "mode": 1}));
+    pair.helper
+        .wait_event("MODE_SWITCHED", Duration::from_secs(5));
+    let call = pair
+        .wait_snapshot("Rust follows Python full duplex", |call| {
+            call.mode == Some(CallMode::FullDuplex)
+        })
+        .await;
+    assert!(!call.transmit_squelched);
+    pair.shutdown().await;
+}
+
+#[serial_test::serial(python_lxst_live)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
+async fn rust_half_duplex_caller_sets_python_callee_mode_and_switch_reaches_python() {
+    let mut pair = ServiceCallPair::connect(&[]).await;
+    pair.rust_calls_python_and_python_answers(Some(CallMode::HalfDuplex))
+        .await;
+    let python = pair.python_snapshot();
+    assert_eq!(python["active_call"]["call_mode"], 2, "{python}");
+    assert_eq!(python["active_call"]["squelched"], true);
+
+    pair.control_tx
+        .send(TelephonyControl::SwitchMode {
+            mode: CallMode::FullDuplex,
+        })
+        .await
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let python = pair.python_snapshot();
+        if python["active_call"]["call_mode"] == 1 {
+            assert_eq!(python["active_call"]["squelched"], false);
+            break;
+        }
+        assert!(Instant::now() < deadline, "Python did not follow: {python}");
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+    pair.shutdown().await;
+}
+
+#[serial_test::serial(python_lxst_live)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
+async fn python_caller_gets_busy_while_rust_service_discovers_a_path() {
+    let mut pair = ServiceCallPair::connect(&[]).await;
+    pair.control_tx
+        .send(TelephonyControl::Call {
+            remote_identity: Identity::new().hash,
+            profile: None,
+            mode: None,
+            discovery_timeout: Duration::from_secs(30),
+        })
+        .await
+        .unwrap();
+    pair.wait_event("pending", Duration::from_secs(5), |event| {
+        matches!(event, TelephonyServiceEvent::OutgoingCallPending { .. })
+    })
+    .await;
+    pair.helper.send(json!({
+        "cmd": "call",
+        "id": "call",
+        "target_destination_hash": hex::encode(pair.rust_destination),
+    }));
+    // Python may report BUSY or, if the link close wins the race, ENDED.
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let mut signals = Vec::new();
+    loop {
+        if let Some(event) = pair
+            .helper
+            .try_wait_event("SIGNALS", Duration::from_millis(200))
+        {
+            signals.push(event["signals"].clone());
+        }
+        let ended = pair
+            .helper
+            .stashed_events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|event| event["event"] == "BUSY" || event["event"] == "ENDED");
+        if ended {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Python call did not end: {signals:?}"
+        );
+    }
+    while let Some(event) = pair.helper.try_wait_event("SIGNALS", Duration::ZERO) {
+        signals.push(event["signals"].clone());
+    }
+    let flat = signals
+        .iter()
+        .flat_map(|list| list.as_array().cloned().unwrap_or_default())
+        .filter_map(|value| value.as_u64())
+        .collect::<Vec<_>>();
+    assert!(flat.contains(&0), "Python never received BUSY: {flat:?}");
+    assert!(!flat.contains(&4), "Python received RINGING: {flat:?}");
+    let rang = pair
+        .drain()
+        .iter()
+        .any(|event| matches!(event, TelephonyServiceEvent::IncomingCall { .. }));
+    assert!(!rang);
+    pair.shutdown().await;
 }

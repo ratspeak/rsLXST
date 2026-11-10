@@ -33,8 +33,8 @@
       "tier": "experimental",
       "compatibility": "reviewed-snapshot",
       "snapshot": "api/snapshots/lxst-embedded.txt",
-      "itemCount": 299,
-      "sha256": "7cfa734581040e35c4b817422376e4e99c9f7d447181d9e3a9e1dac0912b9295"
+      "itemCount": 327,
+      "sha256": "072f231f31bce55c2aa0b5466988b3e62af42f66cc5e30b8f7c2572b1eef0d8d"
     },
     {
       "name": "lxst-core",
@@ -42,8 +42,8 @@
       "tier": "experimental",
       "compatibility": "reviewed-snapshot",
       "snapshot": "api/snapshots/lxst-core.txt",
-      "itemCount": 364,
-      "sha256": "2c272021cc340af7f779d944bebb336ae1804938239a8ead3cbf11a8074022e4"
+      "itemCount": 396,
+      "sha256": "a55ad460bfe1c4a2d689ed94dda09ff2625d9c3aee05285bf1cbd792f6d72f1e"
     },
     {
       "name": "lxst-rns",
@@ -60,8 +60,8 @@
       "tier": "experimental",
       "compatibility": "reviewed-snapshot",
       "snapshot": "api/snapshots/lxst-telephony.txt",
-      "itemCount": 360,
-      "sha256": "c9b9784a9b09bb41a9beffb29b62085b21f2b22cb8b7d18ef53ea9f673d77698"
+      "itemCount": 385,
+      "sha256": "1e7083b6302801c0d7f2417ff182e4dc559e1bf5a1ebde8638efaae26af62a24"
     }
   ],
   "newPackages": [

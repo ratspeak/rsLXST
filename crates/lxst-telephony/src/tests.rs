@@ -416,6 +416,10 @@ fn incoming_call_identify_answer_and_hangup_emit_python_ordered_commands() {
                 link_id,
                 profile: Profile::DEFAULT,
             },
+            TelephonyCommand::SelectMode {
+                link_id,
+                mode: CallMode::FullDuplex,
+            },
             TelephonyCommand::SendSignal {
                 link_id,
                 signal: Signal::from(SignallingStatus::Connecting),
@@ -425,11 +429,12 @@ fn incoming_call_identify_answer_and_hangup_emit_python_ordered_commands() {
                 link_id,
                 signal: Signal::from(SignallingStatus::Established),
             },
+            TelephonyCommand::StartAudioPipelines { link_id },
         ]
     );
     assert_eq!(
         core.active_call().unwrap().call.status(),
-        SignallingStatus::Connecting
+        SignallingStatus::Established
     );
 
     assert_eq!(
@@ -439,7 +444,10 @@ fn incoming_call_identify_answer_and_hangup_emit_python_ordered_commands() {
         )
         .unwrap()
         .commands,
-        vec![TelephonyCommand::StartAudioPipelines { link_id }]
+        vec![TelephonyCommand::IgnoredSignal {
+            link_id,
+            signal: Signal::from(SignallingStatus::Established),
+        }]
     );
     assert_eq!(
         core.active_call().unwrap().call.status(),
@@ -482,7 +490,7 @@ fn answer_admission_is_scoped_to_the_exact_ringing_incoming_link() {
     ));
     assert_eq!(
         core.active_call().unwrap().call.status(),
-        SignallingStatus::Connecting
+        SignallingStatus::Established
     );
 }
 
@@ -504,7 +512,7 @@ async fn answer_control_acks_authoritative_connecting_after_atomic_admission() {
     let snapshot = result.await.unwrap().unwrap();
     assert_eq!(snapshot.link_id, link_id);
     assert_eq!(snapshot.role, CallRole::Incoming);
-    assert_eq!(snapshot.status, SignallingStatus::Connecting);
+    assert_eq!(snapshot.status, SignallingStatus::Established);
     assert!(snapshot.answered);
 
     let mut signals = Vec::new();
@@ -530,21 +538,25 @@ async fn answer_control_acks_authoritative_connecting_after_atomic_admission() {
         Some(TelephonyServiceEvent::Snapshot(snapshot))
             if snapshot.active_call.as_ref().is_some_and(|active| {
                 active.link_id == link_id
-                    && active.status == SignallingStatus::Connecting
+                    && active.status == SignallingStatus::Established
                     && active.answered
             })
     ));
 }
 
 #[tokio::test]
-async fn answered_service_starts_media_only_after_remote_established_echo() {
+async fn answered_callee_is_established_and_ignores_the_caller_echo() {
     let (mut service, _receiver, link_id, mut transport_rx, mut event_rx) =
         ringing_incoming_service(8, 12, TelephonyServiceConfig::default());
     let _destination_registration = transport_rx.try_recv().unwrap();
     let answer = service.answer_exact(link_id).await.unwrap();
-    assert_eq!(answer.status, SignallingStatus::Connecting);
-    assert!(service.answering.is_some());
-    let _ = collect_ready_service_events(&mut event_rx);
+    assert_eq!(answer.status, SignallingStatus::Established);
+    let events = collect_ready_service_events(&mut event_rx);
+    assert!(events.iter().any(|event| matches!(
+        event,
+        TelephonyServiceEvent::Drive(TelephonyDriveStep { step, .. })
+            if step.commands.contains(&TelephonyCommand::StartAudioPipelines { link_id })
+    )));
 
     let step = service
         .core
@@ -555,31 +567,15 @@ async fn answered_service_starts_media_only_after_remote_established_echo() {
         .unwrap();
     assert_eq!(
         step.commands,
-        vec![TelephonyCommand::StartAudioPipelines { link_id }]
+        vec![TelephonyCommand::IgnoredSignal {
+            link_id,
+            signal: Signal::from(SignallingStatus::Established),
+        }]
     );
-    let effects = service.endpoint.execute_commands(&step.commands).unwrap();
-    service
-        .publish_commands(step.commands, effects)
-        .await
-        .unwrap();
-
-    assert!(service.answering.is_none());
-    let active = service.core.snapshot().active_call.unwrap();
-    assert_eq!(active.link_id, link_id);
-    assert_eq!(active.status, SignallingStatus::Established);
-    let events = collect_ready_service_events(&mut event_rx);
-    assert!(events.iter().any(|event| matches!(
-        event,
-        TelephonyServiceEvent::Drive(TelephonyDriveStep { step, .. })
-            if step.commands == vec![TelephonyCommand::StartAudioPipelines { link_id }]
-    )));
-    assert!(matches!(
-        events.last(),
-        Some(TelephonyServiceEvent::Snapshot(snapshot))
-            if snapshot.active_call.as_ref().is_some_and(|active| {
-                active.link_id == link_id && active.status == SignallingStatus::Established
-            })
-    ));
+    assert_eq!(
+        service.core.snapshot().active_call.unwrap().status,
+        SignallingStatus::Established
+    );
 }
 
 #[tokio::test]
@@ -594,7 +590,6 @@ async fn answer_transport_backpressure_rolls_back_without_publishing_a_prefix() 
     let active = service.core.active_call().unwrap();
     assert_eq!(active.call.status(), SignallingStatus::Ringing);
     assert!(!active.call.answered());
-    assert!(service.answering.is_none());
 
     assert!(matches!(
         transport_rx.try_recv().unwrap(),
@@ -603,46 +598,42 @@ async fn answer_transport_backpressure_rolls_back_without_publishing_a_prefix() 
     assert!(transport_rx.try_recv().is_err());
 }
 
-#[tokio::test]
-async fn answering_retries_are_bounded_and_timeout_terminates_connecting_call() {
-    let config = TelephonyServiceConfig {
-        answer_retry_interval: Some(Duration::from_millis(10)),
-        answer_timeout: Some(Duration::from_millis(40)),
-        ..TelephonyServiceConfig::default()
-    };
+#[tokio::test(start_paused = true)]
+async fn answered_callee_sends_one_answer_and_never_times_out_waiting_for_echo() {
     let (mut service, _receiver, link_id, mut transport_rx, mut event_rx) =
-        ringing_incoming_service(16, 16, config);
+        ringing_incoming_service(16, 64, TelephonyServiceConfig::default());
     let _destination_registration = transport_rx.try_recv().unwrap();
     service.answer_exact(link_id).await.unwrap();
+    let _ = take_outbound(&mut transport_rx);
+    let _ = take_outbound(&mut transport_rx);
     let _ = collect_ready_service_events(&mut event_rx);
-    let _ = take_outbound(&mut transport_rx);
-    let _ = take_outbound(&mut transport_rx);
 
-    service.answering.as_mut().unwrap().next_retry_at = Some(Instant::now());
-    assert!(service.handle_due_answer_retry().await);
-    assert!(matches!(
-        event_rx.try_recv().unwrap(),
-        TelephonyServiceEvent::Drive(_)
-    ));
-    let _ = take_outbound(&mut transport_rx);
-    let _ = take_outbound(&mut transport_rx);
-
-    service.answering.as_mut().unwrap().expires_at = Some(Instant::now());
-    assert!(service.handle_due_answer_retry().await);
-    assert!(service.core.active_call().is_none());
-    assert!(service.answering.is_none());
+    for _ in 0..100 {
+        tokio::time::advance(Duration::from_millis(100)).await;
+        assert!(service.handle_due_timeout().await);
+    }
+    while let Ok(message) = transport_rx.try_recv() {
+        assert!(
+            !matches!(
+                message,
+                TransportMessage::Outbound(_)
+                    | TransportMessage::SendLinkEndpoint { .. }
+                    | TransportMessage::SendLinkEndpointBestEffort { .. }
+            ),
+            "no answer retry is sent: {message:?}"
+        );
+    }
     let events = collect_ready_service_events(&mut event_rx);
-    assert!(events.iter().any(|event| matches!(
-        event,
-        TelephonyServiceEvent::CallTerminated {
-            link_id: terminated,
-            reason: Some(SignallingStatus::Connecting),
-        } if *terminated == link_id
-    )));
-    assert!(matches!(
-        events.last(),
-        Some(TelephonyServiceEvent::Snapshot(snapshot)) if snapshot.active_call.is_none()
-    ));
+    let active = service
+        .core
+        .active_call()
+        .unwrap_or_else(|| panic!("{events:?}"));
+    assert_eq!(active.call.status(), SignallingStatus::Established);
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, TelephonyServiceEvent::CallTerminated { .. }))
+    );
 }
 
 #[test]
@@ -711,10 +702,17 @@ fn outgoing_signalling_from_lxst_packets_drives_call_setup() {
                 link_id,
                 profile: Profile::LatencyLow,
             },
-            TelephonyCommand::PrepareDialingPipelines { link_id },
-            TelephonyCommand::SendSignal {
+            TelephonyCommand::SelectMode {
                 link_id,
-                signal: Signal::from(Profile::LatencyLow),
+                mode: CallMode::FullDuplex,
+            },
+            TelephonyCommand::PrepareDialingPipelines { link_id },
+            TelephonyCommand::SendSignalPair {
+                link_id,
+                signals: [
+                    Signal::from(Profile::LatencyLow),
+                    Signal::from(CallMode::FullDuplex)
+                ],
             },
             TelephonyCommand::StartDialTone { link_id },
         ]
@@ -894,7 +892,9 @@ fn runtime_snapshot_reports_busy_pending_and_active_call_state() {
                 role: CallRole::Incoming,
                 status: SignallingStatus::Ringing,
                 profile: None,
+                mode: None,
                 answered: false,
+                transmit_squelched: false,
             }),
         }
     );
@@ -1312,7 +1312,7 @@ fn rns_endpoint_try_drive_ready_pumps_reticulum_handshake_events() {
 }
 
 #[tokio::test]
-async fn discover_remote_telephony_peer_uses_recalled_identity_and_refreshes_path() {
+async fn discover_remote_telephony_peer_uses_recalled_identity_without_path_request() {
     let local_identity = Identity::new();
     let remote_identity = Identity::new();
     let remote_hash = remote_identity.hash;
@@ -1338,16 +1338,6 @@ async fn discover_remote_telephony_peer_uses_recalled_identity_and_refreshes_pat
                 recalled_destination(destination_hash, 3, remote_public_key),
             )))
             .unwrap();
-
-        let request_path = transport_rx.recv().await.unwrap();
-        let TransportMessage::RequestPath {
-            destination_hash: requested_hash,
-        } = request_path
-        else {
-            panic!("expected RequestPath, got {request_path:?}");
-        };
-        assert_eq!(requested_hash, destination_hash);
-        assert!(transport_rx.try_recv().is_err());
     };
 
     let (peer, ()) = tokio::join!(discovery, transport);
@@ -1359,6 +1349,10 @@ async fn discover_remote_telephony_peer_uses_recalled_identity_and_refreshes_pat
             public_key: remote_public_key,
             hops: 3,
         }
+    );
+    assert!(
+        transport_rx.try_recv().is_err(),
+        "no path request for a known peer"
     );
 }
 
@@ -1387,18 +1381,6 @@ async fn discover_remote_telephony_peer_requests_path_when_identity_is_not_recal
         response_tx
             .send(TransportQueryResponse::RecalledDestination(None))
             .unwrap();
-
-        let rpc = transport_rx.recv().await.unwrap();
-        let TransportMessage::Rpc { query, response_tx } = rpc else {
-            panic!("expected DropPath Rpc, got {rpc:?}");
-        };
-        assert!(matches!(
-            query,
-            TransportQuery::DropPath {
-                dest
-            } if dest == destination_hash
-        ));
-        response_tx.send(TransportQueryResponse::Ok).unwrap();
 
         let request_path = transport_rx.recv().await.unwrap();
         let TransportMessage::RequestPath {
@@ -1534,18 +1516,6 @@ async fn begin_outgoing_link_discovers_announce_and_sends_link_request() {
             .send(TransportQueryResponse::RecalledDestination(None))
             .unwrap();
 
-        let rpc = transport_rx.recv().await.unwrap();
-        let TransportMessage::Rpc { query, response_tx } = rpc else {
-            panic!("expected DropPath Rpc, got {rpc:?}");
-        };
-        assert!(matches!(
-            query,
-            TransportQuery::DropPath {
-                dest
-            } if dest == destination_hash
-        ));
-        response_tx.send(TransportQueryResponse::Ok).unwrap();
-
         let request_path = transport_rx.recv().await.unwrap();
         let TransportMessage::RequestPath {
             destination_hash: requested_hash,
@@ -1587,15 +1557,6 @@ async fn begin_outgoing_link_discovers_announce_and_sends_link_request() {
                 2,
             )]))
             .unwrap();
-
-        let request_path = transport_rx.recv().await.unwrap();
-        let TransportMessage::RequestPath {
-            destination_hash: requested_hash,
-        } = request_path
-        else {
-            panic!("expected link RequestPath, got {request_path:?}");
-        };
-        assert_eq!(requested_hash, destination_hash);
 
         let register_link = transport_rx.recv().await.unwrap();
         let TransportMessage::RegisterDestination {
@@ -1674,8 +1635,8 @@ async fn telephony_service_registered_helper_wires_channels_and_lifecycle() {
     assert_deregistered_destination(&mut transport_rx, destination_hash);
 }
 
-#[tokio::test]
-async fn telephony_service_announces_on_start() {
+#[tokio::test(start_paused = true)]
+async fn telephony_service_announces_once_after_first_job_interval() {
     let local_identity = Identity::new();
     let destination_hash = telephony_destination_hash(&local_identity.hash);
     let (transport_tx, mut transport_rx) = mpsc::channel(8);
@@ -1688,7 +1649,6 @@ async fn telephony_service_announces_on_start() {
         &local_identity,
         TelephonyServiceConfig {
             poll_interval: Duration::from_millis(10),
-            announce_interval: None,
             ..TelephonyServiceConfig::default()
         },
         TelephonyServiceChannelConfig::default(),
@@ -1698,7 +1658,13 @@ async fn telephony_service_announces_on_start() {
     let _listener_registration = transport_rx.recv().await.unwrap();
     let service_task = tokio::spawn(service.run());
 
-    let announce = timeout(Duration::from_secs(1), transport_rx.recv())
+    assert!(
+        timeout(Duration::from_millis(4_900), transport_rx.recv())
+            .await
+            .is_err(),
+        "Python Telephone does not announce during construction"
+    );
+    let announce = timeout(Duration::from_millis(200), transport_rx.recv())
         .await
         .unwrap()
         .unwrap();
@@ -1714,6 +1680,12 @@ async fn telephony_service_announces_on_start() {
     let announce_data =
         AnnounceData::unpack(&announce.raw[data_offset..], header.flags.context_flag).unwrap();
     announce_data.validate(&destination_hash).unwrap();
+    assert!(
+        timeout(Duration::from_secs(60), transport_rx.recv())
+            .await
+            .is_err(),
+        "no startup announce burst by default"
+    );
 
     control_tx.send(TelephonyControl::Shutdown).await.unwrap();
     let stopped = timeout(Duration::from_secs(1), event_rx.recv())
@@ -1724,8 +1696,8 @@ async fn telephony_service_announces_on_start() {
     service_task.await.unwrap();
 }
 
-#[tokio::test]
-async fn telephony_service_retries_startup_announces_before_regular_interval() {
+#[tokio::test(start_paused = true)]
+async fn telephony_service_startup_announce_burst_is_opt_in() {
     let local_identity = Identity::new();
     let destination_hash = telephony_destination_hash(&local_identity.hash);
     let (transport_tx, mut transport_rx) = mpsc::channel(8);
@@ -1751,7 +1723,7 @@ async fn telephony_service_retries_startup_announces_before_regular_interval() {
     let service_task = tokio::spawn(service.run());
 
     for _ in 0..3 {
-        let announce = timeout(Duration::from_secs(1), transport_rx.recv())
+        let announce = timeout(Duration::from_secs(6), transport_rx.recv())
             .await
             .unwrap()
             .unwrap();
@@ -1870,6 +1842,7 @@ async fn telephony_service_outgoing_discovery_does_not_block_controls() {
         .send(TelephonyControl::Call {
             remote_identity: remote_hash,
             profile: Some(Profile::QualityMedium),
+            mode: None,
             discovery_timeout: Duration::from_millis(100),
         })
         .await
@@ -1913,17 +1886,6 @@ async fn telephony_service_outgoing_discovery_does_not_block_controls() {
     response_tx
         .send(TransportQueryResponse::RecalledDestination(None))
         .unwrap();
-    let rpc = transport_rx.recv().await.unwrap();
-    let TransportMessage::Rpc { query, response_tx } = rpc else {
-        panic!("expected DropPath Rpc, got {rpc:?}");
-    };
-    assert!(matches!(
-        query,
-        TransportQuery::DropPath {
-            dest
-        } if dest == remote_destination_hash
-    ));
-    response_tx.send(TransportQueryResponse::Ok).unwrap();
 
     let request_path = transport_rx.recv().await.unwrap();
     let TransportMessage::RequestPath { destination_hash } = request_path else {
@@ -1954,6 +1916,17 @@ async fn telephony_service_outgoing_discovery_does_not_block_controls() {
             message: Error::RemoteTelephonyPeerNotDiscovered.to_string(),
         }
     );
+    let event = timeout(Duration::from_secs(1), event_rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(
+        event,
+        TelephonyServiceEvent::Snapshot(TelephonyRuntimeSnapshot {
+            active_call: None,
+            ..
+        })
+    ));
 
     control_tx.send(TelephonyControl::Shutdown).await.unwrap();
     let stopped = timeout(Duration::from_secs(1), event_rx.recv())
@@ -1996,6 +1969,7 @@ async fn telephony_service_call_control_discovers_peer_and_emits_started() {
         .send(TelephonyControl::Call {
             remote_identity: remote_hash,
             profile: Some(Profile::LatencyLow),
+            mode: None,
             discovery_timeout: Duration::from_secs(1),
         })
         .await
@@ -2023,18 +1997,6 @@ async fn telephony_service_call_control_discovers_peer_and_emits_started() {
     response_tx
         .send(TransportQueryResponse::RecalledDestination(None))
         .unwrap();
-
-    let rpc = transport_rx.recv().await.unwrap();
-    let TransportMessage::Rpc { query, response_tx } = rpc else {
-        panic!("expected DropPath Rpc, got {rpc:?}");
-    };
-    assert!(matches!(
-        query,
-        TransportQuery::DropPath {
-            dest
-        } if dest == destination_hash
-    ));
-    response_tx.send(TransportQueryResponse::Ok).unwrap();
 
     let request_path = transport_rx.recv().await.unwrap();
     let TransportMessage::RequestPath {
@@ -2077,15 +2039,6 @@ async fn telephony_service_call_control_discovers_peer_and_emits_started() {
             1,
         )]))
         .unwrap();
-
-    let request_path = transport_rx.recv().await.unwrap();
-    let TransportMessage::RequestPath {
-        destination_hash: requested_hash,
-    } = request_path
-    else {
-        panic!("expected link RequestPath, got {request_path:?}");
-    };
-    assert_eq!(requested_hash, destination_hash);
 
     let register_link = transport_rx.recv().await.unwrap();
     let TransportMessage::RegisterDestination {
@@ -2130,7 +2083,9 @@ async fn telephony_service_call_control_discovers_peer_and_emits_started() {
                 role: CallRole::Outgoing,
                 status: SignallingStatus::Calling,
                 profile: Some(Profile::LatencyLow),
+                mode: None,
                 answered: false,
+                transmit_squelched: false,
             }),
         })
     );
@@ -2873,7 +2828,9 @@ async fn telephony_service_stops_media_streams_on_established_profile_switch() {
                 status: SignallingStatus::Established,
                 profile: Some(new_profile),
                 remote_identity: identity(0xB0),
+                mode: Some(CallMode::FullDuplex),
                 answered: false,
+                transmit_squelched: false,
             }),
         })
     );
@@ -3147,15 +3104,6 @@ fn outgoing_link_attempt_promotes_after_proof_and_drives_available_signal() {
             1,
         )
         .unwrap();
-
-    let request_path = transport_rx.try_recv().unwrap();
-    let TransportMessage::RequestPath {
-        destination_hash: requested_hash,
-    } = request_path
-    else {
-        panic!("expected RequestPath, got {request_path:?}");
-    };
-    assert_eq!(requested_hash, destination_hash);
 
     let register_link = transport_rx.try_recv().unwrap();
     let TransportMessage::RegisterDestination {
@@ -4189,7 +4137,7 @@ async fn native_codec2_duplex_and_input_lease_use_the_real_link() {
                 81
             }
         );
-        let mut decoder = media::AudioDecoder::new(profile).unwrap();
+        let mut decoder = media::ReceiveDecoder::new(profile);
         assert_eq!(
             decoder
                 .decode_frame(&packet.frames[0])
@@ -4257,11 +4205,564 @@ fn native_codec2_rejects_bad_shapes_and_mode_without_poisoning_valid_media() {
         let mut packet = encoder
             .encode_frame(&synthetic_frame_for_profile(profile))
             .unwrap();
-        let mut decoder = media::AudioDecoder::new(profile).unwrap();
+        let mut decoder = media::ReceiveDecoder::new(profile);
         let mode = packet.payload[0];
         packet.payload[0] ^= 1;
         assert!(decoder.decode_frame(&packet).is_err());
         packet.payload[0] = mode;
         assert!(decoder.decode_frame(&packet).is_ok());
     }
+}
+
+fn upstream_media_vectors() -> serde_json::Value {
+    let vectors: serde_json::Value =
+        serde_json::from_str(include_str!("../tests/fixtures/lxst_060_media.json")).unwrap();
+    assert_eq!(vectors["lxst_version"], "0.6.0");
+    assert_eq!(vectors["rns_version"], "1.6.0");
+    vectors
+}
+
+#[test]
+fn receive_decoder_follows_codec_of_each_frame_in_an_upstream_batch() {
+    let vectors = upstream_media_vectors();
+    let profile = Profile::QualityMedium;
+    let mut decoder = media::ReceiveDecoder::new(profile);
+    for entry in vectors["mixed_batch"].as_array().unwrap() {
+        let bytes = hex::decode(entry["wire_hex"].as_str().unwrap()).unwrap();
+        let frame = Frame::from_wire_bytes(&bytes).unwrap();
+        let decoded = decoder
+            .decode_frame(&frame)
+            .unwrap_or_else(|err| panic!("{}: {err}", entry["name"]));
+        // Upstream decoded at 48 kHz; the local profile plays at its own rate.
+        let upstream_ms = entry["decoded_sample_frames"].as_u64().unwrap() as f64 / 48.0;
+        let local_ms =
+            decoded.sample_frames() as f64 * 1000.0 / f64::from(profile.sample_rate_hz());
+        assert!(
+            (upstream_ms - local_ms).abs() < 1.0,
+            "{}: upstream {upstream_ms} ms, Rust {local_ms} ms",
+            entry["name"]
+        );
+        assert_eq!(decoded.channels, profile.channels());
+    }
+}
+
+#[test]
+fn receive_decoder_skips_only_a_corrupt_frame() {
+    let vectors = upstream_media_vectors();
+    let mut decoder = media::ReceiveDecoder::new(Profile::QualityMedium);
+    let frames = vectors["mixed_batch"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            Frame::from_wire_bytes(&hex::decode(entry["wire_hex"].as_str().unwrap()).unwrap())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let mut corrupt = frames[1].clone();
+    corrupt.payload[0] = 0x7F;
+    assert!(decoder.decode_frame(&frames[0]).is_ok());
+    assert!(decoder.decode_frame(&corrupt).is_err());
+    assert!(decoder.decode_frame(&frames[2]).is_ok());
+}
+
+#[test]
+fn profile_buffer_frames_match_upstream_table() {
+    let vectors = upstream_media_vectors();
+    for (wire, frames) in vectors["buffer_frames"].as_object().unwrap() {
+        let profile = Profile::from_wire(wire.parse().unwrap()).unwrap();
+        assert_eq!(
+            u64::from(profile.buffer_frames()),
+            frames.as_u64().unwrap(),
+            "{profile:?}"
+        );
+    }
+}
+
+#[test]
+fn raw_float128_matches_upstream_binary128_bytes() {
+    let vectors = upstream_media_vectors();
+    let raw128 = &vectors["raw128"];
+    if raw128["longdouble_bits"] != 128 || raw128["longdouble_nmant"] != 112 {
+        // Vectors produced on a platform without IEEE binary128 long double.
+        return;
+    }
+    let payload = hex::decode(raw128["payload_hex"].as_str().unwrap()).unwrap();
+    let samples = raw128["samples"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_f64().unwrap() as f32)
+        .collect::<Vec<_>>();
+    let frame = RawAudioFrame::new(1, samples.clone()).unwrap();
+    assert_eq!(frame.to_payload(RawBitDepth::Float128).unwrap(), payload);
+    assert_eq!(
+        RawAudioFrame::from_payload(&payload).unwrap().samples,
+        samples
+    );
+}
+
+#[test]
+fn preferred_mode_signals_use_python_wire_values() {
+    assert_eq!(Signal::from_wire(0xF1), Signal::from(CallMode::FullDuplex));
+    assert_eq!(Signal::from_wire(0xF2), Signal::from(CallMode::HalfDuplex));
+    assert_eq!(Signal::from_wire(0xF0), Signal::PreferredMode(0));
+    assert_eq!(Signal::from_wire(0xF3).wire_value(), 0xF3);
+    assert_eq!(
+        Signal::from_wire(0xFF + 0x40),
+        Signal::from(Profile::QualityMedium)
+    );
+}
+
+fn outgoing_service_at_status(
+    status: Option<SignallingStatus>,
+    profile: Profile,
+    config: TelephonyServiceConfig,
+) -> (
+    TelephonyService,
+    Link,
+    LinkId,
+    mpsc::Receiver<TransportMessage>,
+    mpsc::Receiver<TelephonyServiceEvent>,
+) {
+    let (sender, receiver) = active_link_pair();
+    let link_id = sender.link_id;
+    let (transport_tx, mut transport_rx) = mpsc::channel(32);
+    let mut endpoint = TelephonyRnsEndpoint::register(transport_tx, &Identity::new()).unwrap();
+    let _listener_registration = transport_rx.try_recv().unwrap();
+    let (_link_event_tx, event_rx) = mpsc::channel(4);
+    endpoint.outgoing_links.insert(
+        link_id,
+        OutgoingLinkState {
+            link: sender,
+            event_rx,
+            endpoint: None,
+        },
+    );
+    let mut core = TelephonyRuntimeCore::new();
+    core.start_outgoing_call(link_id, identity(0xC1), Some(profile))
+        .unwrap();
+    let order = [
+        SignallingStatus::Available,
+        SignallingStatus::Ringing,
+        SignallingStatus::Connecting,
+        SignallingStatus::Established,
+    ];
+    if let Some(target) = status {
+        for step in order {
+            core.accept_lxst_plaintext(link_id, &packet([Signal::from(step)]))
+                .unwrap();
+            if step == target {
+                break;
+            }
+        }
+    }
+    let (_control_tx, control_rx) = mpsc::channel(4);
+    let (event_tx, event_rx) = mpsc::channel(64);
+    (
+        TelephonyService::with_config(endpoint, core, control_rx, event_tx, config),
+        receiver,
+        link_id,
+        transport_rx,
+        event_rx,
+    )
+}
+
+fn quiet_config() -> TelephonyServiceConfig {
+    TelephonyServiceConfig {
+        announce_on_start: false,
+        announce_interval: None,
+        ..TelephonyServiceConfig::default()
+    }
+}
+
+#[test]
+fn caller_sends_profile_and_mode_in_one_packet_on_ringing() {
+    let (mut service, receiver, link_id, mut transport_rx, _events) = outgoing_service_at_status(
+        Some(SignallingStatus::Available),
+        Profile::QualityMedium,
+        quiet_config(),
+    );
+    let step = service
+        .core
+        .accept_lxst_plaintext(link_id, &packet([Signal::from(SignallingStatus::Ringing)]))
+        .unwrap();
+    service.endpoint.execute_commands(&step.commands).unwrap();
+    let (_header, encrypted) = take_outbound(&mut transport_rx);
+    let plaintext = receiver.decrypt(&encrypted).unwrap();
+    // Bytes produced by upstream LXST 0.6.0 for QUALITY_MEDIUM / MODE_FULL_DUPLEX.
+    assert_eq!(hex::encode(&plaintext), "810092cd013fccf1");
+    assert!(transport_rx.try_recv().is_err());
+}
+
+#[tokio::test(start_paused = true)]
+async fn outgoing_call_ends_when_callee_does_not_ring_within_connect_time() {
+    let (mut service, _receiver, _link_id, _transport_rx, mut events) = outgoing_service_at_status(
+        Some(SignallingStatus::Available),
+        Profile::QualityMedium,
+        quiet_config(),
+    );
+    let _ = service.refresh_active_timeout();
+    tokio::time::advance(Duration::from_millis(4_900)).await;
+    assert!(service.handle_due_timeout().await);
+    assert!(service.core.active_call().is_some());
+    tokio::time::advance(Duration::from_millis(100)).await;
+    assert!(service.handle_due_timeout().await);
+    assert!(service.core.active_call().is_none());
+    assert!(
+        collect_ready_service_events(&mut events)
+            .iter()
+            .any(|event| matches!(event, TelephonyServiceEvent::CallTerminated { .. }))
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn ringing_outgoing_call_ends_at_wait_time_from_call_start() {
+    let (mut service, _receiver, link_id, _transport_rx, _events) =
+        outgoing_service_at_status(None, Profile::QualityMedium, quiet_config());
+    let _ = service.refresh_active_timeout();
+    tokio::time::advance(Duration::from_secs(4)).await;
+    for status in [SignallingStatus::Available, SignallingStatus::Ringing] {
+        service
+            .core
+            .accept_lxst_plaintext(link_id, &packet([Signal::from(status)]))
+            .unwrap();
+    }
+    let _ = service.refresh_active_timeout();
+    tokio::time::advance(Duration::from_millis(65_900)).await;
+    assert!(service.handle_due_timeout().await);
+    assert!(service.core.active_call().is_some());
+    tokio::time::advance(Duration::from_millis(100)).await;
+    assert!(service.handle_due_timeout().await);
+    assert!(service.core.active_call().is_none());
+}
+
+#[tokio::test]
+async fn squelched_call_sends_no_media() {
+    let profile = Profile::QualityMedium;
+    let (mut service, _receiver, _link_id, mut transport_rx, _events) =
+        outgoing_service_at_status(Some(SignallingStatus::Established), profile, quiet_config());
+    assert!(
+        service
+            .handle_control(TelephonyControl::SquelchTransmit(true))
+            .await
+    );
+    service
+        .send_opus_frames(profile, vec![synthetic_frame_for_profile(profile)])
+        .await
+        .unwrap();
+    assert!(transport_rx.try_recv().is_err());
+    assert!(
+        service
+            .handle_control(TelephonyControl::SquelchTransmit(false))
+            .await
+    );
+    service
+        .send_opus_frames(profile, vec![synthetic_frame_for_profile(profile)])
+        .await
+        .unwrap();
+    let _ = take_outbound(&mut transport_rx);
+}
+
+#[test]
+fn unanswered_incoming_call_drops_a_packet_from_its_first_signal_below_mode() {
+    for stop in [
+        Signal::from(SignallingStatus::Connecting),
+        Signal::Raw(0x50),
+    ] {
+        let link_id = link(0x61);
+        let mut core = TelephonyRuntimeCore::new();
+        core.incoming_link_established(link_id);
+        core.caller_identified(link_id, identity(0x5A)).unwrap();
+        let step = core
+            .accept_lxst_plaintext(
+                link_id,
+                &packet([
+                    Signal::from(Profile::BandwidthLow),
+                    stop,
+                    Signal::from(CallMode::HalfDuplex),
+                ]),
+            )
+            .unwrap();
+        assert_eq!(
+            step.commands,
+            vec![
+                TelephonyCommand::SelectProfile {
+                    link_id,
+                    profile: Profile::BandwidthLow,
+                },
+                TelephonyCommand::IgnoredSignal {
+                    link_id,
+                    signal: stop,
+                },
+            ]
+        );
+        assert_eq!(core.snapshot().active_call.unwrap().mode, None);
+    }
+}
+
+#[tokio::test]
+async fn remote_half_duplex_switch_squelches_and_local_switch_signals() {
+    let profile = Profile::QualityMedium;
+    let (mut service, receiver, link_id, mut transport_rx, _events) =
+        outgoing_service_at_status(Some(SignallingStatus::Established), profile, quiet_config());
+    let step = service
+        .core
+        .accept_lxst_plaintext(link_id, &packet([Signal::from(CallMode::HalfDuplex)]))
+        .unwrap();
+    assert_eq!(
+        step.commands,
+        vec![TelephonyCommand::SwitchMode {
+            link_id,
+            mode: CallMode::HalfDuplex,
+        }]
+    );
+    service
+        .send_opus_frames(profile, vec![synthetic_frame_for_profile(profile)])
+        .await
+        .unwrap();
+    assert!(transport_rx.try_recv().is_err());
+
+    assert!(
+        service
+            .handle_control(TelephonyControl::SwitchMode {
+                mode: CallMode::FullDuplex,
+            })
+            .await
+    );
+    let (_header, encrypted) = take_outbound(&mut transport_rx);
+    let sent = LxstPacket::decode(&receiver.decrypt(&encrypted).unwrap()).unwrap();
+    assert_eq!(sent.signals, vec![Signal::from(CallMode::FullDuplex)]);
+    assert!(
+        !service
+            .core
+            .snapshot()
+            .active_call
+            .unwrap()
+            .transmit_squelched
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn line_is_busy_while_outgoing_call_discovers_path() {
+    let (transport_tx, mut transport_rx) = mpsc::channel(32);
+    let endpoint = TelephonyRnsEndpoint::register(transport_tx, &Identity::new()).unwrap();
+    let _listener_registration = transport_rx.try_recv().unwrap();
+    let (_control_tx, control_rx) = mpsc::channel(4);
+    let (event_tx, mut events) = mpsc::channel(64);
+    let mut service = TelephonyService::with_config(
+        endpoint,
+        TelephonyRuntimeCore::new(),
+        control_rx,
+        event_tx,
+        quiet_config(),
+    );
+    assert!(
+        service
+            .handle_control(TelephonyControl::Call {
+                remote_identity: identity(0xD1),
+                profile: None,
+                mode: None,
+                discovery_timeout: Duration::from_secs(30),
+            })
+            .await
+    );
+    assert!(service.core.line_busy());
+    let incoming = link(0xD2);
+    assert_eq!(
+        service.core.incoming_link_established(incoming),
+        vec![
+            TelephonyCommand::SendSignal {
+                link_id: incoming,
+                signal: Signal::from(SignallingStatus::Busy),
+            },
+            TelephonyCommand::TeardownLink { link_id: incoming },
+        ]
+    );
+
+    assert!(
+        service
+            .handle_control(TelephonyControl::Hangup {
+                ring_timeout: false
+            })
+            .await
+    );
+    assert!(!service.core.line_busy());
+    assert!(
+        collect_ready_service_events(&mut events)
+            .iter()
+            .any(|event| matches!(
+                event,
+                TelephonyServiceEvent::OutgoingCallFailed { message, .. } if message == "cancelled"
+            ))
+    );
+    assert_eq!(
+        service.core.incoming_link_established(link(0xD3)),
+        vec![TelephonyCommand::SendSignal {
+            link_id: link(0xD3),
+            signal: Signal::from(SignallingStatus::Available),
+        }]
+    );
+}
+
+#[tokio::test]
+async fn hangup_during_discovery_also_ends_the_active_call() {
+    let (mut service, receiver, link_id, mut transport_rx, mut events) =
+        ringing_incoming_service(16, 32, quiet_config());
+    let _destination_registration = transport_rx.try_recv().unwrap();
+    service.outgoing_discovery = Some(OutgoingDiscoveryState {
+        remote_identity: identity(0xD4),
+        profile: None,
+        mode: None,
+    });
+    assert!(
+        service
+            .handle_control(TelephonyControl::Hangup {
+                ring_timeout: false
+            })
+            .await
+    );
+    assert!(service.outgoing_discovery.is_none());
+    assert!(service.core.active_call().is_none());
+    let (_header, encrypted) = take_outbound(&mut transport_rx);
+    let sent = LxstPacket::decode(&receiver.decrypt(&encrypted).unwrap()).unwrap();
+    assert_eq!(sent.signals, vec![Signal::from(SignallingStatus::Rejected)]);
+    assert!(
+        collect_ready_service_events(&mut events)
+            .iter()
+            .any(|event| matches!(
+                event,
+                TelephonyServiceEvent::CallTerminated { link_id: ended, .. } if *ended == link_id
+            ))
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn path_discovery_is_bounded_by_wait_time_from_call_start() {
+    let (transport_tx, mut transport_rx) = mpsc::channel(32);
+    let endpoint = TelephonyRnsEndpoint::register(transport_tx, &Identity::new()).unwrap();
+    let _listener_registration = transport_rx.try_recv().unwrap();
+    let (control_tx, control_rx) = mpsc::channel(4);
+    let (event_tx, mut events) = mpsc::channel(64);
+    let service = TelephonyService::with_config(
+        endpoint,
+        TelephonyRuntimeCore::new(),
+        control_rx,
+        event_tx,
+        TelephonyServiceConfig {
+            outgoing_call_timeout: Some(Duration::from_secs(3)),
+            ..quiet_config()
+        },
+    );
+    let task = tokio::spawn(service.run());
+    let started = Instant::now();
+    control_tx
+        .send(TelephonyControl::Call {
+            remote_identity: identity(0xD5),
+            profile: None,
+            mode: None,
+            discovery_timeout: Duration::from_secs(10),
+        })
+        .await
+        .unwrap();
+    let responder = tokio::spawn(async move {
+        while let Some(message) = transport_rx.recv().await {
+            if let TransportMessage::Rpc { query, response_tx } = message {
+                let response = match query {
+                    TransportQuery::DropPath { .. } => TransportQueryResponse::Ok,
+                    _ => TransportQueryResponse::RecalledDestination(None),
+                };
+                let _ = response_tx.send(response);
+            }
+        }
+    });
+    loop {
+        let event = timeout(Duration::from_secs(20), events.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        if matches!(event, TelephonyServiceEvent::OutgoingCallFailed { .. }) {
+            break;
+        }
+    }
+    let elapsed = started.elapsed();
+    assert!(elapsed <= Duration::from_millis(3_200), "{elapsed:?}");
+    control_tx.send(TelephonyControl::Shutdown).await.unwrap();
+    task.await.unwrap();
+    responder.abort();
+}
+
+#[tokio::test]
+async fn known_peer_call_sends_no_path_request_or_drop() {
+    let remote = Identity::new();
+    let remote_destination = telephony_destination_hash(&remote.hash);
+    let (transport_tx, mut transport_rx) = mpsc::channel(64);
+    let endpoint = TelephonyRnsEndpoint::register(transport_tx, &Identity::new()).unwrap();
+    let _listener_registration = transport_rx.try_recv().unwrap();
+    let (control_tx, control_rx) = mpsc::channel(4);
+    let (event_tx, mut events) = mpsc::channel(64);
+    let task = tokio::spawn(
+        TelephonyService::with_config(
+            endpoint,
+            TelephonyRuntimeCore::new(),
+            control_rx,
+            event_tx,
+            quiet_config(),
+        )
+        .run(),
+    );
+    control_tx
+        .send(TelephonyControl::Call {
+            remote_identity: remote.hash,
+            profile: None,
+            mode: None,
+            discovery_timeout: Duration::from_secs(5),
+        })
+        .await
+        .unwrap();
+    let (mut path_requests, mut drops, mut link_requests) = (0, 0, 0);
+    while link_requests == 0 {
+        let message = timeout(Duration::from_secs(5), transport_rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        match message {
+            TransportMessage::RequestPath { destination_hash }
+            | TransportMessage::RequestPathWithOptions {
+                destination_hash, ..
+            } if destination_hash == remote_destination => path_requests += 1,
+            TransportMessage::AwaitPath { reply, .. } => {
+                let _ = reply.send(true);
+            }
+            TransportMessage::SendLinkRequest { result_tx, .. } => {
+                link_requests += 1;
+                let _ = result_tx.send(Ok(()));
+            }
+            TransportMessage::Rpc { query, response_tx } => {
+                let response = match query {
+                    TransportQuery::RecallDestination { dest } => {
+                        TransportQueryResponse::RecalledDestination(Some(recalled_destination(
+                            dest,
+                            1,
+                            remote.get_public_key(),
+                        )))
+                    }
+                    TransportQuery::DropPath { .. } => {
+                        drops += 1;
+                        TransportQueryResponse::Ok
+                    }
+                    TransportQuery::GetPathTable => {
+                        TransportQueryResponse::PathTable(vec![path_entry(remote_destination, 1)])
+                    }
+                    _ => TransportQueryResponse::Ok,
+                };
+                let _ = response_tx.send(response);
+            }
+            _ => {}
+        }
+        while events.try_recv().is_ok() {}
+    }
+    assert_eq!((path_requests, drops), (0, 0));
+    control_tx.send(TelephonyControl::Shutdown).await.unwrap();
+    task.abort();
 }

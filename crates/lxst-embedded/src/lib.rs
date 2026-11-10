@@ -17,7 +17,7 @@ pub use call_state::CallState;
 #[path = "../../lxst-core/src/shared/call_types.rs"]
 mod call_types;
 pub use call_types::{CallRole, TelephonyAction};
-pub use profile::{AudioCodec, OpusApplication, OpusProfile, Profile, SignallingStatus};
+pub use profile::{AudioCodec, CallMode, OpusApplication, OpusProfile, Profile, SignallingStatus};
 pub use wire::{Codec2Mode, CodecKind, Signal};
 
 #[path = "../../lxst-core/src/shared/codec2.rs"]

@@ -69,7 +69,8 @@ fn python_telephone_helper_loads_reference_and_creates_destination() {
         .expect("READY event");
     assert_eq!(ready["app_name"], "lxst");
     assert_eq!(ready["primitive_name"], "telephony");
-    assert_eq!(ready["lxst_version"], "0.4.5");
+    assert_eq!(ready["lxst_version"], "0.6.0");
+    assert_eq!(ready["rns_version"], "1.6.0");
     let lxst_root = PathBuf::from(ready["lxst_root"].as_str().expect("LXST root"));
     if let Ok(configured) = std::env::var("LXST_UPSTREAM_DIR") {
         let configured = PathBuf::from(configured)
@@ -77,7 +78,10 @@ fn python_telephone_helper_loads_reference_and_creates_destination() {
             .expect("configured LXST upstream exists");
         assert_eq!(lxst_root, configured);
     } else {
-        assert!(lxst_root.ends_with(Path::new("upstream").join("LXST")));
+        assert!(
+            lxst_root.ends_with(Path::new("upstream").join("LXST"))
+                || lxst_root.ends_with(Path::new("upstream").join("candidate").join("LXST"))
+        );
     }
     assert!(ready["codec2_stubbed"].is_boolean());
     assert_eq!(ready["headless_audio"], true);

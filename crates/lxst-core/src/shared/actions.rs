@@ -1,16 +1,16 @@
 use crate::Signal;
 use crate::TelephonyAction;
 
-/// Every current transition emits at most four ordered actions.
+/// Every current transition emits at most six ordered actions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Actions {
-    items: [TelephonyAction; 4],
+    items: [TelephonyAction; 6],
     length: usize,
 }
 impl Actions {
     pub(crate) fn new() -> Self {
         Self {
-            items: [const { TelephonyAction::IgnoreSignal(Signal::Raw(0)) }; 4],
+            items: [const { TelephonyAction::IgnoreSignal(Signal::Raw(0)) }; 6],
             length: 0,
         }
     }

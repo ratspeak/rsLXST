@@ -23,8 +23,14 @@ def main_root() -> Path:
     return repo_root().parent
 
 
+def _upstream_checkout(name: str) -> Path:
+    # A candidate worktree holds the next reference release until the pins move.
+    candidate = main_root() / "upstream" / "candidate" / name
+    return candidate if candidate.exists() else main_root() / "upstream" / name
+
+
 def upstream_lxst_root() -> Path:
-    return Path(os.environ.get("LXST_UPSTREAM_DIR", main_root() / "upstream" / "LXST")).resolve()
+    return Path(os.environ.get("LXST_UPSTREAM_DIR", _upstream_checkout("LXST"))).resolve()
 
 
 def upstream_reticulum_root() -> Path:
@@ -32,7 +38,7 @@ def upstream_reticulum_root() -> Path:
     if configured:
         return Path(configured).resolve()
 
-    upstream = main_root() / "upstream" / "Reticulum"
+    upstream = _upstream_checkout("Reticulum")
     if upstream.exists():
         return upstream.resolve()
 

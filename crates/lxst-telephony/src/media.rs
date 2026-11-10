@@ -3,8 +3,8 @@
 use crate::Error;
 use lxst_codec2::{Codec, Mode};
 use lxst_core::{
-    AudioCodec, Codec2Backend, Codec2Mode, Codec2PacketCodec, CodecKind, Frame, OpusDecoderState,
-    OpusEncoderState, Profile, RawAudioFrame,
+    AudioCodec, Codec2Backend, Codec2Mode, Codec2PacketCodec, CodecKind, Frame, OpusEncoderState,
+    OpusPacketDecoder, Profile, RawAudioFrame,
 };
 
 struct Native(Box<Codec>);
@@ -74,31 +74,9 @@ impl Codec2Audio {
         result?;
         Ok(Frame::new(CodecKind::Codec2, payload))
     }
-    fn decode(&mut self, frame: &Frame) -> Result<RawAudioFrame, Error> {
-        if frame.codec != CodecKind::Codec2 {
-            return Err(Error::Audio("unexpected media codec".into()));
-        }
-        self.codec
-            .decode_into(&frame.payload, &mut self.pcm)
-            .map_err(|e| Error::Audio(e.to_string()))?;
-        let samples = self
-            .pcm
-            .iter()
-            .map(|v| f32::from(*v) / 32768.0)
-            .collect::<Vec<_>>();
-        self.pcm.fill(0);
-        Ok(RawAudioFrame {
-            channels: 1,
-            samples,
-        })
-    }
 }
 pub(crate) enum AudioEncoder {
     Opus(Box<OpusEncoderState>),
-    Codec2(Codec2Audio),
-}
-pub(crate) enum AudioDecoder {
-    Opus(Box<OpusDecoderState>),
     Codec2(Codec2Audio),
 }
 impl AudioEncoder {
@@ -115,17 +93,84 @@ impl AudioEncoder {
         }
     }
 }
-impl AudioDecoder {
-    pub(crate) fn new(profile: Profile) -> Result<Self, Error> {
-        match profile.audio_codec() {
-            AudioCodec::Opus(_) => Ok(Self::Opus(Box::new(OpusDecoderState::new(profile)?))),
-            AudioCodec::Codec2(_) => Ok(Self::Codec2(Codec2Audio::new(profile)?)),
+const CODEC2_SAMPLE_RATE_HZ: u32 = 8_000;
+
+/// Follows the codec and Codec2 mode of each received frame, as Python `LinkSource`
+/// does, and converts the output to the local profile's sample rate and channels.
+pub(crate) struct ReceiveDecoder {
+    sample_rate_hz: u32,
+    channels: u8,
+    opus: Option<OpusPacketDecoder>,
+    codec2: Vec<(Codec2Mode, Box<Codec>)>,
+}
+
+impl ReceiveDecoder {
+    pub(crate) fn new(profile: Profile) -> Self {
+        Self {
+            sample_rate_hz: profile.sample_rate_hz(),
+            channels: profile.channels(),
+            opus: None,
+            codec2: Vec::new(),
         }
     }
+
     pub(crate) fn decode_frame(&mut self, frame: &Frame) -> Result<RawAudioFrame, Error> {
-        match self {
-            Self::Opus(codec) => Ok(codec.decode_frame(frame)?),
-            Self::Codec2(codec) => codec.decode(frame),
+        match frame.codec {
+            CodecKind::Opus => {
+                if self.opus.is_none() {
+                    self.opus = Some(OpusPacketDecoder::new(self.sample_rate_hz, self.channels)?);
+                }
+                let decoder = self
+                    .opus
+                    .as_mut()
+                    .expect("Opus decoder exists after creation");
+                Ok(decoder.decode_packet(&frame.payload)?)
+            }
+            CodecKind::Codec2 => self.decode_codec2(&frame.payload),
+            other => Err(Error::Audio(format!("unexpected media codec {other:?}"))),
         }
+    }
+
+    fn decode_codec2(&mut self, payload: &[u8]) -> Result<RawAudioFrame, Error> {
+        let (&header, bytes) = payload
+            .split_first()
+            .ok_or_else(|| Error::Audio("empty Codec2 frame".into()))?;
+        let wire_mode =
+            Codec2Mode::from_header(header).map_err(|error| Error::Audio(error.to_string()))?;
+        let mode = match wire_mode {
+            Codec2Mode::Mode700C => Mode::Rate700C,
+            Codec2Mode::Mode1600 => Mode::Rate1600,
+            Codec2Mode::Mode3200 => Mode::Rate3200,
+            other => {
+                return Err(Error::Audio(format!(
+                    "unsupported native Codec2 mode {other:?}"
+                )));
+            }
+        };
+        let index = match self.codec2.iter().position(|(m, _)| *m == wire_mode) {
+            Some(index) => index,
+            None => {
+                let mut storage = Box::<Codec>::new_uninit();
+                Codec::initialise(&mut storage, mode);
+                // SAFETY: initialise completed in final storage above.
+                self.codec2
+                    .push((wire_mode, unsafe { storage.assume_init() }));
+                self.codec2.len() - 1
+            }
+        };
+        let codec = &mut self.codec2[index].1;
+        // Python decodes every whole native frame in the payload.
+        let mut pcm = vec![0i16; mode.samples()];
+        let mut samples = Vec::with_capacity(bytes.len() / mode.bytes() * mode.samples());
+        for chunk in bytes.chunks_exact(mode.bytes()) {
+            codec
+                .decode(chunk, &mut pcm)
+                .map_err(|_| Error::Audio("invalid native frame".into()))?;
+            samples.extend(pcm.iter().map(|v| f32::from(*v) / 32768.0));
+        }
+        let mono = RawAudioFrame::new(1, samples).map_err(|e| Error::Audio(e.to_string()))?;
+        mono.resampled(CODEC2_SAMPLE_RATE_HZ, self.sample_rate_hz)
+            .with_channels(self.channels)
+            .map_err(|e| Error::Audio(e.to_string()))
     }
 }

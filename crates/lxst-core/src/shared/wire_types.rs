@@ -1,6 +1,7 @@
 // Shared directly with lxst-embedded. The enclosing wire module supplies its
 // own error type; wire identifiers and conversions have one implementation.
-use crate::profile::{Profile, SignallingStatus};
+use crate::profile::{CallMode, Profile, SignallingStatus};
+const PREFERRED_MODE_BASE: u32 = 0xF0;
 const PREFERRED_PROFILE_BASE: u32 = 0xFF;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -36,6 +37,8 @@ impl CodecKind {
 pub enum Signal {
     Status(SignallingStatus),
     PreferredProfile(Profile),
+    /// Raw mode byte after `0xF0`; unknown modes are carried, not rejected.
+    PreferredMode(u8),
     Raw(u32),
 }
 
@@ -44,6 +47,7 @@ impl Signal {
         match self {
             Self::Status(status) => status.wire_value(),
             Self::PreferredProfile(profile) => PREFERRED_PROFILE_BASE + profile.wire_value(),
+            Self::PreferredMode(mode) => PREFERRED_MODE_BASE + mode as u32,
             Self::Raw(value) => value,
         }
     }
@@ -58,6 +62,8 @@ impl Signal {
             } else {
                 Self::Raw(value)
             }
+        } else if value >= PREFERRED_MODE_BASE {
+            Self::PreferredMode((value - PREFERRED_MODE_BASE) as u8)
         } else {
             Self::Raw(value)
         }
@@ -67,6 +73,12 @@ impl Signal {
 impl From<SignallingStatus> for Signal {
     fn from(value: SignallingStatus) -> Self {
         Self::Status(value)
+    }
+}
+
+impl From<CallMode> for Signal {
+    fn from(value: CallMode) -> Self {
+        Self::PreferredMode(value.wire_value())
     }
 }
 

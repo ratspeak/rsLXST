@@ -1,38 +1,38 @@
 {
-  "commit": "1194c9011fe6402edc7aebe7ffe9650ea3b1afee",
+  "commit": "6a329bf6d956ca8b15077d4c470afe4cb7c669cc",
   "dirty": false,
   "files": {
     "LXST/Codecs/Codec2.py": {
-      "bytes": 4107,
-      "sha256": "e43a0be0b3b5b66665c47f468e8b102040632652a88e73598fc8cdbad8d4819a"
+      "bytes": 4221,
+      "sha256": "bb5727a4da4083ceddc0f692a12cf4aa17c8ad48c4394bcc71a61d4bdf5d572c"
     },
     "LXST/Codecs/Opus.py": {
-      "bytes": 7806,
-      "sha256": "0f0e6f9ffa48e899a80220b33485226fc411d70cd07dce3ff0b7582a208deb03"
+      "bytes": 8688,
+      "sha256": "bd3c7b0d777bddfbfc80acd51765b3d9bf623ba02bc0f1d1a6e128a2ab5bdd48"
     },
     "LXST/Codecs/Raw.py": {
-      "bytes": 2316,
-      "sha256": "8bda42cb8602797e7ef62dd71bac074d2ec547278ec2b0bc5bf8bcb7c100a026"
+      "bytes": 2451,
+      "sha256": "bce228630cf26a0c3a72b8d068eef3f9bbd099f077184b4ebf467259a42dbb0f"
     },
     "LXST/Codecs/__init__.py": {
-      "bytes": 704,
-      "sha256": "48c3f7adaf9c89326a81abf29f394f9857b11ea17315b3790214eaf7d45c03de"
+      "bytes": 739,
+      "sha256": "7977e713a3b8fa2167762db122024d1dcad8d09a1e8d98d25099271b22abfe1b"
     },
     "LXST/Network.py": {
-      "bytes": 6172,
-      "sha256": "3da8422a5c2c73f6e9c7d8e784b1e9cb307d079ebb5bf99183fc5daadfbd9701"
+      "bytes": 6458,
+      "sha256": "1f58806a43b2eadac536e1062857493fede551688ef92414b427aaffd6492923"
     },
     "LXST/Primitives/Telephony.py": {
-      "bytes": 37026,
-      "sha256": "35b2a4093368223145a548ac671504b43a4dcdac62368db754b082fe40138825"
+      "bytes": 46484,
+      "sha256": "da13879d66d2f4f83ea3b39c141a6566f29fc0ef7c96636a4c0b5dd619c0ab1c"
     },
     "LXST/_version.py": {
       "bytes": 22,
-      "sha256": "12b90b908d930c15f5388aa2d8619adb408f7aee1972e9448be5df7d16cb53a3"
+      "sha256": "7080f58cb9c2fef8f8f0680c37a61bd4503726c43de73366087991604f131616"
     }
   },
   "missing_files": [],
-  "package_version": "0.4.5",
+  "package_version": "0.6.0",
   "remote": "https://github.com/markqvist/LXST.git",
   "upstream": "../upstream/LXST"
 }

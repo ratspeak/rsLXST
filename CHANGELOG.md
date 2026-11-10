@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+Parity with Python LXST 0.6.0. Several experimental APIs change.
+
+- Call modes: full and half duplex are signalled with the profile when the
+  callee rings, can be switched during a call, and squelch transmit in half
+  duplex. `TelephonyControl::Call` takes a `mode`.
+- The callee is established as soon as it answers. The answer retry and its
+  timeout are removed (`retry_answer`, `answer_retry_interval`,
+  `answer_timeout`).
+- Outgoing calls end unless the callee rings within `connect_timeout`
+  (5 seconds by default), and the 70 second wait runs from the call request,
+  path discovery included.
+- The line is busy while an outgoing call discovers its path.
+- A call to a peer with a known path sends no path request.
+- The first announce follows 5 seconds after start; the startup announce burst
+  is off by default.
+- Received audio is decoded by the codec of each frame, and a bad frame is
+  skipped instead of dropping its packet.
+- `Profile::buffer_frames` gives the receive buffer depth of each profile.
+- Raw float128 samples use IEEE binary128.
+- `lxst-embedded` sessions use the 60, 70, and 5 second ring, wait, and
+  connect times.
+
 ## 0.3.1 - 2026-11-08
 
 - Telephony wakes on Link events instead of polling, polls once a second when

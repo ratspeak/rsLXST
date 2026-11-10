@@ -404,6 +404,87 @@ impl OpusMonoDecoder {
     }
 }
 
+/// Decodes any legal Opus packet (2.5 to 120 ms, mono or stereo) to a fixed sample rate
+/// and channel count, as Python's libopus decoder does whatever the local profile is.
+pub struct OpusPacketDecoder {
+    sample_rate_hz: u32,
+    channels: u8,
+    decoders: [Option<OpusDecoder>; 2],
+}
+
+impl OpusPacketDecoder {
+    pub fn new(sample_rate_hz: u32, channels: u8) -> Result<Self, OpusCodecError> {
+        if !matches!(sample_rate_hz, 8_000 | 12_000 | 16_000 | 24_000 | 48_000) {
+            return Err(OpusCodecError::UnsupportedFrameDuration {
+                sample_rate_hz,
+                sample_frames: 0,
+            });
+        }
+        if !matches!(channels, 1 | 2) {
+            return Err(OpusCodecError::ChannelMismatch {
+                expected: 2,
+                actual: channels,
+            });
+        }
+        Ok(Self {
+            sample_rate_hz,
+            channels,
+            decoders: [None, None],
+        })
+    }
+
+    pub const fn sample_rate_hz(&self) -> u32 {
+        self.sample_rate_hz
+    }
+
+    pub const fn channels(&self) -> u8 {
+        self.channels
+    }
+
+    pub fn decode_packet(&mut self, packet: &[u8]) -> Result<RawAudioFrame, OpusCodecError> {
+        let inspected = inspect_opus_packet(packet)?;
+        let packet_channels = usize::from(inspected.channels);
+        let samples_per_frame =
+            inspected.samples_per_frame_48k * self.sample_rate_hz as usize / 48_000;
+        let slot = &mut self.decoders[packet_channels - 1];
+        if slot.is_none() {
+            *slot = Some(
+                OpusDecoder::new(self.sample_rate_hz as i32, packet_channels)
+                    .map_err(|err| OpusCodecError::Codec(err.to_string()))?,
+            );
+        }
+        let decoder = slot.as_mut().expect("decoder exists after creation");
+
+        let mut samples =
+            Vec::with_capacity(samples_per_frame * inspected.frames.len() * packet_channels);
+        let direct_toc = inspected.toc & !0x03;
+        for payload in inspected.frames {
+            let mut direct_packet = Vec::with_capacity(payload.len() + 1);
+            direct_packet.push(direct_toc);
+            direct_packet.extend_from_slice(payload);
+
+            let output_start = samples.len();
+            samples.resize(output_start + samples_per_frame * packet_channels, 0.0);
+            let decoded = decoder
+                .decode(
+                    &direct_packet,
+                    samples_per_frame,
+                    &mut samples[output_start..],
+                )
+                .map_err(|err| OpusCodecError::Codec(err.to_string()))?;
+            if decoded != samples_per_frame {
+                return Err(OpusCodecError::DecodedPacketDurationMismatch {
+                    expected: samples_per_frame,
+                    actual: decoded,
+                });
+            }
+        }
+
+        let frame = RawAudioFrame::new(inspected.channels, samples)?;
+        Ok(frame.with_channels(self.channels)?)
+    }
+}
+
 /// Returns a supported packet's total duration in samples at the Opus 48 kHz clock.
 ///
 /// The packet is structurally inspected using the framing rules from RFC 6716. Every legal
@@ -683,7 +764,7 @@ fn supports_direct_frame(sample_rate_hz: u32, sample_frames: usize) -> bool {
     sample_frames != 0 && (sample_rate_hz as usize).is_multiple_of(sample_frames)
 }
 
-fn resample_interleaved_linear(
+pub(crate) fn resample_interleaved_linear(
     input: &[f32],
     input_frames: usize,
     output_frames: usize,

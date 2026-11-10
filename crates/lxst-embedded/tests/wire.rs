@@ -123,7 +123,22 @@ fn shared_transitions_retain_full_rust_actions() {
     use lxst_embedded::{CallState, SignallingStatus};
     let mut embedded = CallState::outgoing(Some(Profile::BandwidthVeryLow));
     let mut host = lxst_core::TelephonyCall::outgoing(Some(lxst_core::Profile::BandwidthVeryLow));
-    for signal in [3, 4, 5, 6, 5, 6, 0x11f, 0x12f, 0, 1, u32::MAX] {
+    for signal in [
+        3,
+        4,
+        5,
+        6,
+        5,
+        6,
+        0x11f,
+        0x12f,
+        0xf1,
+        0xf2,
+        0xf3,
+        0,
+        1,
+        u32::MAX,
+    ] {
         let a = embedded.receive_signal(Signal::from_wire(signal));
         let b = host.receive_signal(lxst_core::Signal::from_wire(signal));
         assert_eq!(format!("{:?}", a.as_slice()), format!("{b:?}"));
@@ -132,13 +147,12 @@ fn shared_transitions_retain_full_rust_actions() {
     // Explore combinations including adversarial order to prove the shared
     // fixed action bound; session policy separately restricts allowed ordering.
     for first in 0..512 {
-        for second in [0, 3, 4, 5, 6, 0x11f, 0x12f, 0x13f] {
+        for second in [0, 3, 4, 5, 6, 0x11f, 0x12f, 0x13f, 0xf1, 0xf2] {
             let mut call = CallState::incoming();
             call.caller_identified(false, true);
             call.receive_signal(Signal::from_wire(first));
             call.answer();
             call.receive_signal(Signal::from_wire(second));
-            call.retry_answer();
             call.hangup(false);
             assert_eq!(call.status(), SignallingStatus::Available);
         }

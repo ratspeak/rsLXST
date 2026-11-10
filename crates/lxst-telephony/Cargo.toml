@@ -21,6 +21,7 @@ thiserror.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 hex.workspace = true
 rns-interface.workspace = true
 serial_test.workspace = true

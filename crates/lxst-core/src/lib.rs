@@ -21,10 +21,10 @@ mod wire;
 pub use codec2::{Codec2Backend, Codec2PacketCodec, Codec2PacketError};
 pub use opus::{
     OPUS_ENCODED_FRAME_MAX_BYTES, OPUS_ENCODED_PACKET_MAX_BYTES, OPUS_MONO_DECODE_SAMPLE_RATE_HZ,
-    OpusCodecError, OpusDecoderState, OpusEncoderState, OpusMonoDecoder,
+    OpusCodecError, OpusDecoderState, OpusEncoderState, OpusMonoDecoder, OpusPacketDecoder,
     opus_packet_duration_samples_48k,
 };
-pub use profile::{AudioCodec, OpusApplication, OpusProfile, Profile, SignallingStatus};
+pub use profile::{AudioCodec, CallMode, OpusApplication, OpusProfile, Profile, SignallingStatus};
 pub use raw::RawAudioFrame;
 pub use stream::{
     DropPolicy, FramePacketizer, FrameStreamEvent, FrameStreamState, JitterBuffer, JitterPush,

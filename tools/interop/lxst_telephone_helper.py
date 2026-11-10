@@ -86,6 +86,12 @@ def patch_headless_audio(Telephony, LXST, np, opus_available: bool) -> None:
             self.should_run = False
             self.samplerate = 48000
             self.channels = 1
+            self.buffer_max_height = 3
+            self.autostart_min = 1
+            self.streaming = False
+
+        def wait_for_frames(self):
+            return None
 
         def start(self):
             self.should_run = True
@@ -249,6 +255,8 @@ def patch_headless_audio(Telephony, LXST, np, opus_available: bool) -> None:
     Telephony.Pipeline = HeadlessPipeline
     Telephony.BandPass = NoopFilter
     Telephony.AGC = NoopFilter
+    if hasattr(Telephony, "EchoSuppressor"):
+        Telephony.EchoSuppressor = NoopFilter
 
     if not opus_available:
         original_get_codec = Telephony.Profiles.get_codec
@@ -277,6 +285,20 @@ def patch_signalling_events(Telephony) -> None:
     Telephony.Telephone.signalling_received = signalling_received
 
 
+def patch_open_pipelines_observer(Telephony) -> None:
+    # LXST_HELPER_OPEN_DELAY delays the caller's pipeline setup to model a slow or distant phone.
+    delay = float(os.environ.get("LXST_HELPER_OPEN_DELAY", "0") or 0)
+    original = Telephony.Telephone._Telephone__open_pipelines
+
+    def open_pipelines(self, identity):
+        emit({"event": "OPEN_PIPELINES"})
+        if delay and self.active_call is not None and getattr(self.active_call, "is_outgoing", False):
+            time.sleep(delay)
+        return original(self, identity)
+
+    Telephony.Telephone._Telephone__open_pipelines = open_pipelines
+
+
 def setup_python_stack():
     global _RNS, _LXST, _Telephony, _np, _opus_available
     _RNS, _LXST, codec2_stubbed = import_rns_lxst()
@@ -286,6 +308,7 @@ def setup_python_stack():
     _opus_available = python_opus_available(Telephony)
     patch_headless_audio(Telephony, _LXST, np, _opus_available)
     patch_signalling_events(Telephony)
+    patch_open_pipelines_observer(Telephony)
     _Telephony = Telephony
     _np = np
     return codec2_stubbed
@@ -299,6 +322,8 @@ def snapshot_event():
         active = {
             "identity_hash": bytes(remote.hash).hex() if remote else None,
             "profile": getattr(telephone.active_call, "profile", None),
+            "call_mode": getattr(telephone.active_call, "call_mode", None),
+            "squelched": bool(getattr(getattr(telephone.active_call, "packetizer", None), "squelched", False)),
             "status": telephone.call_status,
             "answered": bool(getattr(telephone.active_call, "answered", False)),
         }
@@ -322,6 +347,7 @@ def emit_ready(identity, telephone, codec2_stubbed):
             "app_name": "lxst",
             "primitive_name": "telephony",
             "lxst_version": lxst_version,
+            "rns_version": _RNS.__version__,
             "lxst_root": str(upstream_lxst_root()),
             "codec2_stubbed": bool(codec2_stubbed),
             "headless_audio": True,
@@ -491,7 +517,7 @@ def handle_command(command: dict, args) -> bool:
                 }
             )
             return True
-        _telephone.call(identity, profile=command.get("profile"))
+        _telephone.call(identity, profile=command.get("profile"), mode=command.get("mode"))
         emit(
             {
                 "event": "CALL_REQUESTED",
@@ -545,6 +571,16 @@ def handle_command(command: dict, args) -> bool:
         encoded = codec.encode(frame)
         sent = send_packetized_frame(codec, encoded)
         emit({"event": "OPUS_FRAME_SENT", "id": command.get("id"), "sent": sent})
+        return True
+
+    if cmd == "switch_mode":
+        _telephone.switch_mode(int(command["mode"]))
+        emit({"event": "MODE_SWITCHED", "id": command.get("id"), "mode": _telephone.active_mode})
+        return True
+
+    if cmd == "unsquelch":
+        _telephone.unsquelch_transmit()
+        emit({"event": "UNSQUELCHED", "id": command.get("id")})
         return True
 
     if cmd == "switch_profile":
