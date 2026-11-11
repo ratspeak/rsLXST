@@ -143,7 +143,7 @@ python_pins = {
         "RSLXST_PYTHON_LXST_COMMIT",
         json.loads((ROOT / "tools/reference/lxst_reference_lock.json").read_text())["commit"],
     ),
-    "Reticulum": ("RSLXST_PYTHON_RNS_COMMIT", "b48b96e61676504e0a4e527b33b9a0b4495c6872"),
+    "Reticulum": ("RSLXST_PYTHON_RNS_COMMIT", "cb1260891d1b6da8f6e9b21542c4f0cc0725cac4"),
 }
 for name, (variable, revision) in python_pins.items():
     pin = re.search(rf"^  {variable}: ([0-9a-f]{{40}})$", workflow, re.MULTILINE)
