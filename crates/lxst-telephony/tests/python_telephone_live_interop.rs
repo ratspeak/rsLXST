@@ -276,6 +276,7 @@ async fn spawn_rust_actor_and_tcp(
     let server = spawn_tcp_server(cfg, server_id, id_gen, actor_tx.clone(), handle_tx)
         .await
         .expect("spawn Rust TCP server");
+    server.owner.mark_registered();
 
     (actor_tx, server, handle_rx)
 }
