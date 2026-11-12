@@ -60,8 +60,8 @@
       "tier": "experimental",
       "compatibility": "reviewed-snapshot",
       "snapshot": "api/snapshots/lxst-telephony.txt",
-      "itemCount": 385,
-      "sha256": "1e7083b6302801c0d7f2417ff182e4dc559e1bf5a1ebde8638efaae26af62a24"
+      "itemCount": 391,
+      "sha256": "f36724579b879506b8cd4fd3e4378f9b594bf97f169764f1461dd64401679b7a"
     }
   ],
   "newPackages": []
