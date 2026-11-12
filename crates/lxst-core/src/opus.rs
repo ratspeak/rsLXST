@@ -1,3 +1,5 @@
+use std::panic::{AssertUnwindSafe, catch_unwind};
+
 use opus_rs::{Application, OpusDecoder, OpusEncoder};
 use thiserror::Error;
 
@@ -247,6 +249,7 @@ impl OpusEncoderState {
 
 pub struct OpusDecoderState {
     profile: Profile,
+    sample_rate_hz: u32,
     channels: u8,
     sample_frames: usize,
     subframe_count: usize,
@@ -269,6 +272,7 @@ impl OpusDecoderState {
 
         Ok(Self {
             profile,
+            sample_rate_hz: sample_rate,
             channels,
             sample_frames,
             subframe_count: packet_layout.subframe_count,
@@ -302,10 +306,14 @@ impl OpusDecoderState {
 
     fn decode_direct_packet(&mut self, frame: &Frame) -> Result<RawAudioFrame, OpusCodecError> {
         let mut samples = vec![0.0f32; self.sample_frames * usize::from(self.channels)];
-        let decoded = self
-            .decoder
-            .decode(&frame.payload, self.sample_frames, &mut samples)
-            .map_err(|err| OpusCodecError::Codec(err.to_string()))?;
+        let decoded = decode_guarded(
+            &mut self.decoder,
+            self.sample_rate_hz,
+            usize::from(self.channels),
+            &frame.payload,
+            self.sample_frames,
+            &mut samples,
+        )?;
         samples.truncate(decoded * usize::from(self.channels));
         Ok(RawAudioFrame::new(self.channels, samples)?)
     }
@@ -325,13 +333,14 @@ impl OpusDecoderState {
             let mut subpacket = Vec::with_capacity(subpayload.len() + 1);
             subpacket.push(toc);
             subpacket.extend_from_slice(subpayload);
-            self.decoder
-                .decode(
-                    &subpacket,
-                    self.subframe_sample_frames,
-                    &mut samples[start..end],
-                )
-                .map_err(|err| OpusCodecError::Codec(err.to_string()))?;
+            decode_guarded(
+                &mut self.decoder,
+                self.sample_rate_hz,
+                channels,
+                &subpacket,
+                self.subframe_sample_frames,
+                &mut samples[start..end],
+            )?;
         }
 
         Ok(RawAudioFrame::new(self.channels, samples)?)
@@ -383,14 +392,14 @@ impl OpusMonoDecoder {
 
             let output_start = samples.len();
             samples.resize(output_start + inspected.samples_per_frame_48k, 0.0);
-            let decoded = self
-                .decoder
-                .decode(
-                    &direct_packet,
-                    inspected.samples_per_frame_48k,
-                    &mut samples[output_start..],
-                )
-                .map_err(|err| OpusCodecError::Codec(err.to_string()))?;
+            let decoded = decode_guarded(
+                &mut self.decoder,
+                OPUS_MONO_DECODE_SAMPLE_RATE_HZ,
+                1,
+                &direct_packet,
+                inspected.samples_per_frame_48k,
+                &mut samples[output_start..],
+            )?;
             if decoded != inspected.samples_per_frame_48k {
                 return Err(OpusCodecError::DecodedPacketDurationMismatch {
                     expected: inspected.samples_per_frame_48k,
@@ -465,13 +474,14 @@ impl OpusPacketDecoder {
 
             let output_start = samples.len();
             samples.resize(output_start + samples_per_frame * packet_channels, 0.0);
-            let decoded = decoder
-                .decode(
-                    &direct_packet,
-                    samples_per_frame,
-                    &mut samples[output_start..],
-                )
-                .map_err(|err| OpusCodecError::Codec(err.to_string()))?;
+            let decoded = decode_guarded(
+                decoder,
+                self.sample_rate_hz,
+                packet_channels,
+                &direct_packet,
+                samples_per_frame,
+                &mut samples[output_start..],
+            )?;
             if decoded != samples_per_frame {
                 return Err(OpusCodecError::DecodedPacketDurationMismatch {
                     expected: samples_per_frame,
@@ -482,6 +492,31 @@ impl OpusPacketDecoder {
 
         let frame = RawAudioFrame::new(inspected.channels, samples)?;
         Ok(frame.with_channels(self.channels)?)
+    }
+}
+
+/// Peer packets reach opus-rs, which has panicked on hostile input (0.1.29: negative SILK LTP
+/// start index, fixed in 0.1.42). A panicked decoder's state is undefined, so it is replaced
+/// and the packet rejected. Remove once the pinned opus-rs passes a decoder fuzz campaign.
+fn decode_guarded(
+    decoder: &mut OpusDecoder,
+    sample_rate_hz: u32,
+    channels: usize,
+    packet: &[u8],
+    frame_size: usize,
+    output: &mut [f32],
+) -> Result<usize, OpusCodecError> {
+    match catch_unwind(AssertUnwindSafe(|| {
+        decoder.decode(packet, frame_size, output)
+    })) {
+        Ok(result) => result.map_err(|err| OpusCodecError::Codec(err.to_string())),
+        Err(_) => {
+            *decoder = OpusDecoder::new(sample_rate_hz as i32, channels)
+                .map_err(|err| OpusCodecError::Codec(err.to_string()))?;
+            Err(OpusCodecError::MalformedPacket(
+                "Opus decoder rejected the packet",
+            ))
+        }
     }
 }
 
@@ -1361,5 +1396,58 @@ mod tests {
                 Err(OpusCodecError::MalformedPacket(_))
             ));
         }
+    }
+
+    // Fuzz-found sequence: the last packet drives opus-rs 0.1.29 `silk_decode_core` to a
+    // negative LTP start index, which panics.
+    fn silk_panic_window() -> Vec<Vec<u8>> {
+        include_str!("../tests/data/opus_silk_negative_ltp_start.hex")
+            .lines()
+            .map(|line| hex::decode(line).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn mono_decoder_rejects_panicking_silk_frame_and_recovers() {
+        let window = silk_panic_window();
+        let (last, prefix) = window.split_last().unwrap();
+        let mut decoder = OpusMonoDecoder::new().unwrap();
+        for packet in prefix {
+            let _ = decoder.decode_packet(packet);
+        }
+        assert!(matches!(
+            decoder.decode_packet(last),
+            Err(OpusCodecError::MalformedPacket(_))
+        ));
+
+        let good = encoded_mono_packet(960, 32_000);
+        let recovered = decoder.decode_packet(&good).unwrap();
+        let fresh = OpusMonoDecoder::new()
+            .unwrap()
+            .decode_packet(&good)
+            .unwrap();
+        assert_eq!(recovered.samples, fresh.samples);
+    }
+
+    #[test]
+    fn packet_decoder_rejects_panicking_silk_frame_and_recovers() {
+        let window = silk_panic_window();
+        let (last, prefix) = window.split_last().unwrap();
+        let mut decoder = OpusPacketDecoder::new(OPUS_MONO_DECODE_SAMPLE_RATE_HZ, 1).unwrap();
+        for packet in prefix {
+            let _ = decoder.decode_packet(packet);
+        }
+        assert!(matches!(
+            decoder.decode_packet(last),
+            Err(OpusCodecError::MalformedPacket(_))
+        ));
+
+        let good = encoded_mono_packet(960, 32_000);
+        let recovered = decoder.decode_packet(&good).unwrap();
+        let fresh = OpusPacketDecoder::new(OPUS_MONO_DECODE_SAMPLE_RATE_HZ, 1)
+            .unwrap()
+            .decode_packet(&good)
+            .unwrap();
+        assert_eq!(recovered.samples, fresh.samples);
     }
 }
