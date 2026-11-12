@@ -4793,4 +4793,15 @@ async fn answer_no_link_cost(
     response_tx
         .send(TransportQueryResponse::FloatResult(None))
         .unwrap();
+    // The link request then asks which MTU to signal; none is known here.
+    let rpc = transport_rx.recv().await.unwrap();
+    let TransportMessage::Rpc { query, response_tx } = rpc else {
+        panic!("expected next-hop MTU query, got {rpc:?}");
+    };
+    assert!(
+        matches!(query, TransportQuery::GetNextHopHardwareMtu { dest } if dest == destination_hash)
+    );
+    response_tx
+        .send(TransportQueryResponse::IntResult(-1))
+        .unwrap();
 }
