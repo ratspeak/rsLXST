@@ -24,9 +24,9 @@ Parity with Python LXST 0.6.0. Several experimental APIs change.
 - `opus-rs` moves from 0.1.29 to 0.1.42, which fixes a decoder panic on a
   crafted SILK frame. A decoder panic on a peer's packet now rejects the
   packet and resets the decoder.
-- The Medium voice profile encodes narrowband SILK at its 8 kbps ceiling, as
-  libopus does under Python LXST; it was wideband. The encoder takes the
-  profile's own sample rate.
+- The Medium voice profile stays wideband SILK at its 8 kbps ceiling, now by
+  an explicit bandwidth setting; the encoder takes the profile's own sample
+  rate. (libopus 1.5 picks wideband there and libopus 1.6 narrowband.)
 - `lxst-embedded` sessions default to the 60, 70, and 5 second ring, wait,
   and connect times; `SessionConfig::times` (`CallTimes`) changes them.
 - A caller is established once it has handled CONNECTING, so a lost

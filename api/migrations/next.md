@@ -39,7 +39,6 @@ matches on `lxst_telephony::Error` need a new arm.
   settings, as upstream does.
 - Call links signal the next hop's MTU when Reticulum's `link_mtu_discovery`
   is on (`RNS/Link.py:392-397`).
-- The Medium voice profile encodes narrowband SILK at its 8 kbps ceiling, as
-  libopus does under Python LXST. It was wideband. Decoders are unaffected.
+- The Medium voice profile still encodes wideband SILK at its 8 kbps ceiling.
 - `opus-rs` is pinned at 0.1.42 (was 0.1.29).
 

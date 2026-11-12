@@ -1,9 +1,9 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-use opus_rs::{Application, OpusDecoder, OpusEncoder};
+use opus_rs::{Application, Bandwidth, OpusDecoder, OpusEncoder};
 use thiserror::Error;
 
-use crate::{AudioCodec, CodecKind, Frame, OpusApplication, Profile, RawAudioFrame};
+use crate::{AudioCodec, CodecKind, Frame, OpusApplication, OpusProfile, Profile, RawAudioFrame};
 
 /// The fixed output clock used by the interoperable Opus packet decoder.
 pub const OPUS_MONO_DECODE_SAMPLE_RATE_HZ: u32 = 48_000;
@@ -90,6 +90,11 @@ impl OpusEncoderState {
         .map_err(|err| OpusCodecError::Codec(err.to_string()))?;
         encoder.bitrate_bps = opus_profile.bitrate_ceiling() as i32;
         encoder.use_cbr = false;
+        if matches!(opus_profile, OpusProfile::VoiceMedium) {
+            // At 8 kbps libopus builds disagree (1.5 wideband, 1.6 narrowband); wideband is
+            // what this profile has always sent.
+            encoder.set_bandwidth(Bandwidth::Wideband);
+        }
 
         Ok(Self {
             profile,
@@ -1067,7 +1072,7 @@ mod tests {
     }
 
     #[test]
-    fn opus_medium_uses_narrowband_silk_as_libopus_does() {
+    fn opus_medium_uses_wideband_silk_at_low_bitrate() {
         let profile = Profile::QualityMedium;
         let mut source = source_for(profile);
         let frame = source.next_raw_frame().unwrap();
@@ -1075,9 +1080,7 @@ mod tests {
 
         let encoded = encoder.encode_frame(&frame).unwrap();
 
-        // Config 1, SILK narrowband 20 ms: libopus 1.6.1 under LXST 0.6.0 picks the same
-        // bandwidth at Medium's 8 kbps ceiling.
-        assert_eq!(encoded.payload[0] & !0x03, 0x08);
+        assert_eq!(encoded.payload[0] & !0x03, 0x48);
         assert!(encoded.payload.len() <= profile.opus_payload_ceiling_bytes().unwrap());
     }
 
