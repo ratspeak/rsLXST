@@ -3367,7 +3367,7 @@ async fn python_caller_gets_busy_while_rust_service_discovers_a_path() {
     pair.shutdown().await;
 }
 
-// Link request stamps under enforcement (Link.py:187-200, :300-395@RNS 1.6.0).
+// Link request stamps under enforcement (Link.py 1.6.0).
 // LXST 0.6.0 has no stamp code of its own; its Telephone destination keeps the
 // default link cost LR_COST = 12.5.
 
