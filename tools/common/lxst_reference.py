@@ -24,9 +24,7 @@ def main_root() -> Path:
 
 
 def _upstream_checkout(name: str) -> Path:
-    # A candidate worktree holds the next reference release until the pins move.
-    candidate = main_root() / "upstream" / "candidate" / name
-    return candidate if candidate.exists() else main_root() / "upstream" / name
+    return main_root() / "upstream" / name
 
 
 def upstream_lxst_root() -> Path:
