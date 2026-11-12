@@ -147,6 +147,9 @@ jobs:
         run: brew install opus libogg
       - name: Install Python interop deps
         run: python -m pip install --upgrade pip && python -m pip install numpy cryptography pyserial cffi "audioop-lts; python_version >= '3.13'"
+      # The voice relay interop tests run an rnsd-rs transport node.
+      - run: cargo build -p rns-tools --bin rnsd-rs --locked
+        working-directory: rsReticulum
       - run: cargo test --workspace --locked
         working-directory: rsLXST
 

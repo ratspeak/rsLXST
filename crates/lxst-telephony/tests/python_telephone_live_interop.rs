@@ -1,7 +1,9 @@
 //! Opt-in live interoperability against Python LXST over real TCP interfaces.
 //!
-//! Tests are ignored by default, except the link request stamp tests at the
-//! end. Run the rest explicitly with the command documented in the repository README.
+//! Tests are ignored by default, except the link request stamp tests and the
+//! calls across a relay of the other kind at the end, which need `rnsd-rs`
+//! (`cargo build -p rns-tools --bin rnsd-rs` in rsReticulum, or `RUST_RNSD_BIN`).
+//! Run the rest explicitly with the command documented in the repository README.
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -18,7 +20,8 @@ use rns_interface::tcp::{TcpClientConfig, TcpServerConfig, spawn_tcp_client, spa
 use rns_transport::actor::TransportActor;
 use rns_transport::constants::InterfaceDirection as TransportInterfaceDirection;
 use rns_transport::messages::{
-    AnnounceHandlerEvent, InterfaceEntry, OutboundRequest, TransportMessage,
+    AnnounceHandlerEvent, InterfaceEntry, OutboundRequest, TransportMessage, TransportQuery,
+    TransportQueryResponse,
 };
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -78,6 +81,7 @@ struct PythonTelephoneHost {
     stdin: ChildStdin,
     events: std::sync::mpsc::Receiver<Value>,
     stashed_events: Mutex<Vec<Value>>,
+    history: Mutex<Vec<Value>>,
     storage: PathBuf,
     log_path: PathBuf,
 }
@@ -101,6 +105,16 @@ impl PythonTelephoneHost {
         enable_transport: bool,
         env: &[(&str, &str)],
     ) -> Self {
+        Self::spawn_script(&helper_script(), port, tcp_role, enable_transport, env)
+    }
+
+    fn spawn_script(
+        script: &Path,
+        port: u16,
+        tcp_role: &str,
+        enable_transport: bool,
+        env: &[(&str, &str)],
+    ) -> Self {
         let storage = temp_storage("rs-lxst-python-telephone-live");
         std::fs::create_dir_all(&storage).expect("create Python helper storage");
         let log_path = storage.join("helper.stderr.log");
@@ -109,7 +123,7 @@ impl PythonTelephoneHost {
         let mut command = Command::new(python_interpreter());
         command
             .env("PYTHONDONTWRITEBYTECODE", "1")
-            .arg(helper_script())
+            .arg(script)
             .arg("--mode")
             .arg("host")
             .arg("--storage-dir")
@@ -156,6 +170,7 @@ impl PythonTelephoneHost {
             stdin,
             events,
             stashed_events: Mutex::new(Vec::new()),
+            history: Mutex::new(Vec::new()),
             storage,
             log_path,
         }
@@ -181,11 +196,19 @@ impl PythonTelephoneHost {
                 .events
                 .recv_timeout(remaining.min(Duration::from_millis(250)))
             {
-                Ok(event) if event["event"] == name => return Some(event),
-                Ok(event) if event["event"] == "FATAL" || event["event"] == "ERROR" => {
-                    panic!("Python helper emitted failure event: {event}")
+                Ok(event) => {
+                    self.history
+                        .lock()
+                        .expect("event history")
+                        .push(event.clone());
+                    if event["event"] == name {
+                        return Some(event);
+                    }
+                    if event["event"] == "FATAL" || event["event"] == "ERROR" {
+                        panic!("Python helper emitted failure event: {event}")
+                    }
+                    self.stashed_events.lock().expect("event stash").push(event);
                 }
-                Ok(event) => self.stashed_events.lock().expect("event stash").push(event),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     panic!("Python helper stdout closed before {name}")
@@ -1122,113 +1145,26 @@ async fn python_telephone_announce_reaches_rust_transport() {
 
 #[serial_test::serial(python_lxst_live)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "requires opt-in live Python LXST/Reticulum TCP interop"]
 async fn rust_to_rust_call_establishes_through_python_transport_hub() {
-    let port = free_tcp_port();
-    let hub = PythonTelephoneHost::spawn_transport_hub(port);
-    let ready = hub.wait_event("READY", Duration::from_secs(10));
-    assert_eq!(ready["headless_audio"], true);
-
-    let mut caller = RustHubNode::spawn("rust-hub-caller", port, 11_001).await;
-    let mut caller_announces = register_telephony_announce_handler(&caller.actor_tx).await;
-    let mut callee = RustHubNode::spawn("rust-hub-callee", port, 12_001).await;
-
-    let announce = wait_for_announce(
-        &mut caller_announces,
-        callee.destination_hash,
-        Duration::from_secs(20),
-        "callee through Python hub",
-    )
-    .await;
-    assert_eq!(announce.name_hash, name_hash(TELEPHONY_DESTINATION_NAME));
-    assert!(
-        announce.public_key.is_some(),
-        "Rust callee announce through Python hub did not include a public key"
-    );
-    assert!(
-        announce.hops >= 1,
-        "callee announce should arrive through at least one transport hop"
-    );
-
-    caller
+    let mut pair = RustCallPair::connect().await;
+    pair.establish(Profile::QualityMedium).await;
+    pair.caller
         .control_tx
-        .send(TelephonyControl::Call {
-            remote_identity: callee.identity.hash,
-            profile: Some(Profile::QualityMedium),
-            mode: None,
-            discovery_timeout: Duration::from_secs(10),
+        .send(TelephonyControl::Hangup {
+            ring_timeout: false,
         })
         .await
-        .expect("send caller Call control");
-
-    wait_matching_service_event(
-        &mut caller.event_rx,
-        Duration::from_secs(10),
-        "outgoing call started through Python hub",
-        |event| matches!(event, TelephonyServiceEvent::OutgoingCallStarted { .. }),
-    )
-    .await;
-
-    let incoming = wait_matching_service_event(
-        &mut callee.event_rx,
-        Duration::from_secs(15),
-        "incoming call through Python hub",
-        |event| matches!(event, TelephonyServiceEvent::IncomingCall { .. }),
-    )
-    .await;
-    let incoming_link_id = match incoming {
-        TelephonyServiceEvent::IncomingCall {
-            link_id,
-            remote_identity,
-        } => {
-            assert_eq!(remote_identity, caller.identity.hash);
-            link_id
-        }
-        other => panic!("expected IncomingCall, got {other:?}"),
-    };
-    lxst_telephony::request_answer(&callee.control_tx, incoming_link_id)
-        .await
-        .expect("answer callee call");
-
-    wait_matching_service_event(
-        &mut caller.event_rx,
-        Duration::from_secs(15),
-        "caller established through Python hub",
-        |event| {
-            matches!(
-                event,
-                TelephonyServiceEvent::Snapshot(snapshot)
-                    if snapshot.active_call.as_ref().is_some_and(|call| {
-                        call.status == SignallingStatus::Established
-                            && call.role == CallRole::Outgoing
-                            && call.remote_identity == callee.identity.hash
-                    })
-            )
-        },
-    )
-    .await;
-
-    wait_matching_service_event(
-        &mut callee.event_rx,
-        Duration::from_secs(15),
-        "callee established through Python hub",
-        |event| {
-            matches!(
-                event,
-                TelephonyServiceEvent::Snapshot(snapshot)
-                    if snapshot.active_call.as_ref().is_some_and(|call| {
-                        call.status == SignallingStatus::Established
-                            && call.role == CallRole::Incoming
-                            && call.remote_identity == caller.identity.hash
-                    })
-            )
-        },
-    )
-    .await;
-
-    caller.shutdown().await;
-    callee.shutdown().await;
-    drop(hub);
+        .expect("send caller hangup");
+    for node in [&mut pair.caller, &mut pair.callee] {
+        wait_matching_service_event(
+            &mut node.event_rx,
+            Duration::from_secs(15),
+            "call terminated through upstream transport",
+            |event| matches!(event, TelephonyServiceEvent::CallTerminated { .. }),
+        )
+        .await;
+    }
+    pair.shutdown().await;
 }
 
 #[serial_test::serial(python_lxst_live)]
@@ -3545,4 +3481,689 @@ async fn python_outgoing_call_reaches_an_enforcing_rust_telephone_only_when_stam
         accepted_read_task.abort();
         server.read_task.abort();
     }
+}
+
+// Calls across a relay of the other kind: two upstream Telephones through an
+// `rnsd-rs` transport, and two Rust Telephones through an upstream transport.
+
+const VOICE_MEDIA_FRAMES: usize = 34;
+const SWITCH_MEDIA_FRAMES: usize = 10;
+const CALL_SEQUENCE_EVENTS: [&str; 4] = ["SIGNALS", "RINGING", "ESTABLISHED", "ENDED"];
+
+fn relay_helper_script() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/python_telephone_relay_helper.py")
+}
+
+fn rnsd_rs_binary() -> PathBuf {
+    if let Some(path) = std::env::var_os("RUST_RNSD_BIN") {
+        return PathBuf::from(path);
+    }
+    let exe = format!("rnsd-rs{}", std::env::consts::EXE_SUFFIX);
+    let mut candidates = Vec::new();
+    if let Some(target) = std::env::var_os("CARGO_TARGET_DIR") {
+        let target = PathBuf::from(target);
+        candidates.push(target.join("debug").join(&exe));
+        candidates.push(target.join("release").join(&exe));
+    }
+    let rs_reticulum = repo_root().join("../rsReticulum/target");
+    candidates.push(rs_reticulum.join("debug").join(&exe));
+    candidates.push(rs_reticulum.join("release").join(&exe));
+    candidates
+        .into_iter()
+        .find(|path| path.is_file())
+        .unwrap_or_else(|| {
+            panic!(
+                "rnsd-rs not found: build it with `cargo build -p rns-tools --bin rnsd-rs` in \
+                 rsReticulum, or set RUST_RNSD_BIN"
+            )
+        })
+}
+
+/// An `rnsd-rs` transport node with one TCP server interface.
+struct RustRelay {
+    child: Child,
+    dir: PathBuf,
+    port: u16,
+}
+
+impl RustRelay {
+    fn spawn() -> Self {
+        let dir = temp_storage("rs-lxst-rnsd-rs-relay");
+        std::fs::create_dir_all(&dir).expect("create rnsd-rs config dir");
+        let port = free_tcp_port();
+        std::fs::write(
+            dir.join("config"),
+            format!(
+                "[reticulum]\n  enable_transport = yes\n  share_instance = no\n\n\
+                 [logging]\n  loglevel = 4\n\n[interfaces]\n  [[Relay]]\n    \
+                 type = TCPServerInterface\n    enabled = yes\n    listen_ip = 127.0.0.1\n    \
+                 listen_port = {port}\n"
+            ),
+        )
+        .expect("write rnsd-rs config");
+        let log = std::fs::File::create(dir.join("rnsd.log")).expect("create rnsd-rs log");
+        let child = Command::new(rnsd_rs_binary())
+            .arg("--config")
+            .arg(&dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(log.try_clone().expect("clone rnsd-rs log")))
+            .stderr(Stdio::from(log))
+            .spawn()
+            .expect("spawn rnsd-rs");
+        let relay = Self { child, dir, port };
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
+            assert!(
+                Instant::now() < deadline,
+                "rnsd-rs never listened on {port}:\n{}",
+                relay.log()
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        relay
+    }
+
+    fn log(&self) -> String {
+        std::fs::read_to_string(self.dir.join("rnsd.log")).unwrap_or_default()
+    }
+}
+
+impl Drop for RustRelay {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+impl PythonTelephoneHost {
+    /// Every event read so far, after reading whatever arrives within `settle`.
+    fn history_after(&self, settle: Duration) -> Vec<Value> {
+        let _ = self.try_wait_event("__history__", settle);
+        self.history.lock().expect("event history").clone()
+    }
+
+    fn history_len(&self) -> usize {
+        self.history_after(Duration::ZERO).len()
+    }
+
+    /// The codec header byte, channels and frame time upstream's `Profiles` gives `profile`.
+    fn profile_codec(&mut self, profile: Profile) -> UpstreamProfileCodec {
+        self.send(json!({"cmd": "profile_codec", "profile": profile.wire_value()}));
+        let event = self.wait_event("PROFILE_CODEC", Duration::from_secs(10));
+        let codec = UpstreamProfileCodec {
+            codec: event["codec"].as_u64().expect("codec header byte"),
+            stereo: event["channels"].as_u64().expect("channels") == 2,
+        };
+        assert_eq!(event["frame_ms"], profile.frame_time_ms());
+        codec
+    }
+
+    fn wait_active_profile(&mut self, profile: Profile) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            self.send(json!({"cmd": "snapshot"}));
+            let snapshot = self.wait_event("SNAPSHOT", Duration::from_secs(5));
+            if snapshot["active_profile"].as_u64() == Some(u64::from(profile.wire_value())) {
+                return;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "Python Telephone never reported profile {}: {snapshot}",
+                profile.name()
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
+}
+
+struct UpstreamProfileCodec {
+    codec: u64,
+    stereo: bool,
+}
+
+/// The call events one Telephone records, in order: received signals and callbacks.
+fn call_sequence(history: &[Value]) -> Vec<String> {
+    history
+        .iter()
+        .filter_map(|event| {
+            let name = event["event"].as_str()?;
+            if !CALL_SEQUENCE_EVENTS.contains(&name) {
+                return None;
+            }
+            Some(if name == "SIGNALS" {
+                format!("SIGNALS {}", event["signals"])
+            } else {
+                name.to_string()
+            })
+        })
+        .collect()
+}
+
+/// Two upstream Telephones, either linked directly or both clients of an `rnsd-rs` relay.
+struct PythonCallPair {
+    caller: PythonTelephoneHost,
+    callee: PythonTelephoneHost,
+    callee_destination: String,
+    relay: Option<RustRelay>,
+}
+
+/// One direction of a media run between upstream Telephones.
+struct PythonMediaRun {
+    sent: Vec<Value>,
+    received: Vec<Value>,
+    decoded: Vec<Value>,
+}
+
+impl PythonCallPair {
+    fn connect(through_rust_relay: bool) -> Self {
+        let script = relay_helper_script();
+        let (relay, port, callee_role) = if through_rust_relay {
+            let relay = RustRelay::spawn();
+            let port = relay.port;
+            (Some(relay), port, "client")
+        } else {
+            (None, free_tcp_port(), "server")
+        };
+        let mut callee = PythonTelephoneHost::spawn_script(&script, port, callee_role, false, &[]);
+        let callee_ready = callee.wait_event("READY", Duration::from_secs(20));
+        let caller = PythonTelephoneHost::spawn_script(&script, port, "client", false, &[]);
+        let caller_ready = caller.wait_event("READY", Duration::from_secs(20));
+        for ready in [&callee_ready, &caller_ready] {
+            assert_eq!(ready["lxst_version"], "0.6.0");
+            assert_eq!(ready["rns_version"], "1.6.0");
+            assert_eq!(ready["opus_available"], true, "live voice media needs Opus");
+        }
+        let callee_destination = callee_ready["destination_hash"]
+            .as_str()
+            .expect("callee destination")
+            .to_string();
+        callee.send(json!({"cmd": "announce"}));
+        callee.wait_event("ANNOUNCED", Duration::from_secs(10));
+        let mut pair = Self {
+            caller,
+            callee,
+            callee_destination,
+            relay,
+        };
+        pair.caller.send(json!({
+            "cmd": "hops",
+            "destination_hash": pair.callee_destination,
+            "timeout": 15,
+        }));
+        let hops = pair.caller.wait_event("HOPS", Duration::from_secs(20));
+        assert_eq!(
+            hops["has_path"], true,
+            "caller has no path to the callee: {hops}"
+        );
+        let expected_hops = if through_rust_relay { 2 } else { 1 };
+        assert_eq!(
+            hops["hops"],
+            expected_hops,
+            "hops from caller to callee{}",
+            pair.relay_log()
+        );
+        pair
+    }
+
+    fn relay_log(&self) -> String {
+        self.relay
+            .as_ref()
+            .map(|relay| format!("\nrnsd-rs log:\n{}", relay.log()))
+            .unwrap_or_default()
+    }
+
+    fn establish(&mut self, profile: Profile) {
+        self.caller.send(json!({
+            "cmd": "call",
+            "target_destination_hash": self.callee_destination,
+            "profile": profile.wire_value(),
+        }));
+        self.caller
+            .wait_event("CALL_REQUESTED", Duration::from_secs(20));
+        self.callee.wait_event("RINGING", Duration::from_secs(15));
+        // The callee selects the caller's profile from the signal sent on RINGING.
+        let profile_signal = python_preferred_profile_signal(profile);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let signals = self.callee.wait_event("SIGNALS", Duration::from_secs(10));
+            if signals["signals"]
+                .as_array()
+                .is_some_and(|all| all.iter().any(|v| v.as_u64() == Some(profile_signal)))
+            {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "no profile signal reached the callee"
+            );
+        }
+        self.callee.send(json!({"cmd": "answer"}));
+        let answered = self.callee.wait_event("ANSWERED", Duration::from_secs(5));
+        assert_eq!(answered["accepted"], true);
+        self.callee
+            .wait_event("ESTABLISHED", Duration::from_secs(10));
+        self.caller
+            .wait_event("ESTABLISHED", Duration::from_secs(10));
+        self.caller.wait_active_profile(profile);
+        self.callee.wait_active_profile(profile);
+    }
+
+    fn hang_up(&mut self) {
+        self.caller.send(json!({"cmd": "hangup"}));
+        self.caller.wait_event("ENDED", Duration::from_secs(10));
+        self.callee.wait_event("ENDED", Duration::from_secs(15));
+    }
+
+    /// Both Telephones send `frames` paced call frames at once; returns
+    /// caller-to-callee and callee-to-caller.
+    fn exchange_media(&mut self, frames: usize) -> (PythonMediaRun, PythonMediaRun) {
+        let caller_start = self.caller.history_len();
+        let callee_start = self.callee.history_len();
+        self.caller
+            .send(json!({"cmd": "send_call_frames", "count": frames}));
+        self.callee
+            .send(json!({"cmd": "send_call_frames", "count": frames}));
+        let limit = Duration::from_secs(10) + Duration::from_millis(60 * frames as u64);
+        for host in [&self.caller, &self.callee] {
+            let done = host.wait_event("CALL_FRAMES_DONE", limit);
+            assert_eq!(done["sent"], frames, "{done}");
+        }
+        let caller = self.caller.history_after(Duration::from_secs(1))[caller_start..].to_vec();
+        let callee = self.callee.history_after(Duration::from_secs(1))[callee_start..].to_vec();
+        let pick = |history: &[Value], name: &str| -> Vec<Value> {
+            history
+                .iter()
+                .filter(|event| event["event"] == name)
+                .cloned()
+                .collect()
+        };
+        let received = |history: &[Value]| -> Vec<Value> {
+            pick(history, "FRAME_RECEIVED")
+                .into_iter()
+                .flat_map(|event| event["frames"].as_array().cloned().unwrap_or_default())
+                .collect()
+        };
+        (
+            PythonMediaRun {
+                sent: pick(&caller, "FRAME_SENT"),
+                received: received(&callee),
+                decoded: pick(&callee, "MEDIA_FRAME"),
+            },
+            PythonMediaRun {
+                sent: pick(&callee, "FRAME_SENT"),
+                received: received(&caller),
+                decoded: pick(&caller, "MEDIA_FRAME"),
+            },
+        )
+    }
+
+    fn assert_media(&mut self, frames: usize, profile: Profile) {
+        let expected = self.caller.profile_codec(profile);
+        let (forward, backward) = self.exchange_media(frames);
+        for (label, run) in [
+            ("caller to callee", forward),
+            ("callee to caller", backward),
+        ] {
+            assert_eq!(run.sent.len(), frames, "{label}: frames sent");
+            let strip = |frame: &Value| json!([frame["codec"], frame["stereo"], frame["digest"]]);
+            assert_eq!(
+                run.received.iter().map(strip).collect::<Vec<_>>(),
+                run.sent.iter().map(strip).collect::<Vec<_>>(),
+                "{label}: frames received differ from frames sent{}",
+                self.relay_log()
+            );
+            for frame in &run.sent {
+                assert_eq!(frame["codec"], expected.codec, "{label}: {frame}");
+                assert_eq!(frame["stereo"], expected.stereo, "{label}: {frame}");
+            }
+            assert_eq!(run.decoded.len(), frames, "{label}: frames decoded");
+            let output_frames = python_headless_output_frames(profile);
+            for decoded in &run.decoded {
+                assert_eq!(decoded["decoded"], true);
+                assert_eq!(decoded["shape"][0], output_frames, "{label}: {decoded}");
+            }
+        }
+    }
+
+    fn switch_profile(&mut self, profile: Profile) {
+        self.caller
+            .send(json!({"cmd": "switch_profile", "profile": profile.wire_value()}));
+        let switched = self
+            .caller
+            .wait_event("PROFILE_SWITCHED", Duration::from_secs(5));
+        assert_eq!(switched["profile"], profile.wire_value());
+        self.callee.wait_active_profile(profile);
+    }
+}
+
+#[serial_test::serial(python_lxst_live)]
+#[test]
+fn python_call_through_rust_relay_signals_as_a_direct_python_call() {
+    let mut sequences = Vec::new();
+    for through_rust_relay in [false, true] {
+        let mut pair = PythonCallPair::connect(through_rust_relay);
+        pair.establish(Profile::QualityMedium);
+        pair.hang_up();
+        let settle = Duration::from_millis(500);
+        sequences.push((
+            call_sequence(&pair.caller.history_after(settle)),
+            call_sequence(&pair.callee.history_after(settle)),
+        ));
+    }
+    let (direct, relayed) = (&sequences[0], &sequences[1]);
+    assert!(
+        direct.0.iter().any(|event| event == "ESTABLISHED")
+            && direct.1.iter().any(|event| event == "RINGING"),
+        "direct reference call is incomplete: {direct:?}"
+    );
+    assert_eq!(relayed.0, direct.0, "caller sequence through rnsd-rs");
+    assert_eq!(relayed.1, direct.1, "callee sequence through rnsd-rs");
+}
+
+#[serial_test::serial(python_lxst_live)]
+#[test]
+fn python_voice_media_crosses_rust_relay_both_ways() {
+    let mut pair = PythonCallPair::connect(true);
+    pair.establish(Profile::QualityMedium);
+    pair.assert_media(VOICE_MEDIA_FRAMES, Profile::QualityMedium);
+    pair.hang_up();
+}
+
+#[serial_test::serial(python_lxst_live)]
+#[test]
+fn python_profile_switches_cross_rust_relay() {
+    let mut pair = PythonCallPair::connect(true);
+    pair.establish(Profile::QualityHigh);
+    for profile in [Profile::QualityMedium, Profile::QualityMax] {
+        pair.switch_profile(profile);
+        pair.assert_media(SWITCH_MEDIA_FRAMES, profile);
+    }
+    pair.hang_up();
+}
+
+/// Two Rust Telephones, both clients of an upstream transport.
+struct RustCallPair {
+    hub: PythonTelephoneHost,
+    caller: RustHubNode,
+    callee: RustHubNode,
+}
+
+#[derive(Default)]
+struct RustMediaTally {
+    sent: usize,
+    received: Vec<(u8, Option<u8>)>,
+    decoded: usize,
+}
+
+impl RustCallPair {
+    async fn connect() -> Self {
+        let port = free_tcp_port();
+        let hub =
+            PythonTelephoneHost::spawn_script(&relay_helper_script(), port, "server", true, &[]);
+        let ready = hub.wait_event("READY", Duration::from_secs(20));
+        assert_eq!(ready["rns_version"], "1.6.0");
+        assert_eq!(
+            ready["opus_available"], true,
+            "upstream TOC vectors need Opus"
+        );
+        let caller = RustHubNode::spawn("rust-relay-caller", port, 21_001).await;
+        let mut caller_announces = register_telephony_announce_handler(&caller.actor_tx).await;
+        let callee = RustHubNode::spawn("rust-relay-callee", port, 22_001).await;
+        // One start-up announce can be missed while the hub spawns the callee's interface.
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            match tokio::time::timeout(Duration::from_secs(3), caller_announces.recv()).await {
+                Ok(Some(event)) if event.destination_hash == callee.destination_hash => break,
+                Ok(Some(_)) => continue,
+                Ok(None) => panic!("announce handler channel closed"),
+                Err(_) => {
+                    assert!(
+                        tokio::time::Instant::now() < deadline,
+                        "callee announce never crossed the upstream transport:\n{}",
+                        hub.stderr_log()
+                    );
+                    callee
+                        .control_tx
+                        .send(TelephonyControl::Announce)
+                        .await
+                        .expect("re-announce callee");
+                }
+            }
+        }
+        let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+        caller
+            .actor_tx
+            .send(TransportMessage::Rpc {
+                query: TransportQuery::HopsTo {
+                    dest: callee.destination_hash,
+                },
+                response_tx,
+            })
+            .await
+            .expect("query hops");
+        let hops = tokio::time::timeout(Duration::from_secs(5), response_rx)
+            .await
+            .expect("hops reply")
+            .expect("hops reply channel");
+        assert!(
+            matches!(hops, TransportQueryResponse::IntResult(2)),
+            "the call must cross the upstream transport: {hops:?}"
+        );
+        Self {
+            hub,
+            caller,
+            callee,
+        }
+    }
+
+    async fn establish(&mut self, profile: Profile) {
+        self.caller
+            .control_tx
+            .send(TelephonyControl::Call {
+                remote_identity: self.callee.identity.hash,
+                profile: Some(profile),
+                mode: None,
+                discovery_timeout: Duration::from_secs(10),
+            })
+            .await
+            .expect("send caller Call control");
+        let incoming = wait_matching_service_event(
+            &mut self.callee.event_rx,
+            Duration::from_secs(15),
+            "incoming call through upstream transport",
+            |event| matches!(event, TelephonyServiceEvent::IncomingCall { .. }),
+        )
+        .await;
+        let TelephonyServiceEvent::IncomingCall { link_id, .. } = incoming else {
+            unreachable!()
+        };
+        // Answer once the caller's profile has reached the callee.
+        wait_matching_service_event(
+            &mut self.callee.event_rx,
+            Duration::from_secs(10),
+            "caller profile at callee",
+            |event| {
+                matches!(event, TelephonyServiceEvent::Snapshot(snapshot)
+                    if snapshot.active_call.as_ref().is_some_and(|call| call.profile == Some(profile)))
+            },
+        )
+        .await;
+        lxst_telephony::request_answer(&self.callee.control_tx, link_id)
+            .await
+            .expect("answer callee call");
+        self.wait_both_profile(profile).await;
+    }
+
+    async fn wait_both_profile(&mut self, profile: Profile) {
+        let caller_identity = self.caller.identity.hash;
+        let callee_identity = self.callee.identity.hash;
+        for (node, role, remote) in [
+            (&mut self.caller, CallRole::Outgoing, callee_identity),
+            (&mut self.callee, CallRole::Incoming, caller_identity),
+        ] {
+            wait_matching_service_event(
+                &mut node.event_rx,
+                Duration::from_secs(15),
+                "established in profile",
+                |event| {
+                    matches!(event, TelephonyServiceEvent::Snapshot(snapshot)
+                    if snapshot.active_call.as_ref().is_some_and(|call| {
+                        call.status == SignallingStatus::Established
+                            && call.profile == Some(profile)
+                            && call.role == role
+                            && call.remote_identity == remote
+                    }))
+                },
+            )
+            .await;
+        }
+    }
+
+    async fn switch_profile(&mut self, profile: Profile) {
+        self.caller
+            .control_tx
+            .send(TelephonyControl::SwitchProfile { profile })
+            .await
+            .expect("send profile switch");
+        self.wait_both_profile(profile).await;
+    }
+
+    async fn assert_media(&mut self, frames: usize, profile: Profile) {
+        let expected = self.hub.profile_codec(profile);
+        for node in [&self.caller, &self.callee] {
+            let (frame_tx, frame_rx) = mpsc::channel(frames);
+            node.control_tx
+                .send(TelephonyControl::StartOpusStream {
+                    profile,
+                    frames: frame_rx,
+                })
+                .await
+                .expect("start Opus stream");
+            tokio::spawn(async move {
+                let mut source = SyntheticSource::new(
+                    profile.channels(),
+                    profile.sample_rate_hz(),
+                    profile.sample_frames_per_packet(),
+                    SyntheticSourceKind::Sine {
+                        frequency_hz: 440.0,
+                        amplitude: 0.25,
+                    },
+                )
+                .unwrap();
+                let mut tick = tokio::time::interval(Duration::from_millis(u64::from(
+                    profile.frame_time_ms(),
+                )));
+                for _ in 0..frames {
+                    tick.tick().await;
+                    if frame_tx
+                        .send(source.next_raw_frame().unwrap())
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            });
+        }
+        let deadline = tokio::time::Instant::now()
+            + Duration::from_secs(10)
+            + Duration::from_millis(u64::from(profile.frame_time_ms()) * frames as u64);
+        let (caller, callee) = tokio::join!(
+            collect_rust_media(&mut self.caller.event_rx, frames, profile, deadline),
+            collect_rust_media(&mut self.callee.event_rx, frames, profile, deadline),
+        );
+        for (label, sender, receiver) in [
+            ("caller to callee", &caller, &callee),
+            ("callee to caller", &callee, &caller),
+        ] {
+            assert_eq!(sender.sent, frames, "{label}: frames sent");
+            assert_eq!(receiver.received.len(), frames, "{label}: frames received");
+            assert_eq!(receiver.decoded, frames, "{label}: frames decoded");
+            for (codec, toc) in &receiver.received {
+                assert_eq!(
+                    u64::from(*codec),
+                    expected.codec,
+                    "{label}: codec header byte"
+                );
+                assert_eq!(
+                    toc.map(|toc| toc & 0x04 != 0),
+                    Some(expected.stereo),
+                    "{label}: Opus stereo flag in {}",
+                    profile.name()
+                );
+            }
+        }
+    }
+
+    async fn shutdown(self) {
+        self.caller.shutdown().await;
+        self.callee.shutdown().await;
+        drop(self.hub);
+    }
+}
+
+async fn collect_rust_media(
+    event_rx: &mut mpsc::Receiver<TelephonyServiceEvent>,
+    frames: usize,
+    profile: Profile,
+    deadline: tokio::time::Instant,
+) -> RustMediaTally {
+    let mut tally = RustMediaTally::default();
+    while tally.sent < frames || tally.decoded < frames {
+        let Ok(Some(event)) = tokio::time::timeout_at(deadline, event_rx.recv()).await else {
+            break;
+        };
+        match event {
+            TelephonyServiceEvent::MediaSent { frames, .. } => tally.sent += frames,
+            TelephonyServiceEvent::Drive(step) => {
+                if let Some(inbound) = step.step.inbound {
+                    for frame_event in inbound.frame_events {
+                        if let FrameStreamEvent::Frame(frame) = frame_event {
+                            tally
+                                .received
+                                .push((frame.codec.wire_id(), frame.payload.first().copied()));
+                        }
+                    }
+                }
+            }
+            TelephonyServiceEvent::OpusFramesReceived {
+                profile: decoded_profile,
+                frames: decoded,
+                ..
+            } => {
+                assert_eq!(decoded_profile, profile, "decoded in the active profile");
+                for frame in &decoded {
+                    assert_eq!(frame.channels, profile.channels());
+                    assert_eq!(frame.sample_frames(), profile.sample_frames_per_packet());
+                }
+                tally.decoded += decoded.len();
+            }
+            TelephonyServiceEvent::Error { message } => panic!("Rust Telephone error: {message}"),
+            _ => {}
+        }
+    }
+    tally
+}
+
+#[serial_test::serial(python_lxst_live)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn rust_voice_media_crosses_python_relay_both_ways() {
+    let mut pair = RustCallPair::connect().await;
+    pair.establish(Profile::QualityMedium).await;
+    pair.assert_media(VOICE_MEDIA_FRAMES, Profile::QualityMedium)
+        .await;
+    pair.shutdown().await;
+}
+
+#[serial_test::serial(python_lxst_live)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn rust_profile_switches_cross_python_relay() {
+    let mut pair = RustCallPair::connect().await;
+    pair.establish(Profile::QualityHigh).await;
+    for profile in [Profile::QualityMedium, Profile::QualityMax] {
+        pair.switch_profile(profile).await;
+        pair.assert_media(SWITCH_MEDIA_FRAMES, profile).await;
+    }
+    pair.shutdown().await;
 }
