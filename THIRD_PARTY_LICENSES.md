@@ -32,13 +32,13 @@ repository, or source changes.
 
 ## Upstream Opus implementation
 
-rsLXST consumes the exact crates.io package `opus-rs` 0.1.29 from
+rsLXST consumes the exact crates.io package `opus-rs` 0.1.42 from
 [`restsend/opus-rs`](https://github.com/restsend/opus-rs), associated with
-upstream commit `95f8b76430beb8c1bed067354d519c918ceade21` and locked crate
-checksum `eadaf84d53a021172447a8771d74f805ac3719a61041dafa95720ef86b8e271d`.
+upstream commit `5d8230f362b2618b9e730e6201c0d8f98961dfe1` and locked crate
+checksum `bafbcaf2ed381cdf68ced4ed8d16517de90ffd7424e36f0b9e45d67fbe30b1f9`.
 It is BSD-3-Clause, is not locally modified, and is configured with explicit
 heap-backed codec state. The preserved license and Opus patent notice are in
-[`third_party/opus-rs-0.1.29-COPYING`](third_party/opus-rs-0.1.29-COPYING).
+[`third_party/opus-rs-0.1.42-COPYING`](third_party/opus-rs-0.1.42-COPYING).
 
 This inventory records source and license evidence; it is not legal advice and
 does not by itself replace any third-party notice required for a distributed

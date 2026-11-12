@@ -17,7 +17,7 @@ EMBEDDED_MSRV = {"lxst-codec2": "1.87", "lxst-embedded": "1.87"}
 EXPECTED_RETICULUM_VERSION = "1.4.0"
 EXPECTED_RETICULUM_COMMIT = "14241a383910e6ee7665303eff1e7c8d98957cc0"
 EXPECTED_OPUS_DEPENDENCY = (
-    'opus-rs = { version = "=0.1.29", default-features = false, '
+    'opus-rs = { version = "=0.1.42", default-features = false, '
     'features = ["heap"] }'
 )
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
@@ -79,7 +79,7 @@ if "## Unreleased" not in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8"):
 
 root_manifest = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
 if EXPECTED_OPUS_DEPENDENCY not in root_manifest:
-    fail("workspace must consume exact upstream opus-rs 0.1.29 with heap state")
+    fail("workspace must consume exact upstream opus-rs 0.1.42 with heap state")
 if (ROOT / "vendor/opus-rs").exists():
     fail("local opus-rs vendor/fork must not exist")
 

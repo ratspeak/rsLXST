@@ -21,6 +21,12 @@ Parity with Python LXST 0.6.0. Several experimental APIs change.
   skipped instead of dropping its packet.
 - `Profile::buffer_frames` gives the receive buffer depth of each profile.
 - Raw float128 samples use IEEE binary128.
+- `opus-rs` moves from 0.1.29 to 0.1.42, which fixes a decoder panic on a
+  crafted SILK frame. A decoder panic on a peer's packet now rejects the
+  packet and resets the decoder.
+- The Medium voice profile encodes narrowband SILK at its 8 kbps ceiling, as
+  libopus does under Python LXST; it was wideband. The encoder takes the
+  profile's own sample rate.
 - `lxst-embedded` sessions default to the 60, 70, and 5 second ring, wait,
   and connect times; `SessionConfig::times` (`CallTimes`) changes them.
 - A caller is established once it has handled CONNECTING, so a lost

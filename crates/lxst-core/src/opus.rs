@@ -3,7 +3,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use opus_rs::{Application, OpusDecoder, OpusEncoder};
 use thiserror::Error;
 
-use crate::{AudioCodec, CodecKind, Frame, OpusApplication, OpusProfile, Profile, RawAudioFrame};
+use crate::{AudioCodec, CodecKind, Frame, OpusApplication, Profile, RawAudioFrame};
 
 /// The fixed output clock used by the interoperable Opus packet decoder.
 pub const OPUS_MONO_DECODE_SAMPLE_RATE_HZ: u32 = 48_000;
@@ -68,8 +68,6 @@ pub struct OpusEncoderState {
     sample_frames: usize,
     subframe_count: usize,
     subframe_sample_frames: usize,
-    encode_sample_frames: usize,
-    encode_subframe_sample_frames: usize,
     max_payload_bytes: usize,
     encoder: OpusEncoder,
 }
@@ -82,20 +80,10 @@ impl OpusEncoderState {
         };
         let channels = opus_profile.channels();
         let sample_rate = opus_profile.sample_rate();
-        let encode_sample_rate = encode_sample_rate(opus_profile);
         let sample_frames = profile.sample_frames_per_packet();
-        let encode_sample_frames =
-            scale_sample_frames(sample_frames, sample_rate, encode_sample_rate)?;
-        let packet_layout = PacketLayout::new(encode_sample_rate, encode_sample_frames)?;
-        let subframe_sample_frames = sample_frames
-            .checked_div(packet_layout.subframe_count)
-            .filter(|frames| frames * packet_layout.subframe_count == sample_frames)
-            .ok_or(OpusCodecError::UnsupportedFrameDuration {
-                sample_rate_hz: sample_rate,
-                sample_frames,
-            })?;
+        let packet_layout = PacketLayout::new(sample_rate, sample_frames)?;
         let mut encoder = OpusEncoder::new(
-            encode_sample_rate as i32,
+            sample_rate as i32,
             usize::from(channels),
             opus_application(opus_profile.application()),
         )
@@ -108,9 +96,7 @@ impl OpusEncoderState {
             channels,
             sample_frames,
             subframe_count: packet_layout.subframe_count,
-            subframe_sample_frames,
-            encode_sample_frames,
-            encode_subframe_sample_frames: packet_layout.subframe_sample_frames,
+            subframe_sample_frames: packet_layout.subframe_sample_frames,
             max_payload_bytes: opus_profile.max_bytes_per_frame_ms(profile.frame_time_ms()),
             encoder,
         })
@@ -146,22 +132,10 @@ impl OpusEncoderState {
             return self.encode_multi_subframe_packet(frame);
         }
 
-        let resampled;
-        let input = if self.encode_sample_frames == self.sample_frames {
-            &frame.samples
-        } else {
-            resampled = resample_interleaved_linear(
-                &frame.samples,
-                self.sample_frames,
-                self.encode_sample_frames,
-                usize::from(self.channels),
-            );
-            &resampled
-        };
         let mut encoded = vec![0u8; self.max_payload_bytes];
         let written = self
             .encoder
-            .encode(input, self.encode_sample_frames, &mut encoded)
+            .encode(&frame.samples, self.sample_frames, &mut encoded)
             .map_err(|err| OpusCodecError::Codec(err.to_string()))?;
         encoded.truncate(written);
         Ok(Frame::new(CodecKind::Opus, encoded))
@@ -178,22 +152,14 @@ impl OpusEncoderState {
         for (subframe_index, payload_budget) in budgets.into_iter().enumerate() {
             let start = subframe_index * self.subframe_sample_frames * channels;
             let end = start + self.subframe_sample_frames * channels;
-            let resampled;
-            let input = if self.encode_subframe_sample_frames == self.subframe_sample_frames {
-                &frame.samples[start..end]
-            } else {
-                resampled = resample_interleaved_linear(
-                    &frame.samples[start..end],
-                    self.subframe_sample_frames,
-                    self.encode_subframe_sample_frames,
-                    channels,
-                );
-                &resampled
-            };
             let mut encoded = vec![0u8; payload_budget + 1];
             let written = self
                 .encoder
-                .encode(input, self.encode_subframe_sample_frames, &mut encoded)
+                .encode(
+                    &frame.samples[start..end],
+                    self.subframe_sample_frames,
+                    &mut encoded,
+                )
                 .map_err(|err| OpusCodecError::Codec(err.to_string()))?;
             encoded.truncate(written);
             if encoded.first().is_none_or(|toc| toc & 0x03 != 0) {
@@ -762,39 +728,6 @@ fn opus_application(application: OpusApplication) -> Application {
     }
 }
 
-fn encode_sample_rate(profile: OpusProfile) -> u32 {
-    match profile {
-        // Python LXST uses libopus with an output byte ceiling but no fixed
-        // bitrate or bandwidth CTLs. At Medium's 8 kbps ceiling, libopus is
-        // free to pick lower voice bandwidth; opus-rs otherwise forces
-        // superwideband/hybrid from the 24 kHz API rate, which is poor for
-        // speech at this budget.
-        OpusProfile::VoiceMedium => 16_000,
-        _ => profile.sample_rate(),
-    }
-}
-
-fn scale_sample_frames(
-    sample_frames: usize,
-    source_sample_rate: u32,
-    encode_sample_rate: u32,
-) -> Result<usize, OpusCodecError> {
-    let numerator = sample_frames
-        .checked_mul(encode_sample_rate as usize)
-        .ok_or(OpusCodecError::UnsupportedFrameDuration {
-            sample_rate_hz: encode_sample_rate,
-            sample_frames,
-        })?;
-    let denominator = source_sample_rate as usize;
-    if !numerator.is_multiple_of(denominator) {
-        return Err(OpusCodecError::UnsupportedFrameDuration {
-            sample_rate_hz: encode_sample_rate,
-            sample_frames,
-        });
-    }
-    Ok(numerator / denominator)
-}
-
 fn supports_direct_frame(sample_rate_hz: u32, sample_frames: usize) -> bool {
     sample_frames != 0 && (sample_rate_hz as usize).is_multiple_of(sample_frames)
 }
@@ -1134,7 +1067,7 @@ mod tests {
     }
 
     #[test]
-    fn opus_medium_uses_wideband_silk_at_low_bitrate() {
+    fn opus_medium_uses_narrowband_silk_as_libopus_does() {
         let profile = Profile::QualityMedium;
         let mut source = source_for(profile);
         let frame = source.next_raw_frame().unwrap();
@@ -1142,7 +1075,9 @@ mod tests {
 
         let encoded = encoder.encode_frame(&frame).unwrap();
 
-        assert_eq!(encoded.payload[0] & !0x03, 0x48);
+        // Config 1, SILK narrowband 20 ms: libopus 1.6.1 under LXST 0.6.0 picks the same
+        // bandwidth at Medium's 8 kbps ceiling.
+        assert_eq!(encoded.payload[0] & !0x03, 0x08);
         assert!(encoded.payload.len() <= profile.opus_payload_ceiling_bytes().unwrap());
     }
 
@@ -1398,8 +1333,8 @@ mod tests {
         }
     }
 
-    // Fuzz-found sequence: the last packet drives opus-rs 0.1.29 `silk_decode_core` to a
-    // negative LTP start index, which panics.
+    // Fuzz-found sequence: the last packet drove opus-rs 0.1.29 `silk_decode_core` to a
+    // negative LTP start index and a panic. 0.1.42 decodes or refuses it.
     fn silk_panic_window() -> Vec<Vec<u8>> {
         include_str!("../tests/data/opus_silk_negative_ltp_start.hex")
             .lines()
@@ -1408,46 +1343,40 @@ mod tests {
     }
 
     #[test]
-    fn mono_decoder_rejects_panicking_silk_frame_and_recovers() {
+    fn mono_decoder_survives_fuzz_found_silk_frame() {
         let window = silk_panic_window();
         let (last, prefix) = window.split_last().unwrap();
         let mut decoder = OpusMonoDecoder::new().unwrap();
         for packet in prefix {
             let _ = decoder.decode_packet(packet);
         }
-        assert!(matches!(
-            decoder.decode_packet(last),
-            Err(OpusCodecError::MalformedPacket(_))
-        ));
+        let _ = decoder.decode_packet(last);
 
         let good = encoded_mono_packet(960, 32_000);
-        let recovered = decoder.decode_packet(&good).unwrap();
+        let after = decoder.decode_packet(&good).unwrap();
         let fresh = OpusMonoDecoder::new()
             .unwrap()
             .decode_packet(&good)
             .unwrap();
-        assert_eq!(recovered.samples, fresh.samples);
+        assert_eq!(after.samples.len(), fresh.samples.len());
     }
 
     #[test]
-    fn packet_decoder_rejects_panicking_silk_frame_and_recovers() {
+    fn packet_decoder_survives_fuzz_found_silk_frame() {
         let window = silk_panic_window();
         let (last, prefix) = window.split_last().unwrap();
         let mut decoder = OpusPacketDecoder::new(OPUS_MONO_DECODE_SAMPLE_RATE_HZ, 1).unwrap();
         for packet in prefix {
             let _ = decoder.decode_packet(packet);
         }
-        assert!(matches!(
-            decoder.decode_packet(last),
-            Err(OpusCodecError::MalformedPacket(_))
-        ));
+        let _ = decoder.decode_packet(last);
 
         let good = encoded_mono_packet(960, 32_000);
-        let recovered = decoder.decode_packet(&good).unwrap();
+        let after = decoder.decode_packet(&good).unwrap();
         let fresh = OpusPacketDecoder::new(OPUS_MONO_DECODE_SAMPLE_RATE_HZ, 1)
             .unwrap()
             .decode_packet(&good)
             .unwrap();
-        assert_eq!(recovered.samples, fresh.samples);
+        assert_eq!(after.samples.len(), fresh.samples.len());
     }
 }

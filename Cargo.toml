@@ -24,7 +24,7 @@ bytes = "1"
 tokio = { version = "1", features = ["sync", "time", "rt", "macros"] }
 half = "2"
 proptest = "1"
-opus-rs = { version = "=0.1.29", default-features = false, features = ["heap"] }
+opus-rs = { version = "=0.1.42", default-features = false, features = ["heap"] }
 serial_test = "3"
 
 rns-crypto = { path = "../rsReticulum/crates/rns-crypto", version = "~1.4.0" }
