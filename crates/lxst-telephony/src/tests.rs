@@ -27,31 +27,31 @@ fn recalled_destination(
     hops: u8,
     public_key: [u8; 64],
 ) -> RecalledDestinationRpcEntry {
-    RecalledDestinationRpcEntry {
-        dest_hash: destination_hash,
-        public_key,
-        app_data: None,
-        ratchet: None,
-        hops,
-        timestamp: 1234.0,
-    }
+    let mut entry = RecalledDestinationRpcEntry::default();
+    entry.dest_hash = destination_hash;
+    entry.public_key = public_key;
+    entry.app_data = None;
+    entry.ratchet = None;
+    entry.hops = hops;
+    entry.timestamp = 1234.0;
+    entry
 }
 
 fn path_entry(destination_hash: [u8; 16], hops: u8) -> PathTableRpcEntry {
-    PathTableRpcEntry {
-        hash: destination_hash,
-        timestamp: 1235.0,
-        via: None,
-        hops,
-        expires: 3600.0,
-        value: None,
-        used: 0.0,
-        lr_cost: None,
-        interface: "test".to_string(),
-        interface_id: 1,
-        interface_mode: InterfaceMode::Full,
-        interface_role: InterfaceRole::Normal,
-    }
+    let mut entry = PathTableRpcEntry::default();
+    entry.hash = destination_hash;
+    entry.timestamp = 1235.0;
+    entry.via = None;
+    entry.hops = hops;
+    entry.expires = 3600.0;
+    entry.value = None;
+    entry.used = 0.0;
+    entry.lr_cost = None;
+    entry.interface = "test".to_string();
+    entry.interface_id = 1;
+    entry.interface_mode = InterfaceMode::Full;
+    entry.interface_role = InterfaceRole::Normal;
+    entry
 }
 
 fn packet(signals: impl IntoIterator<Item = Signal>) -> Vec<u8> {
