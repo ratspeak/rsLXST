@@ -375,21 +375,19 @@ fn register_interface_entry(
         inbound: handle.direction.inbound,
         outbound: handle.direction.outbound,
     };
-    let entry = InterfaceEntry {
-        owner: handle.owner,
-        packet_capacity: handle.packet_capacity,
-        online: Some(handle.online),
-        rxb: handle.rxb,
-        txb: handle.txb,
-        ..InterfaceEntry::new(
-            handle.name,
-            mode,
-            direction,
-            handle.bitrate,
-            handle.mtu,
-            handle.tx,
-        )
-    };
+    let mut entry = InterfaceEntry::new(
+        handle.name,
+        mode,
+        direction,
+        handle.bitrate,
+        handle.mtu,
+        handle.tx,
+    );
+    entry.owner = handle.owner;
+    entry.packet_capacity = handle.packet_capacity;
+    entry.online = Some(handle.online);
+    entry.rxb = handle.rxb;
+    entry.txb = handle.txb;
     (handle.id, entry, handle.read_task)
 }
 
