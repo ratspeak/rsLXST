@@ -1,13 +1,20 @@
 {
   "schemaVersion": 1,
   "scope": "Adapted Codec2 and all registry third-party normal/build dependencies reachable from rsLXST workspace members across declared targets; dev-only and first-party path packages are excluded.",
-  "cargoLockSha256": "78c8572a9737a9d60a1970e886c01f11ad301764bc40341381a1a2ba17d955d2",
+  "cargoLockSha256": "841c611b2e2f26085c85bebcf9727a132ccfbfa6939b52a4575ef8d13e92abaa",
   "packages": [
     {
       "name": "aes",
       "version": "0.8.4",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/block-ciphers",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "ahash",
+      "version": "0.8.12",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/tkaitchuck/ahash",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
@@ -78,6 +85,13 @@
       "version": "0.1.2",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/block-modes",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "cc",
+      "version": "1.11.2",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/cc-rs",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
@@ -249,6 +263,20 @@
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
+      "name": "fallible-iterator",
+      "version": "0.3.0",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/sfackler/rust-fallible-iterator",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "fallible-streaming-iterator",
+      "version": "0.1.9",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/sfackler/fallible-streaming-iterator",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
       "name": "fastrand",
       "version": "2.4.1",
       "license": "Apache-2.0 OR MIT",
@@ -260,6 +288,13 @@
       "version": "0.2.9",
       "license": "MIT OR Apache-2.0 OR BSD-1-Clause",
       "repository": "https://github.com/mit-plv/fiat-crypto",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "find-msvc-tools",
+      "version": "0.1.15",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/cc-rs",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
@@ -299,6 +334,13 @@
     },
     {
       "name": "hashbrown",
+      "version": "0.14.5",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/hashbrown",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "hashbrown",
       "version": "0.15.5",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/hashbrown",
@@ -309,6 +351,13 @@
       "version": "0.17.0",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/hashbrown",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "hashlink",
+      "version": "0.9.1",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/kyren/hashlink",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
@@ -428,6 +477,13 @@
       "version": "0.2.16",
       "license": "MIT",
       "repository": "https://github.com/rust-lang/compiler-builtins",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "libsqlite3-sys",
+      "version": "0.30.1",
+      "license": "MIT",
+      "repository": "https://github.com/rusqlite/rusqlite",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
@@ -567,6 +623,13 @@
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
+      "name": "pkg-config",
+      "version": "0.3.34",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/pkg-config-rs",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
       "name": "ppv-lite86",
       "version": "0.2.21",
       "license": "MIT OR Apache-2.0",
@@ -651,6 +714,13 @@
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
+      "name": "rusqlite",
+      "version": "0.32.1",
+      "license": "MIT",
+      "repository": "https://github.com/rusqlite/rusqlite",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
       "name": "rustc_version",
       "version": "0.4.1",
       "license": "MIT OR Apache-2.0",
@@ -725,6 +795,13 @@
       "version": "0.10.9",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/hashes",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "shlex",
+      "version": "2.0.1",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/comex/rust-shlex",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
@@ -872,6 +949,13 @@
       "version": "0.2.6",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/unicode-rs/unicode-xid",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "vcpkg",
+      "version": "0.2.15",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/mcgoo/vcpkg-rs",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
