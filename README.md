@@ -6,7 +6,7 @@
 
 [![License: LXST license](https://img.shields.io/badge/license-LXST%20license-blue.svg)](LICENSE)
 [![Rust 1.89+](https://img.shields.io/badge/rust-1.89%2B-orange.svg)](https://www.rust-lang.org)
-[![LXST 0.4.5](https://img.shields.io/badge/target-LXST%200.4.5-success.svg)](https://github.com/markqvist/LXST)
+[![LXST 0.6.0](https://img.shields.io/badge/target-LXST%200.6.0-success.svg)](https://github.com/markqvist/LXST)
 [![Status](https://img.shields.io/badge/status-experimental-yellow.svg)](#release-scope)
 
 [rsLXMF](https://github.com/ratspeak/rsLXMF) |
@@ -21,23 +21,12 @@
 rsLXST is a Rust port of [LXST](https://github.com/markqvist/LXST), Mark Qvist's
 Lightweight Extensible Signal Transport for real-time voice calls and other
 media streams over Reticulum. It was written from the reference source with
-interoperability as the primary focus. Python LXST remains the source-of-truth
-implementation; do not treat this repository as one.
+interoperability as the primary focus.
 
 rsLXST is Ratspeak's voice component. The LXST author licenses this port for
 use in Ratspeak only, for non-commercial use, with no derivatives or use outside
 Ratspeak; see [License](#license). The build, test, and API notes below document
 the code for Ratspeak development.
-
-The current rsLXST is experimental and incomplete. It provides LXST wire codecs,
-Reticulum link media packet boundaries, a telephony runtime, and Opus stream
-integration for Ratspeak.
-
-This README describes the 0.3.1 release, `v0.3.1`, declaring version **0.3.1**
-and using rsReticulum **1.4.0** (`v1.4.0`); it is the source line Ratspeak
-builds from. The earlier `v0.3.0` release uses the **1.3.0** Reticulum
-dependency line. Keep the dependency set associated with the source you build;
-a matching rsLXST package version alone is not enough.
 
 ## Contents
 
@@ -47,23 +36,16 @@ a matching rsLXST package version alone is not enough.
 - [Crate Layout](#crate-layout)
 - [Using Telephony](#using-telephony)
 - [Rust API](api/README.md)
-- [Contributing](#contributing)
 - [License](#license)
 - [Third-party licenses](#third-party-licenses)
 
 ## Release Scope
 
-The implemented application path covers telephony signalling and negotiated
-Opus or native Codec2 media over Reticulum Links. It does not provide a
-`rnphone-rs` client, a general platform microphone/speaker backend, or complete
-parity with the Python reference's audio graph and non-telephony features.
-
-`lxst-core::Codec2PacketCodec` provides bounded, fixed-profile packet processing
-over a `Codec2Backend`. The workspace supplies native 700C, 1600 and 3200 modes,
-plus host stream and embedded integration. Caller-owned buffers and complete
-packet validation bound the codec work; a backend error requires replacement
-of that packet-codec instance. Board audio, timing, memory and transport still
-require qualification. Its mode header belongs to LXST, not LXMF audio fields.
+The implemented application path covers telephony signalling, full- and
+half-duplex call modes, and negotiated Opus or native Codec2 media over
+Reticulum Links. It does not provide a
+`rnphone-rs` client, a general platform microphone/speaker backend, or LXST's
+non-telephony features.
 
 ## Build It
 
@@ -83,13 +65,12 @@ mkdir ratspeak-src
 cd ratspeak-src
 git clone https://github.com/ratspeak/rsReticulum
 git clone https://github.com/ratspeak/rsLXST
-git -C rsReticulum checkout --detach v1.4.0
-git -C rsLXST checkout --detach v0.3.1
+git -C rsReticulum checkout --detach v1.5.0
+git -C rsLXST checkout --detach v0.4.0
 cd rsLXST
 ```
 
-The commands below run from that `rsLXST` directory. For the earlier 0.3.0
-release, use `v0.3.0` with its rsReticulum `v1.3.0` sibling instead.
+The commands below run from that `rsLXST` directory.
 
 ### macOS
 
@@ -161,11 +142,8 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
-The test gate covers wire codecs, telephony state, profile metadata, Opus
-stream boundaries, malformed-input handling, the local service runtime, Python
-LXST wire parity, and Reticulum destination parity. Live headless Telephone
-interop is intentionally excluded from ordinary `cargo test` runs because it
-starts Python processes and TCP interfaces. Run that suite explicitly with:
+The live call tests against Python LXST are not part of ordinary runs. Run
+them explicitly with:
 
 ```bash
 cargo test -p lxst-telephony --test python_telephone_live_interop -- --ignored
@@ -237,20 +215,6 @@ The compiled [`service` example](crates/lxst-telephony/examples/service.rs)
 checks construction and types. It does not run a transport or place a call. The lower-level endpoint and runtime types remain
 available for compatible specialist use, but are experimental SPI.
 
-An initial Reticulum `LINKREQUEST` still follows normal destination routing.
-After proof validation, rsLXST binds the call to the exact interface that
-established the Link. Signalling, identification, keepalives, media, and close
-traffic never reroute through a newly learned path, and packets arriving on a
-different interface are rejected before decryption or call accounting.
-Interface loss terminates that exact call.
-
-Control and teardown traffic use an ordered, bounded Link endpoint queue. Final
-teardown waits for the ordered close-send attempt to drain or fail terminally
-before transport removes the endpoint and temporary Link destination. Realtime media uses exact-interface best-effort
-delivery instead: it never enters the lossless control queue, reports drops
-under backpressure, and intentionally does not request Reticulum delivery
-receipts.
-
 For Opus calls, the host app supplies and receives `RawAudioFrame` values through
 `StartOpusStream` and `StartOpusReceiveStream`. rsLXST enforces the negotiated
 LXST profile and reports profile changes, source/sink closure, frame drops, and
@@ -285,13 +249,6 @@ allocator. The host telephony and embedded boundaries accept standard ULBW,
 VLBW and LBW profiles. Device timing, stack and audio qualification remain
 required before use on hardware. This backend does not implement Opus voice
 memo containers.
-
-## Contributing
-
-If the issue or contribution belongs upstream as well, start there. Python LXST
-and Reticulum remain the reference implementations.
-
-PRs are closed for now until I have time to catch up on everything.
 
 ## License
 

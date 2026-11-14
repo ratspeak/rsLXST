@@ -2,38 +2,25 @@
 
 ## Unreleased
 
-Parity with Python LXST 0.6.0. Several experimental APIs change.
+## 0.4.0 - 2026-11-13
 
-- Call modes: full and half duplex are signalled with the profile when the
-  callee rings, can be switched during a call, and squelch transmit in half
-  duplex. `TelephonyControl::Call` takes a `mode`.
-- The callee is established as soon as it answers. The answer retry and its
-  timeout are removed (`retry_answer`, `answer_retry_interval`,
-  `answer_timeout`).
-- Outgoing calls end unless the callee rings within `connect_timeout`
-  (5 seconds by default), and the 70 second wait runs from the call request,
-  path discovery included.
-- The line is busy while an outgoing call discovers its path.
-- A call to a peer with a known path sends no path request.
-- The first announce follows 5 seconds after start; the startup announce burst
-  is off by default.
-- Received audio is decoded by the codec of each frame, and a bad frame is
-  skipped instead of dropping its packet.
-- `Profile::buffer_frames` gives the receive buffer depth of each profile.
-- Raw float128 samples use IEEE binary128.
-- `opus-rs` moves from 0.1.29 to 0.1.42, which fixes a decoder panic on a
-  crafted SILK frame. A decoder panic on a peer's packet now rejects the
-  packet and resets the decoder.
-- The Medium voice profile stays wideband SILK at its 8 kbps ceiling, now by
-  an explicit bandwidth setting; the encoder takes the profile's own sample
-  rate. (libopus 1.5 picks wideband there and libopus 1.6 narrowband.)
-- `lxst-embedded` sessions default to the 60, 70, and 5 second ring, wait,
-  and connect times; `SessionConfig::times` (`CallTimes`) changes them.
-- A caller is established once it has handled CONNECTING, so a lost
-  ESTABLISHED no longer ends the call at the wait time. Its audio, and media
-  sent or received, still start only on the callee's ESTABLISHED
-  (`audio_started`).
-- The media vector generator moved to `tools/fixtures/lxst_media_fixtures.py`.
+### Added
+
+- **Call modes**: calls can be full or half duplex, as in LXST 0.6.0, and switch during a call. `TelephonyControl::Call` takes a `mode`; `None` is full duplex.
+- **Stamped calls**: call announces and link requests carry stamps when Reticulum's `[stamps]` settings ask for them, and call links use Link MTU discovery.
+
+### Fixed and improved
+
+- Calls connect as in LXST 0.6.0: the callee is established as soon as it answers, and a lost setup packet no longer ends a call. Check `audio_started` to know when audio is running.
+- An outgoing call ends if the callee doesn't ring within `connect_timeout` (5 seconds by default), and the line is busy while a call looks for its path.
+- `lxst-embedded` sessions use LXST 0.6.0's ring, wait, and connect times; change them with `SessionConfig::times`.
+- The first announce goes out 5 seconds after start, with no startup burst by default.
+- `opus-rs` 0.1.42 fixes a decoder crash on a crafted packet, and a damaged frame is now skipped instead of dropping its whole packet.
+
+### Build and compatibility
+
+- rsLXST now uses rsReticulum `~1.5.0`, whose default storage builds a bundled SQLite and needs a C compiler.
+- API changes, including the removed answer retry, call modes, and async outgoing link calls, are listed in the [migration guide](api/migrations/next.md).
 
 ## 0.3.1 - 2026-11-08
 
