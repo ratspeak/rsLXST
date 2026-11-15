@@ -3844,10 +3844,20 @@ impl PythonCallPair {
             ("callee to caller", backward),
         ] {
             assert_eq!(run.sent.len(), frames, "{label}: frames sent");
-            let strip = |frame: &Value| json!([frame["codec"], frame["stereo"], frame["digest"]]);
+            // Upstream hands each link packet to its own thread, so arrival order is not kept.
+            let strip = |frames: &[Value]| {
+                let mut keys = frames
+                    .iter()
+                    .map(|frame| {
+                        json!([frame["codec"], frame["stereo"], frame["digest"]]).to_string()
+                    })
+                    .collect::<Vec<_>>();
+                keys.sort();
+                keys
+            };
             assert_eq!(
-                run.received.iter().map(strip).collect::<Vec<_>>(),
-                run.sent.iter().map(strip).collect::<Vec<_>>(),
+                strip(&run.received),
+                strip(&run.sent),
                 "{label}: frames received differ from frames sent{}",
                 self.relay_log()
             );
