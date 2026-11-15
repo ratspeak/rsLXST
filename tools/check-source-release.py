@@ -15,7 +15,7 @@ EXPECTED_PACKAGES = {"lxst-core", "lxst-codec2", "lxst-embedded", "lxst-rns", "l
 EXPECTED_MSRV = "1.89"
 EMBEDDED_MSRV = {"lxst-codec2": "1.87", "lxst-embedded": "1.87"}
 EXPECTED_RETICULUM_VERSION = "1.5.0"
-EXPECTED_RETICULUM_COMMIT = "0680941fe4d4df1272749544f2e79ed95a45ef01"
+EXPECTED_RETICULUM_COMMIT = "81e6188e4cb6158972041c9089c350534e2b7897"
 EXPECTED_OPUS_DEPENDENCY = (
     'opus-rs = { version = "=0.1.42", default-features = false, '
     'features = ["heap"] }'
