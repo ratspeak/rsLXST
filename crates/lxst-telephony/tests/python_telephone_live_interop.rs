@@ -448,6 +448,17 @@ struct RustHubNode {
 
 impl RustHubNode {
     async fn spawn(name: &str, port: u16, interface_id: u64) -> Self {
+        Self::spawn_on_tcp(name, port, interface_id, true).await
+    }
+
+    /// A node that does not announce. Its first announce, echoed back by the hub
+    /// next to the hub's own and the awaited one, can push its new interface
+    /// into an ingress burst that holds the awaited announce (Interface.py).
+    async fn spawn_silent(name: &str, port: u16, interface_id: u64) -> Self {
+        Self::spawn_on_tcp(name, port, interface_id, false).await
+    }
+
+    async fn spawn_on_tcp(name: &str, port: u16, interface_id: u64, announce: bool) -> Self {
         let (actor_tx, read_task) = spawn_rust_actor_and_tcp_client(name, port, interface_id).await;
         Self::spawn_with_actor(
             actor_tx,
@@ -457,6 +468,10 @@ impl RustHubNode {
                 incoming_ring_timeout: Some(Duration::from_secs(15)),
                 outgoing_call_timeout: Some(Duration::from_secs(15)),
                 media_frames_per_tick: 4,
+                announce_on_start: announce,
+                announce_interval: TelephonyServiceConfig::default()
+                    .announce_interval
+                    .filter(|_| announce),
                 ..TelephonyServiceConfig::default()
             },
         )
@@ -1174,7 +1189,7 @@ async fn rust_telephony_startup_retry_announces_after_late_tcp_hub_connection() 
     let ready = hub.wait_event("READY", Duration::from_secs(10));
     assert_eq!(ready["headless_audio"], true);
 
-    let caller = RustHubNode::spawn("rust-hub-caller-late", port, 13_001).await;
+    let caller = RustHubNode::spawn_silent("rust-hub-caller-late", port, 13_001).await;
     let mut caller_announces = register_telephony_announce_handler(&caller.actor_tx).await;
     let mut callee = RustHubNode::spawn_before_tcp().await;
 
