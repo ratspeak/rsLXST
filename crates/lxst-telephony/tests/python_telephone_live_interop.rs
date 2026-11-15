@@ -676,6 +676,25 @@ async fn wait_matching_service_event(
     }
 }
 
+/// A caller is Established once it answers CONNECTING (Telephony.py `signal`),
+/// but takes media only after the callee's ESTABLISHED starts its audio.
+async fn wait_caller_audio_started(
+    event_rx: &mut mpsc::Receiver<TelephonyServiceEvent>,
+    timeout: Duration,
+) {
+    wait_matching_service_event(event_rx, timeout, "caller audio start", |event| {
+        let TelephonyServiceEvent::Drive(drive) = event else {
+            return false;
+        };
+        drive
+            .step
+            .commands
+            .iter()
+            .any(|command| matches!(command, TelephonyCommand::StartAudioPipelines { .. }))
+    })
+    .await;
+}
+
 fn synthetic_frame_for_profile(profile: Profile) -> RawAudioFrame {
     SyntheticSource::new(
         profile.channels(),
@@ -818,6 +837,7 @@ impl RustCallerSession {
         let answered = helper.wait_event("ANSWERED", Duration::from_secs(5));
         assert_eq!(answered["accepted"], true);
         helper.wait_event("ESTABLISHED", Duration::from_secs(5));
+        wait_caller_audio_started(&mut event_rx, Duration::from_secs(5)).await;
         wait_matching_service_event(
             &mut event_rx,
             Duration::from_secs(5),
@@ -2570,6 +2590,7 @@ async fn rust_service_sends_raw_media_to_python_established_call() {
     let answered = helper.wait_event("ANSWERED", Duration::from_secs(5));
     assert_eq!(answered["accepted"], true);
     helper.wait_event("ESTABLISHED", Duration::from_secs(5));
+    wait_caller_audio_started(&mut event_rx, Duration::from_secs(5)).await;
     wait_matching_service_event(
         &mut event_rx,
         Duration::from_secs(5),
@@ -2619,12 +2640,16 @@ async fn rust_service_sends_raw_media_to_python_established_call() {
         }
     ));
 
-    let first = helper.wait_event("MEDIA_FRAME", Duration::from_secs(5));
-    assert_eq!(first["shape"], json!([3, 1]));
-    assert_eq!(first["samples"], json!([0.0, 0.25, -0.5]));
-    let second = helper.wait_event("MEDIA_FRAME", Duration::from_secs(5));
-    assert_eq!(second["shape"], json!([2, 1]));
-    assert_eq!(second["samples"], json!([1.0, -1.0]));
+    // Link.py runs each packet callback on its own thread, so the mixer may see either first.
+    let mut frames = [
+        helper.wait_event("MEDIA_FRAME", Duration::from_secs(5)),
+        helper.wait_event("MEDIA_FRAME", Duration::from_secs(5)),
+    ];
+    frames.sort_by_key(|frame| std::cmp::Reverse(frame["total_samples"].as_u64()));
+    assert_eq!(frames[0]["shape"], json!([3, 1]));
+    assert_eq!(frames[0]["samples"], json!([0.0, 0.25, -0.5]));
+    assert_eq!(frames[1]["shape"], json!([2, 1]));
+    assert_eq!(frames[1]["samples"], json!([1.0, -1.0]));
 
     control_tx
         .send(TelephonyControl::Shutdown)
@@ -4005,6 +4030,7 @@ impl RustCallPair {
         lxst_telephony::request_answer(&self.callee.control_tx, link_id)
             .await
             .expect("answer callee call");
+        wait_caller_audio_started(&mut self.caller.event_rx, Duration::from_secs(15)).await;
         self.wait_both_profile(profile).await;
     }
 
