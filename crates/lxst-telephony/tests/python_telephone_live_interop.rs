@@ -289,6 +289,7 @@ async fn spawn_rust_actor_and_tcp(
     rns_interface::traits::InterfaceHandle,
     mpsc::Receiver<rns_interface::traits::InterfaceHandle>,
 ) {
+    unstamp_rust_announces();
     let (actor, actor_tx) = TransportActor::new();
     tokio::spawn(actor.run());
 
@@ -316,9 +317,23 @@ async fn spawn_rust_actor_and_tcp_client(
 }
 
 async fn spawn_rust_actor() -> mpsc::Sender<TransportMessage> {
+    unstamp_rust_announces();
     let (actor, actor_tx) = TransportActor::new();
     tokio::spawn(actor.run());
     actor_tx
+}
+
+/// By default a Rust announce waits for its value-25 stamp, seconds to tens of
+/// seconds in a debug build. Only stamping is turned off: a stamp test's
+/// enforcement stays as it configured it.
+fn unstamp_rust_announces() {
+    rns_runtime::destination_stamper::configure(
+        rns_transport::stamps::StampPolicy {
+            stamp_destinations: false,
+            ..rns_runtime::destination_stamper::policy()
+        },
+        None,
+    );
 }
 
 async fn attach_rust_tcp_client(

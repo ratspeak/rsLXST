@@ -18,6 +18,18 @@ fn link(byte: u8) -> LinkId {
     [byte; 16]
 }
 
+/// Announces leave at once: by default the process stamper holds them for a
+/// value-25 stamp, seconds in a debug build.
+fn unstamped_announces() {
+    rns_runtime::destination_stamper::configure(
+        rns_transport::stamps::StampPolicy {
+            stamp_destinations: false,
+            ..rns_runtime::destination_stamper::policy()
+        },
+        None,
+    );
+}
+
 fn identity(byte: u8) -> IdentityHash {
     [byte; 16]
 }
@@ -1449,6 +1461,7 @@ async fn await_path_to_identity_uses_telephony_destination_hash() {
 
 #[tokio::test]
 async fn endpoint_announce_sends_lxst_telephony_announce_with_public_key() {
+    unstamped_announces();
     let identity = Identity::new();
     let destination_hash = telephony_destination_hash(&identity.hash);
     let public_key = identity.get_public_key();
@@ -1646,6 +1659,7 @@ async fn telephony_service_registered_helper_wires_channels_and_lifecycle() {
 
 #[tokio::test(start_paused = true)]
 async fn telephony_service_announces_once_after_first_job_interval() {
+    unstamped_announces();
     let local_identity = Identity::new();
     let destination_hash = telephony_destination_hash(&local_identity.hash);
     let (transport_tx, mut transport_rx) = mpsc::channel(8);
@@ -1707,6 +1721,7 @@ async fn telephony_service_announces_once_after_first_job_interval() {
 
 #[tokio::test(start_paused = true)]
 async fn telephony_service_startup_announce_burst_is_opt_in() {
+    unstamped_announces();
     let local_identity = Identity::new();
     let destination_hash = telephony_destination_hash(&local_identity.hash);
     let (transport_tx, mut transport_rx) = mpsc::channel(8);
@@ -1769,6 +1784,7 @@ async fn telephony_service_startup_announce_burst_is_opt_in() {
 
 #[tokio::test]
 async fn telephony_service_announce_control_queues_telephony_announce() {
+    unstamped_announces();
     let local_identity = Identity::new();
     let destination_hash = telephony_destination_hash(&local_identity.hash);
     let (transport_tx, mut transport_rx) = mpsc::channel(8);
@@ -1821,6 +1837,7 @@ async fn telephony_service_announce_control_queues_telephony_announce() {
 
 #[tokio::test]
 async fn telephony_service_outgoing_discovery_does_not_block_controls() {
+    unstamped_announces();
     let local_identity = Identity::new();
     let remote_identity = Identity::new();
     let remote_hash = remote_identity.hash;
