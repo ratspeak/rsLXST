@@ -421,6 +421,9 @@ def setup_reticulum(storage: Path, tcp_role: str, tcp_host: str, tcp_port: int, 
         + ("\n[stamps]\n" + os.environ["LXST_HELPER_STAMPS"].replace(";", "\n") + "\n" if os.environ.get("LXST_HELPER_STAMPS") else ""),
         encoding="utf-8",
     )
+    # Destination stamping opt-in, as before Reticulum 1.6.1 ([stamps] still turns it on):
+    # macOS stamps on one core, and a value-25 stamp takes about a minute there.
+    _RNS.Transport.STAMP_DESTINATIONS = False
 
     loglevel = os.environ.get("LXST_PYTHON_LOGLEVEL")
     if loglevel:
