@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_PACKAGES = {"lxst-core", "lxst-codec2", "lxst-embedded", "lxst-rns", "lxst-telephony"}
 EXPECTED_MSRV = "1.89"
 EMBEDDED_MSRV = {"lxst-codec2": "1.87", "lxst-embedded": "1.87"}
-EXPECTED_RETICULUM_VERSION = "1.5.0"
-EXPECTED_RETICULUM_COMMIT = "184bbfe59f1e089af802df2de706688b82dd49d2"
+EXPECTED_RETICULUM_VERSION = "1.5.1"
+EXPECTED_RETICULUM_COMMIT = "3d53958892c42b4ea4bf6cbc13524e2fd8988b93"
 EXPECTED_OPUS_DEPENDENCY = (
     'opus-rs = { version = "=0.1.42", default-features = false, '
     'features = ["heap"] }'
@@ -143,7 +143,7 @@ python_pins = {
         "RSLXST_PYTHON_LXST_COMMIT",
         json.loads((ROOT / "tools/reference/lxst_reference_lock.json").read_text())["commit"],
     ),
-    "Reticulum": ("RSLXST_PYTHON_RNS_COMMIT", "cb1260891d1b6da8f6e9b21542c4f0cc0725cac4"),
+    "Reticulum": ("RSLXST_PYTHON_RNS_COMMIT", "cff4d03fdbd6bfb63b765280cd944756ac5cce8d"),
 }
 for name, (variable, revision) in python_pins.items():
     pin = re.search(rf"^  {variable}: ([0-9a-f]{{40}})$", workflow, re.MULTILINE)
