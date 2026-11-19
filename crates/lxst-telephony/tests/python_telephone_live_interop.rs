@@ -3724,7 +3724,7 @@ impl PythonCallPair {
         let caller_ready = caller.wait_event("READY", Duration::from_secs(20));
         for ready in [&callee_ready, &caller_ready] {
             assert_eq!(ready["lxst_version"], "0.6.0");
-            assert_eq!(ready["rns_version"], "1.6.0");
+            assert_eq!(ready["rns_version"], "1.6.1");
             assert_eq!(ready["opus_available"], true, "live voice media needs Opus");
         }
         let callee_destination = callee_ready["destination_hash"]
@@ -3965,7 +3965,7 @@ impl RustCallPair {
         let hub =
             PythonTelephoneHost::spawn_script(&relay_helper_script(), port, "server", true, &[]);
         let ready = hub.wait_event("READY", Duration::from_secs(20));
-        assert_eq!(ready["rns_version"], "1.6.0");
+        assert_eq!(ready["rns_version"], "1.6.1");
         assert_eq!(
             ready["opus_available"], true,
             "upstream TOC vectors need Opus"

@@ -70,7 +70,7 @@ fn python_telephone_helper_loads_reference_and_creates_destination() {
     assert_eq!(ready["app_name"], "lxst");
     assert_eq!(ready["primitive_name"], "telephony");
     assert_eq!(ready["lxst_version"], "0.6.0");
-    assert_eq!(ready["rns_version"], "1.6.0");
+    assert_eq!(ready["rns_version"], "1.6.1");
     let lxst_root = PathBuf::from(ready["lxst_root"].as_str().expect("LXST root"));
     if let Ok(configured) = std::env::var("LXST_UPSTREAM_DIR") {
         let configured = PathBuf::from(configured)
