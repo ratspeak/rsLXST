@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "scope": "Adapted Codec2 and all registry third-party normal/build dependencies reachable from rsLXST workspace members across declared targets; dev-only and first-party path packages are excluded.",
-  "cargoLockSha256": "beb6355bc13c3963c1babf2d5fba3cd8ee25713f32445c1c6640a52541abeb99",
+  "cargoLockSha256": "ce5a11b52a7c3d39e944b8dfc48831c6793e42e8e0f04c1d35c9efafbcf6e15d",
   "packages": [
     {
       "name": "aes",
@@ -57,13 +57,6 @@
       "version": "0.3.3",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/RustCrypto/utils",
-      "source": "registry+https://github.com/rust-lang/crates.io-index"
-    },
-    {
-      "name": "block2",
-      "version": "0.5.1",
-      "license": "MIT",
-      "repository": "https://github.com/madsmtm/objc2",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
@@ -543,23 +536,16 @@
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
-      "name": "objc-sys",
-      "version": "0.3.5",
-      "license": "MIT",
-      "repository": "https://github.com/madsmtm/objc2",
-      "source": "registry+https://github.com/rust-lang/crates.io-index"
-    },
-    {
       "name": "objc2",
-      "version": "0.5.2",
+      "version": "0.6.5",
       "license": "MIT",
       "repository": "https://github.com/madsmtm/objc2",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
       "name": "objc2-core-bluetooth",
-      "version": "0.2.2",
-      "license": "MIT",
+      "version": "0.3.2",
+      "license": "Zlib OR Apache-2.0 OR MIT",
       "repository": "https://github.com/madsmtm/objc2",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
@@ -572,7 +558,7 @@
     },
     {
       "name": "objc2-foundation",
-      "version": "0.2.2",
+      "version": "0.3.2",
       "license": "MIT",
       "repository": "https://github.com/madsmtm/objc2",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
